@@ -1,5 +1,4 @@
 'use client'
-
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -8,73 +7,59 @@ export default function SelecionarRole() {
   const { user } = useUser()
   const router = useRouter()
   const [selecionado, setSelecionado] = useState<string>('')
+  const [carregando, setCarregando] = useState(false)
+  const [erro, setErro] = useState('')
 
   const roles = [
-    {
-      id: 'cliente',
-      nome: 'Cliente',
-      descricao: 'Fazer pedidos e acompanhar entregas',
-      icon: '👤',
-      rota: '/cliente'
-    },
-    {
-      id: 'entregador',
-      nome: 'Entregador',
-      descricao: 'Aceitar e realizar entregas',
-      icon: '🚗',
-      rota: '/entregador'
-    },
-    {
-      id: 'restaurante',
-      nome: 'Restaurante',
-      descricao: 'Gerenciar cardápio e pedidos',
-      icon: '🍽️',
-      rota: '/restaurante'
-    },
-    {
-      id: 'operador',
-      nome: 'Operador',
-      descricao: 'Aprovar restaurantes e monitorar pedidos',
-      icon: '⚙️',
-      rota: '/operador'
-    },
-    {
-      id: 'gerente',
-      nome: 'Gerente',
-      descricao: 'Ver relatórios e configurações',
-      icon: '📊',
-      rota: '/gerente'
-    }
+    { id: 'cliente', nome: 'Cliente', descricao: 'Fazer pedidos e acompanhar entregas', icon: '👤', rota: '/cliente' },
+    { id: 'entregador', nome: 'Entregador', descricao: 'Aceitar e realizar entregas', icon: '🚗', rota: '/entregador' },
+    { id: 'restaurante', nome: 'Restaurante', descricao: 'Gerenciar cardápio e pedidos', icon: '🍽️', rota: '/restaurante' },
+    { id: 'gerente', nome: 'Gerente', descricao: 'Aprovar restaurantes, relatórios e configurações', icon: '📊', rota: '/gerente' },
   ]
 
   const continuar = async () => {
     const role = roles.find(r => r.id === selecionado)
-    if (!role) return
+    if (!role || !user) return
 
-    if (user) {
-      try {
-        await user.setPublicMetadata({ role: selecionado })
-      } catch (err) {
-        console.error('Erro ao salvar role no Clerk:', err)
+    setCarregando(true)
+    setErro('')
+
+    try {
+      // Salva role no Clerk
+      await user.update({ unsafeMetadata: { role: selecionado } })
+
+      // Cria usuário no banco conforme o role
+      const endpoints: Record<string, string> = {
+        cliente: '/api/clientes',
+        entregador: '/api/entregadores',
+        restaurante: '/api/restaurantes/cadastro',
+        gerente: '/api/gerentes',
       }
-    }
 
-    localStorage.setItem('userRole', selecionado)
-    router.push(role.rota)
+      const endpoint = endpoints[selecionado]
+      if (endpoint) {
+        await fetch(endpoint, { method: 'POST' })
+      }
+
+      router.push(role.rota)
+    } catch (err) {
+      console.error('Erro ao salvar role:', err)
+      setErro('Erro ao salvar perfil. Tente novamente.')
+    } finally {
+      setCarregando(false)
+    }
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center p-4">
       <div className="max-w-4xl w-full">
-        {/* Header */}
         <div className="text-center mb-12">
           <h1 className="text-4xl font-bold text-orange-600 mb-2">🍕 FoodExpress</h1>
           <p className="text-xl text-gray-700">Bem-vindo, {user?.firstName}!</p>
           <p className="text-gray-600 mt-2">Escolha seu perfil para continuar</p>
         </div>
 
-        {/* Grid de Roles */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           {roles.map(role => (
             <button
               key={role.id}
@@ -94,18 +79,23 @@ export default function SelecionarRole() {
           ))}
         </div>
 
-        {/* Botão Continuar */}
+        {erro && (
+          <p className="text-center text-red-600 mb-4">{erro}</p>
+        )}
+
         <div className="flex justify-center">
           <button
             onClick={continuar}
-            disabled={!selecionado}
+            disabled={!selecionado || carregando}
             className={`px-12 py-4 rounded-lg font-semibold text-lg transition-colors ${
-              selecionado
+              selecionado && !carregando
                 ? 'bg-orange-600 hover:bg-orange-700 text-white cursor-pointer'
                 : 'bg-gray-300 text-gray-500 cursor-not-allowed'
             }`}
           >
-            Continuar como {selecionado ? roles.find(r => r.id === selecionado)?.nome : '...'}
+            {carregando
+              ? 'Salvando...'
+              : `Continuar como ${selecionado ? roles.find(r => r.id === selecionado)?.nome : '...'}`}
           </button>
         </div>
       </div>
