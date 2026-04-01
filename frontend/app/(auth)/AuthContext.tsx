@@ -37,44 +37,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   const login = async (email: string, senha: string) => {
-    // Simular validação (em produção seria com um servidor)
+    // Simula validação 
     if (!email || !senha) {
       throw new Error('Email e senha são obrigatórios')
     }
 
     // Usuários pré-criados para testes
     const usuariosDemo: Record<string, Usuario> = {
-      'cliente@test.com': {
-        id: '1',
-        nome: 'João Silva',
-        email: 'cliente@test.com',
-        perfil: 'cliente'
-      },
-      'entregador@test.com': {
-        id: '2',
-        nome: 'Maria Silva',
-        email: 'entregador@test.com',
-        perfil: 'entregador'
-      },
-      'restaurante@test.com': {
-        id: '3',
-        nome: 'Pizzaria do João',
-        email: 'restaurante@test.com',
-        perfil: 'restaurante'
-      },
-      'operador@test.com': {
-        id: '4',
-        nome: 'Carlos',
-        email: 'operador@test.com',
-        perfil: 'operador'
-      },
-      'gerente@test.com': {
-        id: '5',
-        nome: 'Admin',
-        email: 'gerente@test.com',
-        perfil: 'gerente'
-      }
-    }
+  'cliente@test.com': {
+    id: '1',
+    nome: 'João Silva',
+    email: 'cliente@test.com',
+    perfil: 'cliente' as const
+  },
+  'entregador@test.com': {
+    id: '2',
+    nome: 'Maria Silva',
+    email: 'entregador@test.com',
+    perfil: 'entregador' as const
+  },
+
+  'restaurante@test.com': {
+    id: '3',
+    nome: 'Pizzaria do João',
+    email: 'restaurante@test.com',
+    perfil: 'restaurante' as const  
+  },
+  'gerente@test.com': {
+      id: '5',
+      nome: 'Admin',
+      email: 'gerente@test.com',
+      perfil: 'gerente'as const
+  }
+}
 
     const usuarioEncontrado = usuariosDemo[email]
     if (!usuarioEncontrado) {

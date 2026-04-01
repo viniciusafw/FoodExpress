@@ -111,7 +111,6 @@ export default function ClientePage() {
             <div className="flex gap-2">
               <Link href="/perfil" className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded text-sm" title="Perfil">👤</Link>
               <Link href="/suporte" className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded text-sm" title="Suporte">💬</Link>
-              <Link href="/selecionar-role" className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded text-sm" title="Trocar perfil">🔄</Link>
             </div>
           </div>
         </div>

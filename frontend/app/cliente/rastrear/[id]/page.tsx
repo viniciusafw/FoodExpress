@@ -147,12 +147,12 @@ export default function RastreamentoPage({ params }: { params: { id: string } })
 
             {/* Contato de Emergência */}
             <div className="bg-red-50 border border-red-200 rounded-lg p-6">
-              <h3 className="font-bold text-lg text-red-800 mb-3">🆘 Precisa de Ajuda?</h3>
+              <h3 className="font-bold text-lg text-red-800 mb-3"> Precisa de Ajuda?</h3>
               <button className="w-full bg-red-600 hover:bg-red-700 text-white py-2 rounded font-semibold text-sm">
                 📞 Ligar para Entregador
               </button>
               <button className="w-full mt-2 bg-red-600 hover:bg-red-700 text-white py-2 rounded font-semibold text-sm">
-                🆘 Reportar Problema
+                 Reportar Problema
               </button>
             </div>
           </div>
