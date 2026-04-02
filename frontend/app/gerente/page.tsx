@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import LogoutButton from '../../components/LogoutButton'
 
 export default function GerentePage() {
   return (
@@ -8,9 +9,12 @@ export default function GerentePage() {
       <header className="bg-white border-b">
         <div className="max-w-6xl mx-auto px-4 py-4 flex justify-between items-center">
           <Link href="/" className="text-2xl font-bold text-orange-600">🍕 FoodExpress</Link>
-          <div className="text-right">
-            <p className="font-semibold">Admin</p>
-            <p className="text-sm text-gray-600">Gerente</p>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="font-semibold">Admin</p>
+              <p className="text-sm text-gray-600">Gerente</p>  
+            </div>
+            <LogoutButton />
           </div>
         </div>
       </header>

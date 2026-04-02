@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useUser } from '@clerk/nextjs'
 import Link from 'next/link'
+import LogoutButton from '../../components/LogoutButton'
 
 interface Pedido {
   id: string
@@ -111,6 +112,7 @@ export default function ClientePage() {
             <div className="flex gap-2">
               <Link href="/perfil" className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded text-sm" title="Perfil">👤</Link>
               <Link href="/suporte" className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded text-sm" title="Suporte">💬</Link>
+              <LogoutButton />
             </div>
           </div>
         </div>

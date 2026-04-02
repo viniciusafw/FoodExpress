@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import LogoutButton from '../../components/LogoutButton'
 
 interface Perfil {
   nome: string
@@ -50,11 +51,14 @@ export default function PerfilPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b">
-        <div className="max-w-4xl mx-auto px-4 py-4">
-          <Link href="/cliente" className="text-orange-600 text-sm hover:text-orange-700">
-            ← Voltar
-          </Link>
-          <h1 className="text-3xl font-bold mt-2">👤 Meu Perfil</h1>
+        <div className="max-w-4xl mx-auto px-4 py-4 flex justify-between items-center">
+          <div>
+            <Link href="/cliente" className="text-orange-600 text-sm hover:text-orange-700">
+              ← Voltar
+            </Link>
+            <h1 className="text-3xl font-bold mt-2">👤 Meu Perfil</h1>
+          </div>
+          <LogoutButton />
         </div>
       </header>
 

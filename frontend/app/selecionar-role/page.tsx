@@ -1,14 +1,39 @@
 'use client'
 import { useUser } from '@clerk/nextjs'
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 export default function SelecionarRole() {
-  const { user } = useUser()
+  const { user, isLoaded } = useUser()
   const router = useRouter()
   const [selecionado, setSelecionado] = useState<string>('')
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
+
+  // Verifica se o usuário já tem um role definido
+  useEffect(() => {
+    if (!isLoaded) return
+
+    if (!user) {
+      router.push('/sign-in')
+      return
+    }
+
+    // Se o usuário já tem um role definido, redirecionar para sua página
+    const roleDefinido = user.unsafeMetadata?.role as string | undefined
+    if (roleDefinido) {
+      const rotasRole: Record<string, string> = {
+        cliente: '/cliente',
+        entregador: '/entregador',
+        restaurante: '/restaurante',
+        gerente: '/gerente',
+      }
+      const rota = rotasRole[roleDefinido]
+      if (rota) {
+        router.push(rota)
+      }
+    }
+  }, [isLoaded, user, router])
 
   const roles = [
     { id: 'cliente', nome: 'Cliente', descricao: 'Fazer pedidos e acompanhar entregas', icon: '👤', rota: '/cliente' },
