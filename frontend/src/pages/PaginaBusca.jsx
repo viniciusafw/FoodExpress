@@ -1,14 +1,12 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import { motion as Motion } from 'framer-motion'
 import { Search, Star, Clock, Truck, X, SlidersHorizontal, MapPin } from 'lucide-react'
 import Header from '../components/Header'
+import api from '../services/api'
 import MobileNavBar from '../components/MobileNavBar'
-import { lojas, todosProdutos } from '../data/dadosLojas'
-import { filtrosBusca } from '../data/DadosPagina'
 
-// aqui e o back gelado - filtros fixos devem vir de backend ou configuração remota
-const filtros = filtrosBusca
+const filtros = ['Entrega Grátis', 'Mais Avaliados', 'Mais Próximos']
 
 function LojaCard({ loja, index }) {
   const navigate = useNavigate()
@@ -85,10 +83,39 @@ export default function SearchPage() {
   const [inputValue, setInputValue] = useState(query)
   const [abaAtiva, setAbaAtiva] = useState('lojas')
   const [filtrosAtivos, setFiltrosAtivos] = useState([])
+  const [todasLojas, setTodasLojas] = useState([])
+  const [todosProdutos, setTodosProdutos] = useState([])
+
+  useEffect(() => {
+    api.restaurantes.listar().then(dados => {
+      const lojas = dados.map(r => ({
+        ...r,
+        emoji: r.emoji || '🍽️',
+        avaliacao: r.avaliacao_media ?? 0,
+        tempoEntrega: r.tempo_medio_preparo ? `${r.tempo_medio_preparo}-${r.tempo_medio_preparo + 10} min` : '30-40 min',
+        taxaEntrega: 'Grátis',
+      }))
+      setTodasLojas(lojas)
+      // Busca cardápio de todos os restaurantes em paralelo
+      Promise.allSettled(lojas.map(l => api.cardapio.listar(l.id).then(itens =>
+        itens.map(item => ({
+          id: item.id,
+          nome: item.nome,
+          desc: item.descricao || '',
+          preco: Number(item.preco),
+          emoji: item.emoji || '🍽️',
+          loja: { id: l.id, nome: l.nome },
+        }))
+      ))).then(results => {
+        const todos = results.flatMap(r => r.status === 'fulfilled' ? r.value : [])
+        setTodosProdutos(todos)
+      })
+    }).catch(console.error)
+  }, [])
 
   const lojasResultado = useMemo(() => {
-    if (!query.trim()) return lojas
-    return lojas.filter(l =>
+    if (!query.trim()) return todasLojas
+    return todasLojas.filter(l =>
       l.nome.toLowerCase().includes(query.toLowerCase()) ||
       l.categoria.toLowerCase().includes(query.toLowerCase())
     ).filter(l => {
@@ -103,12 +130,12 @@ export default function SearchPage() {
   }, [query, filtrosAtivos])
 
   const produtosResultado = useMemo(() => {
-    if (!query.trim()) return todosProdutos
+    if (!query.trim()) return []
     return todosProdutos.filter(p =>
       p.nome.toLowerCase().includes(query.toLowerCase()) ||
       p.desc?.toLowerCase().includes(query.toLowerCase())
     )
-  }, [query])
+  }, [query, todosProdutos])
 
   const toggleFiltro = (f) => {
     setFiltrosAtivos(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f])

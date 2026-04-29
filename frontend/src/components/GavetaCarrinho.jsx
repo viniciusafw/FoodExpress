@@ -1,4 +1,5 @@
 import { useCart } from '../contexts/CartContext';
+import { useAuth } from '../contexts/AuthContext';
 import { X, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -6,6 +7,7 @@ import { motion as Motion, AnimatePresence } from 'framer-motion';
 
 export default function CartDrawer({ isOpen, onClose }) {
   const { itens, removerItem, totalCarrinho } = useCart();
+  const { estaLogado } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export default function CartDrawer({ isOpen, onClose }) {
         <>
           {/* Overlay */}
           <Motion.div
-            className="fixed inset-0 bg-black/45 backdrop-blur-sm z-100"
+            className="fixed inset-0 bg-black/45 backdrop-blur-sm z-[9998]"
             onClick={onClose}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -38,7 +40,7 @@ export default function CartDrawer({ isOpen, onClose }) {
 
           {/* Mobile: bottom sheet | Desktop: side drawer */}
           <Motion.div
-            className="fixed z-101 bg-white flex flex-col
+            className="fixed z-[9999] bg-white flex flex-col
               bottom-0 left-0 right-0 w-full rounded-t-3xl max-h-[90dvh]
               md:top-0 md:bottom-0 md:left-auto md:right-0 md:w-100 md:max-h-none md:rounded-none
               shadow-[0_-4px_40px_rgba(0,0,0,0.15)] md:shadow-[-8px_0_40px_rgba(0,0,0,0.15)]"
@@ -151,7 +153,11 @@ export default function CartDrawer({ isOpen, onClose }) {
               </div>
               <Motion.button
                 onClick={() => {
-                  navigate('/checkout');
+                  if (!estaLogado) {
+                    navigate('/login');
+                  } else {
+                    navigate('/checkout');
+                  }
                   onClose();
                 }}
                 disabled={itens.length === 0}
@@ -160,8 +166,11 @@ export default function CartDrawer({ isOpen, onClose }) {
                 whileTap={{ scale: 0.98 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 20 }}
               >
-                Finalizar pedido <ArrowRight size={18} />
+                {estaLogado ? 'Finalizar pedido' : 'Entrar para finalizar pedido'} <ArrowRight size={18} />
               </Motion.button>
+              {!estaLogado && itens.length > 0 && (
+                <p className="mt-2 text-xs text-text-muted">É necessário entrar para finalizar a compra.</p>
+              )}
             </Motion.div>
           </Motion.div>
         </>

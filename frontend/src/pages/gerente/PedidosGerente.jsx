@@ -1,9 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { Clock, CheckCircle, XCircle, Truck, ShoppingBag, Search, ChevronDown } from 'lucide-react'
-import { pedidosGerenteExemplo } from '../../data/DadosGerente'
-
-// aqui e o back gelado - os pedidos do gerente devem ser buscados do backend
+import api from '../../services/api'
 
 const statusConfig = {
   Preparando: { cor: 'text-primary bg-primary-light border-primary/20', icon: Clock, texto: 'Preparando' },
@@ -14,11 +12,48 @@ const statusConfig = {
 
 const statusOrdem = ['Preparando', 'Entregando', 'Entregue', 'Cancelado']
 
+// Mapeia status da UI → status do banco
+const statusParaBanco = {
+  Preparando: 'confirmado',
+  Entregando: 'entregando',
+  Entregue:   'entregue',
+  Cancelado:  'cancelado',
+}
+
+function normalizarPedido(p) {
+  return {
+    ...p,
+    status: p.status === 'confirmado' ? 'Preparando'
+          : p.status === 'entregando' ? 'Entregando'
+          : p.status === 'entregue'   ? 'Entregue'
+          : p.status === 'cancelado'  ? 'Cancelado'
+          : 'Preparando',
+    loja: p.restaurante_id,
+    cliente: p.cliente_id,
+    valorNum: Number(p.total),
+    horario: new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    itens: (() => {
+      try { return typeof p.itens === 'string' ? JSON.parse(p.itens).map(i => i.nome || i.id) : (p.itens || []) }
+      catch { return [] }
+    })(),
+    tempo: p.tempo_preparo_estimado ? `${p.tempo_preparo_estimado} min` : '--',
+  }
+}
+
 export default function PedidosGerente() {
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('Todos')
-  const [pedidos, setPedidos] = useState(pedidosGerenteExemplo)
+  const [pedidos, setPedidos] = useState([])
   const [expandido, setExpandido] = useState(null)
+  const [carregando, setCarregando] = useState(true)
+
+  useEffect(() => {
+    setCarregando(true)
+    api.pedidos.listar()
+      .then(dados => setPedidos(dados.map(normalizarPedido)))
+      .catch(console.error)
+      .finally(() => setCarregando(false))
+  }, [])
 
   const pedidosFiltrados = pedidos.filter(p => {
     const buscaOk = p.id.toLowerCase().includes(busca.toLowerCase()) || p.cliente.toLowerCase().includes(busca.toLowerCase())
@@ -26,13 +61,28 @@ export default function PedidosGerente() {
     return buscaOk && statusOk
   })
 
-  const avancarStatus = (id) => {
-    setPedidos(prev => prev.map(p => {
-      if (p.id !== id) return p
-      const idx = statusOrdem.indexOf(p.status)
-      if (idx < 2) return { ...p, status: statusOrdem[idx + 1] }
-      return p
-    }))
+  const avancarStatus = async (id) => {
+    const pedido = pedidos.find(p => p.id === id)
+    if (!pedido) return
+    const idx = statusOrdem.indexOf(pedido.status)
+    if (idx >= 2) return
+    const novoStatusUI = statusOrdem[idx + 1]
+    const novoStatusBanco = statusParaBanco[novoStatusUI]
+    try {
+      await api.pedidos.atualizarStatus(id, novoStatusBanco)
+      setPedidos(prev => prev.map(p => p.id === id ? { ...p, status: novoStatusUI } : p))
+    } catch (e) {
+      alert('Erro ao atualizar status: ' + e.message)
+    }
+  }
+
+  const cancelarPedido = async (id) => {
+    try {
+      await api.pedidos.cancelar(id)
+      setPedidos(prev => prev.map(p => p.id === id ? { ...p, status: 'Cancelado' } : p))
+    } catch (e) {
+      alert('Erro ao cancelar pedido: ' + e.message)
+    }
   }
 
   return (
@@ -74,7 +124,12 @@ export default function PedidosGerente() {
       {/* Lista de pedidos */}
       <div className="flex flex-col gap-3">
         <AnimatePresence>
-          {pedidosFiltrados.length === 0 && (
+          {carregando && (
+            <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16 text-text-muted font-semibold">
+              Carregando pedidos...
+            </Motion.div>
+          )}
+          {!carregando && pedidosFiltrados.length === 0 && (
             <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-16 text-text-muted font-semibold">
               Nenhum pedido encontrado.
             </Motion.div>
@@ -90,7 +145,6 @@ export default function PedidosGerente() {
                 transition={{ delay: i * 0.04 }}
                 className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden"
               >
-                {/* Cabeçalho do card */}
                 <button
                   onClick={() => setExpandido(aberto ? null : p.id)}
                   className="w-full flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-surface-2 transition-colors text-left"
@@ -100,7 +154,7 @@ export default function PedidosGerente() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-display font-bold text-text-primary">{p.id}</span>
+                      <span className="font-display font-bold text-text-primary">#{String(p.id).slice(-6)}</span>
                       <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full border ${cor}`}>
                         <Icone size={11} />{p.status}
                       </span>
@@ -108,13 +162,12 @@ export default function PedidosGerente() {
                     <p className="text-sm text-text-secondary font-semibold truncate mt-0.5">{p.cliente} · {p.itens.join(', ')}</p>
                   </div>
                   <div className="text-right shrink-0 flex flex-col items-end gap-1">
-                    <span className="font-display font-extrabold text-accent">R$ {p.valor.toFixed(2).replace('.', ',')}</span>
-                    <span className="text-xs text-text-muted font-semibold flex items-center gap-1"><Clock size={11} />{p.tempo}</span>
+                    <span className="font-display font-extrabold text-accent">R$ {p.valorNum.toFixed(2).replace('.', ',')}</span>
+                    <span className="text-xs text-text-muted font-semibold flex items-center gap-1"><Clock size={11} />{p.horario}</span>
                   </div>
                   <ChevronDown size={16} className={`text-text-muted shrink-0 transition-transform ${aberto ? 'rotate-180' : ''}`} />
                 </button>
 
-                {/* Detalhes expandidos */}
                 <AnimatePresence>
                   {aberto && (
                     <Motion.div
@@ -135,9 +188,9 @@ export default function PedidosGerente() {
                             ))}
                           </ul>
                           <p className="text-xs font-bold text-text-muted uppercase tracking-wider mt-4 mb-1">Endereço de entrega</p>
-                          <p className="text-sm text-text-secondary font-semibold">{p.endereco}</p>
-                          <p className="text-xs font-bold text-text-muted uppercase tracking-wider mt-4 mb-1">Telefone</p>
-                          <p className="text-sm text-text-secondary font-semibold">{p.telefone}</p>
+                          <p className="text-sm text-text-secondary font-semibold">{p.endereco_entrega || '—'}</p>
+                          <p className="text-xs font-bold text-text-muted uppercase tracking-wider mt-4 mb-1">Horário</p>
+                          <p className="text-sm text-text-secondary font-semibold">{p.horario}</p>
                         </div>
                         <div className="flex flex-col gap-2 sm:w-48 justify-end">
                           {p.status !== 'Entregue' && p.status !== 'Cancelado' && (
@@ -150,7 +203,7 @@ export default function PedidosGerente() {
                           )}
                           {p.status === 'Preparando' && (
                             <button
-                              onClick={() => setPedidos(prev => prev.map(x => x.id === p.id ? { ...x, status: 'Cancelado' } : x))}
+                              onClick={() => cancelarPedido(p.id)}
                               className="w-full py-2.5 bg-red-50 text-red-500 border border-red-200 rounded-xl text-sm font-bold cursor-pointer hover:bg-red-100 transition-all"
                             >
                               Cancelar pedido

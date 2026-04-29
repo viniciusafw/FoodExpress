@@ -1,10 +1,20 @@
-import { useState, createElement } from 'react'
+import { useState, createElement, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { Store, MapPin, Phone, User, Mail, Lock, Eye, EyeOff, ArrowLeft, ChevronRight, CheckCircle, Building2 } from 'lucide-react'
 import { motion as Motion } from 'framer-motion'
 import { mascaraTelefone, mascaraCNPJ, mascaraCPF } from '../utils/mascaras'
-import { tiposCadastroEstabelecimento } from '../data/DadosPagina'
+
+const tiposCadastroEstabelecimento = [
+  { value: 'restaurante', label: '🍽️ Restaurante' },
+  { value: 'pizzaria', label: '🍕 Pizzaria' },
+  { value: 'lanchonete', label: '🍔 Lanchonete' },
+  { value: 'mercado', label: '🛒 Mercado' },
+  { value: 'farmacia', label: '💊 Farmácia' },
+  { value: 'padaria', label: '🥖 Padaria' },
+  { value: 'outros', label: '📦 Outros' },
+]
+
 
 // aqui e o back gelado - tipos de estabelecimento devem ser carregados do backend ou CMS
 
@@ -45,33 +55,80 @@ const cardVariants = {
 
 export default function CadastroLoja() {
   const [dados, setDados] = useState({
-    nomeLoja: '', tipoLoja: '', cnpjLoja: '', enderecoLoja: '', telefoneLoja: '',
+    nomeLoja: '', nomeFicticio: '', tipoLoja: '', cnpjLoja: '', enderecoLoja: '', telefoneLoja: '',
     nomeDono: '', emailDono: '', telefoneDono: '', cpfDono: '', senha: '',
   })
   const [mostrarSenha, setMostrarSenha] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [aceitouTermos, setAceitouTermos] = useState(false)
+  const [cnpjStatus, setCnpjStatus] = useState(null) // null | 'buscando' | 'ok' | 'erro'
+  const [cnpjErro, setCnpjErro] = useState('')
+  const [erro, setErro] = useState('')
   const { cadastrarGerente } = useAuth()
   const navigate = useNavigate()
 
-  const handleEnviar = (e) => {
+  // Busca dados do CNPJ na API gratuita BrasilAPI
+  const buscarCNPJ = useCallback(async (cnpjRaw) => {
+    const cnpj = cnpjRaw.replace(/[^\d]/g, '')
+    if (cnpj.length !== 14) return
+    setCnpjStatus('buscando')
+    setCnpjErro('')
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpj}`)
+      if (!res.ok) throw new Error('CNPJ não encontrado')
+      const data = await res.json()
+      setDados(prev => ({
+        ...prev,
+        nomeLoja: data.razao_social || data.nome_fantasia || prev.nomeLoja,
+        nomeFicticio: data.nome_fantasia || prev.nomeFicticio,
+        enderecoLoja: [
+          data.logradouro, data.numero,
+          data.bairro, data.municipio,
+          data.uf
+        ].filter(Boolean).join(', '),
+        telefoneLoja: prev.telefoneLoja || (data.ddd_telefone_1
+          ? `(${data.ddd_telefone_1.slice(0,2)}) ${data.ddd_telefone_1.slice(2)}`
+          : ''),
+        emailDono: prev.emailDono || data.email || prev.emailDono,
+      }))
+      setCnpjStatus('ok')
+    } catch (error) {
+      setCnpjStatus('erro')
+      setCnpjErro(error.message || 'CNPJ não encontrado ou inválido')
+    }
+  }, [])
+
+  const handleEnviar = async (e) => {
     e.preventDefault()
     if (!aceitouTermos) return
+    setErro('')
     setCarregando(true)
-    const fn = cadastrarGerente
-    fn({
-      storeName: dados.nomeLoja, storeAddress: dados.enderecoLoja,
-      storePhone: dados.telefoneLoja, storeCnpj: dados.cnpjLoja,
-      ownerName: dados.nomeDono, ownerEmail: dados.emailDono,
-      ownerPhone: dados.telefoneDono, ownerCpf: dados.cpfDono, password: dados.senha,
-    })
+    try {
+      await cadastrarGerente({
+        storeName: dados.nomeLoja, storeFantasyName: dados.nomeFicticio, storeAddress: dados.enderecoLoja,
+        storePhone: dados.telefoneLoja, storeCnpj: dados.cnpjLoja,
+        ownerName: dados.nomeDono, ownerEmail: dados.emailDono,
+        ownerPhone: dados.telefoneDono, ownerCpf: dados.cpfDono, password: dados.senha,
+        nomeFicticio: dados.nomeFicticio,
+      })
+    } catch (error) {
+      console.error('Erro ao cadastrar gerente:', error)
+      setErro(error?.message || 'Não foi possível concluir o cadastro do estabelecimento.')
+    } finally {
+      setCarregando(false)
+    }
   }
 
   const handleChange = (e) => {
     const { name, value } = e.target
     let valor = value
     if (name === 'telefoneLoja' || name === 'telefoneDono') valor = mascaraTelefone(value)
-    if (name === 'cnpjLoja') valor = mascaraCNPJ(value)
+    if (name === 'cnpjLoja') {
+      valor = mascaraCNPJ(value)
+      const digits = valor.replace(/[^\d]/g, '')
+      if (digits.length === 14) buscarCNPJ(valor)
+      else if (cnpjStatus === 'ok') setCnpjStatus(null)
+    }
     if (name === 'cpfDono') valor = mascaraCPF(value)
     setDados({ ...dados, [name]: valor })
   }
@@ -139,6 +196,11 @@ export default function CadastroLoja() {
         </Motion.div>
 
         <form onSubmit={handleEnviar} className="flex flex-col gap-4">
+          {erro && (
+            <div className="text-red-500 text-sm font-semibold bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              ⚠️ {erro}
+            </div>
+          )}
 
           {/* Card — Dados da Loja */}
           <Motion.div
@@ -170,6 +232,12 @@ export default function CadastroLoja() {
                 value={dados.nomeLoja} onChange={handleChange}
               />
 
+              <Campo
+                label="Nome fictício" name="nomeFicticio"
+                placeholder="Ex: Pizzaria do João" Icon={Store}
+                value={dados.nomeFicticio} onChange={handleChange}
+              />
+
               <div>
                 <label className="block text-xs font-extrabold text-text-secondary uppercase tracking-wide mb-1.5">Tipo *</label>
                 <div className="relative">
@@ -185,12 +253,36 @@ export default function CadastroLoja() {
               </div>
 
               <div>
-                <label className="block text-xs font-extrabold text-text-secondary uppercase tracking-wide mb-1.5">CNPJ *</label>
+                <label className="block text-xs font-extrabold text-text-secondary uppercase tracking-wide mb-1.5">
+                  CNPJ *
+                  {cnpjStatus === 'buscando' && (
+                    <span className="ml-2 text-text-muted font-semibold normal-case">Consultando gov.br...</span>
+                  )}
+                  {cnpjStatus === 'ok' && (
+                    <span className="ml-2 text-accent font-semibold normal-case">✓ Empresa encontrada</span>
+                  )}
+                </label>
+                <p className="text-xs text-text-muted font-semibold mb-2">
+                  Ao preencher o CNPJ, os dados do estabelecimento serão carregados automaticamente.
+                </p>
                 <div className="relative">
                   <Building2 size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
                   <input name="cnpjLoja" type="text" placeholder="00.000.000/0001-00"
-                    value={dados.cnpjLoja} onChange={handleChange} required className={inputBase} />
+                    value={dados.cnpjLoja} onChange={handleChange} required
+                    className={inputBase + (cnpjStatus === 'ok' ? ' border-accent focus:border-accent' : cnpjStatus === 'erro' ? ' border-red-400 focus:border-red-400' : '')} />
+                  {cnpjStatus === 'buscando' && (
+                    <Motion.div
+                      className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-2 border-secondary border-t-transparent"
+                      animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.7, ease: 'linear' }}
+                    />
+                  )}
                 </div>
+                {cnpjStatus === 'erro' && (
+                  <p className="text-xs text-red-500 font-semibold mt-1">{cnpjErro}</p>
+                )}
+                {cnpjStatus === 'ok' && dados.nomeLoja && (
+                  <p className="text-xs text-accent font-semibold mt-1">Dados preenchidos automaticamente</p>
+                )}
               </div>
 
               <Campo
@@ -258,9 +350,9 @@ export default function CadastroLoja() {
                 className="mt-0.5 w-4 h-4 accent-secondary shrink-0 cursor-pointer" />
               <span className="text-xs text-text-secondary font-semibold leading-snug">
                 Concordo com os{' '}
-                <a href="#" className="text-secondary font-bold hover:underline">Termos para Parceiros</a>
+                <Link to="/termos-parceiros" target="_blank" rel="noreferrer" className="text-secondary font-bold hover:underline">Termos para Parceiros</Link>
                 {' '}e autorizo o processamento conforme a{' '}
-                <a href="#" className="text-secondary font-bold hover:underline">Política de Privacidade</a>
+                <Link to="/politica-privacidade" target="_blank" rel="noreferrer" className="text-secondary font-bold hover:underline">Política de Privacidade</Link>
               </span>
             </label>
 

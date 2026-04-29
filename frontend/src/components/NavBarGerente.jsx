@@ -4,7 +4,7 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed,
   BarChart3, Users, Settings, LogOut, Store,
 } from 'lucide-react';
-import logoSrc from '../imgs/Logo-site.png';
+import logoSrc from '../imgs/Logo-site.jpeg';
 
 const links = [
   { to: '/gerente', label: 'Dashboard', Icon: LayoutDashboard },

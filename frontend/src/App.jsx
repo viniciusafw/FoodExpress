@@ -17,9 +17,14 @@ import PainelRestaurante from './pages/PainelRestaurante'
 import DetalhesPedido from './pages/DetalhesPedido'
 import RastrearPedido from './pages/RastrearPedido'
 import Suporte from './pages/Suporte'
+import TermosUso from './pages/TermosUso'
+import PoliticaPrivacidade from './pages/PoliticaPrivacidade'
+import TermosParceiros from './pages/TermosParceiros'
+import AuthCallback from './pages/AuthCallback'
 import { AuthProvider } from './contexts/AuthContext'
 import { CartProvider } from './contexts/CartContext'
 import { useAuth } from './contexts/AuthContext'
+import { DarkModeProvider } from './contexts/DarkModeContext'
 
 const PageWrapper = ({ children }) => (
   <Motion.div
@@ -53,11 +58,20 @@ function AnimatedRoutes() {
         <Route path="/Mercados" element={<PageWrapper><Mercados /></PageWrapper>} />
         <Route path="/loja/:id" element={<PageWrapper><PaginaLoja /></PageWrapper>} />
         <Route path="/busca" element={<PageWrapper><PaginaBusca /></PageWrapper>} />
-        <Route path="/checkout" element={<PageWrapper><FinalizarCompra /></PageWrapper>} />
+        <Route path="/checkout" element={
+          <RotaProtegida perfil="cliente">
+            <PageWrapper><FinalizarCompra /></PageWrapper>
+          </RotaProtegida>
+        } />
 
         {/* Páginas novas */}
         <Route path="/selecionar-perfil" element={<PageWrapper><SelecionarPerfil /></PageWrapper>} />
         <Route path="/suporte" element={<PageWrapper><Suporte /></PageWrapper>} />
+        <Route path="/termos-uso" element={<PageWrapper><TermosUso /></PageWrapper>} />
+        <Route path="/politica-privacidade" element={<PageWrapper><PoliticaPrivacidade /></PageWrapper>} />
+        <Route path="/termos-parceiros" element={<PageWrapper><TermosParceiros /></PageWrapper>} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/auth/ativar" element={<AuthCallback />} />
         <Route path="/pedido/:id" element={<PageWrapper><DetalhesPedido /></PageWrapper>} />
         <Route path="/rastrear/:id" element={<PageWrapper><RastrearPedido /></PageWrapper>} />
 
@@ -95,11 +109,13 @@ function AnimatedRoutes() {
 
 function App() {
   return (
-    <AuthProvider>
-      <CartProvider>
-        <AnimatedRoutes />
-      </CartProvider>
-    </AuthProvider>
+    <DarkModeProvider>
+      <AuthProvider>
+        <CartProvider>
+          <AnimatedRoutes />
+        </CartProvider>
+      </AuthProvider>
+    </DarkModeProvider>
   )
 }
 

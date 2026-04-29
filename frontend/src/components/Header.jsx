@@ -1,15 +1,17 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import CartDrawer from './GavetaCarrinho'
 import { useAuth } from '../contexts/AuthContext'
 import { useCart } from '../contexts/CartContext'
-import { Search, MapPin, ChevronDown, LogIn, ShoppingBag, User, LogOut, Menu, X } from 'lucide-react'
+import { Search, MapPin, ChevronDown, LogIn, ShoppingBag, User, LogOut, Menu, X, Moon, Sun } from 'lucide-react'
+import { useDarkMode } from '../contexts/DarkModeContext'
 import logoSrc from '../imgs/Logo-site.png'
 import { motion as Motion, AnimatePresence, useScroll, useMotionValueEvent } from 'framer-motion'
 
 export default function Header() {
   const { estaLogado, usuario, sair } = useAuth()
   const { quantidadeTotal, totalCarrinho } = useCart()
+  const { dark, toggle } = useDarkMode()
   const navigate = useNavigate()
   const location = useLocation()
   const [busca, setBusca] = useState('')
@@ -17,6 +19,14 @@ export default function Header() {
   const [menuMobile, setMenuMobile] = useState(false)
   const [oculto, setOculto] = useState(false)
   const [ultimoScroll, setUltimoScroll] = useState(0)
+  const [popupLocalizacao, setPopupLocalizacao] = useState(false)
+  const [regiao, setRegiao] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('regiao') || 'Tauape'
+    }
+    return 'Tauape'
+  })
+  const [statusLocalizacao, setStatusLocalizacao] = useState('')
 
   const { scrollY } = useScroll()
 
@@ -39,6 +49,63 @@ export default function Header() {
   const total = totalCarrinho || 0
   const qtd = quantidadeTotal || 0
   const ativo = (path) => location.pathname === path
+
+  const getRegionName = (lat, lng) => {
+    if (lat >= -23.57 && lat <= -23.53 && lng >= -46.64 && lng <= -46.62) return 'Tauape'
+    if (lat >= -23.7 && lat <= -23.45 && lng >= -46.7 && lng <= -46.45) return 'São Paulo'
+    if (lat >= -23.65 && lat <= -23.55 && lng >= -46.75 && lng <= -46.6) return 'Zona Sul'
+    return 'Sua região'
+  }
+
+  const solicitarLocalizacao = () => {
+    if (!navigator.geolocation) {
+      setStatusLocalizacao('Seu navegador não suporta geolocalização.')
+      setPopupLocalizacao(false)
+      return
+    }
+
+    setStatusLocalizacao('Buscando localização...')
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords
+        const novaRegiao = getRegionName(latitude, longitude)
+        setRegiao(novaRegiao)
+        localStorage.setItem('regiao', novaRegiao)
+        localStorage.setItem('localizacao', JSON.stringify({ latitude, longitude }))
+        window.dispatchEvent(new Event('localizacao-atualizada'))
+        setStatusLocalizacao('Localização atual definida.')
+        setPopupLocalizacao(false)
+      },
+      (error) => {
+        if (error.code === error.PERMISSION_DENIED) {
+          setStatusLocalizacao('Permissão de localização negada.')
+        } else {
+          setStatusLocalizacao('Não foi possível obter a localização.')
+        }
+        setPopupLocalizacao(false)
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
+    )
+  }
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const savedRegion = localStorage.getItem('regiao')
+    if (savedRegion) {
+      setRegiao(savedRegion)
+    } else if (navigator.geolocation) {
+      setPopupLocalizacao(true)
+    }
+
+    const handleLocationUpdated = () => {
+      const novaRegiao = localStorage.getItem('regiao')
+      if (novaRegiao) setRegiao(novaRegiao)
+    }
+
+    window.addEventListener('localizacao-atualizada', handleLocationUpdated)
+    return () => window.removeEventListener('localizacao-atualizada', handleLocationUpdated)
+  }, [])
 
   const handleBusca = (e) => {
     e.preventDefault()
@@ -66,8 +133,8 @@ export default function Header() {
       >
         <div className="max-7xl mx-auto px-4 sm:px-6 h-18 flex items-center gap-3 sm:gap-6">
 
-          <Link to="/" className="shrink-0">
-            <img src={logoSrc} alt="FoodExpress" className="h-12 sm:h-13 w-auto object-contain" />
+          <Link to="/" className="shrink-0 rounded-xl p-1.5 hover:bg-surface-2 transition-colors">
+            <img src={logoSrc} alt="FoodExpress" className="h-10 sm:h-11 w-auto object-contain" />
           </Link>
 
           <nav className="hidden lg:flex items-center">
@@ -97,7 +164,7 @@ export default function Header() {
             <MapPin size={18} className="text-primary" />
             <div className="flex flex-col items-start">
               <span className="text-[0.68rem] text-text-muted font-semibold leading-none">Próximo de</span>
-              <span className="text-sm font-extrabold text-text-primary leading-tight">Tauape</span>
+              <span className="text-sm font-extrabold text-text-primary leading-tight">{regiao}</span>
             </div>
             <ChevronDown size={14} className="text-text-muted" />
           </button>
@@ -129,6 +196,10 @@ export default function Header() {
                   </div>
                 </button>
 
+                <button onClick={toggle}
+                  className="hidden sm:flex w-10 h-10 rounded-full border-none bg-transparent items-center justify-center text-text-secondary cursor-pointer transition-all hover:bg-surface-2"
+                  title={dark ? 'Modo claro' : 'Modo escuro'}
+                >{dark ? <Sun size={18} className="text-yellow-400" /> : <Moon size={18} />}</button>
                 <button onClick={handleSair}
                   className="hidden sm:flex w-10 h-10 rounded-full border-none bg-transparent items-center justify-center text-text-secondary cursor-pointer transition-all hover:bg-red-50 hover:text-red-500"
                 ><LogOut size={18} /></button>
@@ -151,6 +222,48 @@ export default function Header() {
             )}
           </div>
         </div>
+
+        {/* Localização popup */}
+        <AnimatePresence>
+          {popupLocalizacao && (
+            <Motion.div
+              className="fixed inset-0 z-[9998] bg-black/50 flex items-center justify-center px-4"
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            >
+              <Motion.div
+                className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-border"
+                initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+              >
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-3">
+                    <MapPin size={22} className="text-primary" />
+                    <div>
+                      <h2 className="font-display text-lg font-bold text-text-primary">Compartilhar localização</h2>
+                      <p className="text-sm text-text-muted">Para mostrar restaurantes e mercados perto de você, permita o uso da sua localização.</p>
+                    </div>
+                  </div>
+                  {statusLocalizacao && (
+                    <p className="text-sm text-text-muted">{statusLocalizacao}</p>
+                  )}
+                  <div className="flex flex-col gap-3 pt-2">
+                    <button
+                      onClick={solicitarLocalizacao}
+                      className="w-full py-3 bg-primary text-white rounded-2xl font-bold transition-all hover:bg-primary/90"
+                    >
+                      Permitir localização
+                    </button>
+                    <button
+                      onClick={() => setPopupLocalizacao(false)}
+                      className="w-full py-3 bg-surface-2 text-text-primary rounded-2xl font-semibold transition-all hover:bg-surface-3"
+                    >
+                      Não agora
+                    </button>
+                  </div>
+                </div>
+              </Motion.div>
+            </Motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Menu mobile dropdown */}
         <AnimatePresence>

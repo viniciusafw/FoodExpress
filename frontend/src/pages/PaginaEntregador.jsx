@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -8,18 +8,10 @@ import {
   TrendingUp, ArrowUpRight, Wifi, WifiOff
 } from 'lucide-react'
 import logoSrc from '../imgs/Logo-site.png'
-import {
-  entregaAtivaEntregadorExemplo,
-  filaEntregadorExemplo,
-  historicoEntregadorExemplo,
-  estatisticasEntregadorExemplo,
-} from '../data/DadosPagina'
+import api from '../services/api'
 
 // aqui e o back gelado - dados de entregador devem vir do backend
-const entregaAtiva = entregaAtivaEntregadorExemplo
-const fila = filaEntregadorExemplo
-const historico = historicoEntregadorExemplo
-const stats = estatisticasEntregadorExemplo
+// dados carregados do backend no componente principal
 
 // ── Mini mapa SVG ─────────────────────────────────────────────────────────────
 function MiniMapa({ etapa }) {
@@ -154,7 +146,7 @@ function EntregaAtiva({ entrega, onAvançar }) {
           {[
             { label: 'Distância', valor: entrega.distancia, icon: Bike },
             { label: 'Tempo est.', valor: entrega.tempoEstimado, icon: Clock },
-            { label: 'Valor', valor: `R$ ${entrega.valor.toFixed(2).replace('.', ',')}`, icon: DollarSign },
+            { label: 'Valor', valor: `R$ ${Number(entrega.valor || 0).toFixed(2).replace('.', ',')}`, icon: DollarSign },
           ].map((item) => {
             const Icon = item.icon
             return (
@@ -227,7 +219,7 @@ function FilaPedidos() {
               <p className="text-xs text-text-muted font-medium truncate">{pedido.destino}</p>
             </div>
             <div className="text-right shrink-0">
-              <p className="font-display text-sm font-extrabold text-accent">R$ {pedido.valor.toFixed(2).replace('.', ',')}</p>
+              <p className="font-display text-sm font-extrabold text-accent">R$ {Number(pedido.valor || 0).toFixed(2).replace('.', ',')}</p>
               <p className="text-xs text-text-muted font-semibold">{pedido.distancia}</p>
             </div>
           </Motion.div>
@@ -339,16 +331,165 @@ function HeaderEntregador({ online, onToggle, usuario }) {
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function PaginaEntregador() {
   const { usuario, sair } = useAuth()
-  const [online, setOnline] = useState(true)
+  const [online, setOnline] = useState(false)
+  const [localizacao, setLocalizacao] = useState(null)
+  const [locErro, setLocErro] = useState('')
   const [etapa, setEtapa] = useState('coletando')
   const [entregaConcluida, setEntregaConcluida] = useState(false)
+  const [entregaAtiva, setEntregaAtiva] = useState(null)
+  const [fila, setFila] = useState([])
+  const [historico, setHistorico] = useState([])
+  const [stats, setStats] = useState([])
+  const [entregadorId, setEntregadorId] = useState(null)
 
-  const entrega = { ...entregaAtiva, etapa }
+  useEffect(() => {
+    // Busca dados do entregador logado
+    api.entregadores.meuPerfil()
+      .then(ent => {
+        setEntregadorId(ent.id)
+        // Pedido ativo (entregando)
+        return api.pedidos.listar({ entregadorId: ent.id, status: 'entregando' })
+          .then(pedidosAtivos => {
+            if (pedidosAtivos.length > 0) {
+              const p = pedidosAtivos[0]
+              setEntregaAtiva({
+                id: `#${String(p.id).slice(-4)}`,
+                cliente: { nome: p.cliente_id, telefone: '', avatar: 'CL' },
+                loja: { nome: p.restaurante_id, emoji: '🍽️', endereco: '' },
+                destino: { rua: p.endereco_entrega, bairro: '', cidade: '' },
+                itens: typeof p.itens === 'string' ? p.itens : JSON.stringify(p.itens),
+                valor: p.total,
+                distancia: p.distancia_km ? `${p.distancia_km} km` : '--',
+                tempoEstimado: p.tempo_entrega_estimado ? `${p.tempo_entrega_estimado} min` : '--',
+                etapa: 'coletando',
+                _id: p.id,
+              })
+            }
+          })
+      }).catch(console.error)
+  }, [])
 
-  const handleAvançar = () => {
-    if (etapa === 'coletando') {
-      setEtapa('entregando')
+  useEffect(() => {
+    if (!entregadorId) return
+    // Histórico de entregas concluídas
+    api.pedidos.listar({ entregadorId, status: 'entregue' })
+      .then(lista => setHistorico(lista.slice(0, 10).map(p => ({
+        id: `#${String(p.id).slice(-4)}`,
+        loja: p.restaurante_id, emoji: '🍽️',
+        cliente: p.cliente_id,
+        valor: p.total,
+        tempo: p.tempo_entrega_estimado ? `${p.tempo_entrega_estimado} min` : '--',
+        avaliacao: p.avaliacao_entregador || 5,
+        horario: new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+      })))
+    ).catch(() => {})
+    // Stats calculados a partir do histórico
+    api.pedidos.listar({ entregadorId, status: 'entregue' })
+      .then(lista => {
+        const hoje = new Date().toDateString()
+        const hoje_lista = lista.filter(p => new Date(p.created_at).toDateString() === hoje)
+        const ganhos = hoje_lista.reduce((s, p) => s + Number(p.total || 0) * 0.8, 0) // 80% vai para o entregador
+        const totalEntregas = hoje_lista.length
+        setHistorico(lista.slice(0, 10).map(p => ({
+          id: `#${String(p.id).slice(-4)}`,
+          loja: p.restaurante_id, emoji: '🍽️',
+          cliente: p.cliente_id,
+          valor: p.total,
+          tempo: p.tempo_entrega_estimado ? `${p.tempo_entrega_estimado} min` : '--',
+          avaliacao: 5,
+          horario: new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        })))
+        setStats([
+          { label: 'Ganhos hoje', valor: `R$ ${ganhos.toFixed(2)}`, icon: DollarSign, cor: 'text-accent', bg: 'bg-accent/10', variacao: '' },
+          { label: 'Entregas hoje', valor: String(totalEntregas), icon: Package, cor: 'text-primary', bg: 'bg-primary-light', variacao: '' },
+          { label: 'Total entregas', valor: String(lista.length), icon: Bike, cor: 'text-secondary', bg: 'bg-secondary/10', variacao: 'all time' },
+          { label: 'Avaliação', valor: '5.0', icon: Star, cor: 'text-yellow-500', bg: 'bg-yellow-50', variacao: 'média' },
+        ])
+      }).catch(() => {
+        setStats([
+          { label: 'Ganhos hoje', valor: 'R$ 0,00', icon: DollarSign, cor: 'text-accent', bg: 'bg-accent/10', variacao: '' },
+          { label: 'Entregas hoje', valor: '0', icon: Package, cor: 'text-primary', bg: 'bg-primary-light', variacao: '' },
+          { label: 'Total entregas', valor: '0', icon: Bike, cor: 'text-secondary', bg: 'bg-secondary/10', variacao: 'all time' },
+          { label: 'Avaliação', valor: '—', icon: Star, cor: 'text-yellow-500', bg: 'bg-yellow-50', variacao: 'média' },
+        ])
+      })
+  }, [entregadorId])
+
+  const entrega = entregaAtiva ? { ...entregaAtiva, etapa } : null
+
+  // Ao ficar online, pede localização e envia pro backend a cada 30s
+  const handleToggleOnline = () => {
+    if (!online) {
+      // Ficar online: pede permissão de localização
+      if (!navigator.geolocation) {
+        setLocErro('Seu navegador não suporta geolocalização')
+        setOnline(true) // fica online mesmo assim
+        return
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords
+          setLocalizacao({ latitude, longitude })
+          setLocErro('')
+          setOnline(true)
+          // Envia localização inicial pro backend
+          if (entregadorId) {
+            api.entregadores.atualizar(entregadorId, { latitude, longitude, status: 'disponivel' })
+              .catch(console.error)
+          }
+        },
+        (err) => {
+          if (err.code === 1) {
+            setLocErro('Permissão de localização negada. Ative nas configurações do navegador.')
+          } else {
+            setLocErro('Não foi possível obter sua localização.')
+          }
+          setOnline(true) // fica online mesmo sem localização
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      )
     } else {
+      // Ficar offline
+      setOnline(false)
+      if (entregadorId) {
+        api.entregadores.atualizarDisponibilidade(entregadorId, false).catch(console.error)
+      }
+    }
+  }
+
+  // Atualiza localização a cada 30s quando online
+  useEffect(() => {
+    if (!online || !entregadorId || !navigator.geolocation) return
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords
+        setLocalizacao({ latitude, longitude })
+        api.entregadores.atualizar(entregadorId, { latitude, longitude }).catch(() => {})
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+    )
+    return () => navigator.geolocation.clearWatch(watchId)
+  }, [online, entregadorId])
+
+  const handleAvançar = async () => {
+    if (!entrega) return
+    if (etapa === 'coletando') {
+      // Saiu do restaurante — status: entregando
+      setEtapa('entregando')
+      if (entrega._id) {
+        await api.pedidos.atualizarStatus(entrega._id, 'entregando').catch(console.error)
+      }
+    } else {
+      // Entregue ao cliente
+      if (entrega._id) {
+        await api.pedidos.atualizarStatus(entrega._id, 'entregue').catch(console.error)
+        // Libera o entregador
+        if (entregadorId) {
+          await api.entregadores.atualizarDisponibilidade(entregadorId, true).catch(console.error)
+        }
+      }
+      setEntregaAtiva(null)
       setEntregaConcluida(true)
       setTimeout(() => setEntregaConcluida(false), 3000)
       setEtapa('coletando')
@@ -357,7 +498,7 @@ export default function PaginaEntregador() {
 
   return (
     <div className="min-h-screen bg-background pb-8">
-      <HeaderEntregador online={online} onToggle={() => setOnline(o => !o)} usuario={usuario} />
+      <HeaderEntregador online={online} onToggle={handleToggleOnline} usuario={usuario} />
 
       {/* Toast de entrega concluída */}
       <AnimatePresence>
@@ -375,6 +516,16 @@ export default function PaginaEntregador() {
 
       {/* Banner offline */}
       <AnimatePresence>
+        {locErro && (
+          <Motion.div
+            className="mx-4 mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-xl flex items-start gap-2 text-xs font-semibold text-yellow-800"
+            initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }}
+          >
+            <span className="text-base">📍</span>
+            <span>{locErro}</span>
+          </Motion.div>
+        )}
+
         {!online && (
           <Motion.div
             className="bg-text-primary text-white px-4 py-3 flex items-center justify-center gap-2 text-sm font-bold"
@@ -407,7 +558,7 @@ export default function PaginaEntregador() {
               transition={{ delay: i * 0.07 }}
             >
               <div className={`w-8 h-8 rounded-xl ${s.bg} flex items-center justify-center mb-2`}>
-                <s.icon size={15} className={s.cor} />
+                {s.icon && (() => { const SI = s.icon; return <SI size={15} className={s.cor} /> })()}
               </div>
               <div className="font-display text-xl font-extrabold text-text-primary leading-tight">{s.valor}</div>
               <div className="text-xs text-text-muted font-semibold mt-0.5">{s.label}</div>
@@ -421,7 +572,7 @@ export default function PaginaEntregador() {
 
           {/* Coluna esquerda */}
           <div className="flex flex-col gap-5">
-            <EntregaAtiva entrega={entrega} onAvançar={handleAvançar} />
+            {entrega ? <EntregaAtiva entrega={entrega} onAvançar={handleAvançar} /> : <div className="bg-white rounded-2xl border border-border p-8 text-center text-text-muted"><p className="text-3xl mb-3">🛵</p><p className="font-semibold">Nenhuma entrega ativa</p><p className="text-sm mt-1">Aguardando novo pedido...</p></div>}
             <Historico />
           </div>
 

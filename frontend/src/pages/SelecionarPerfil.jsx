@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { User, Bike, UtensilsCrossed, BarChart3, ArrowRight } from 'lucide-react'
 import logoSrc from '../imgs/Logo-site.png'
+import api from '../services/api'
 
 const roles = [
   { id: 'cliente',     nome: 'Cliente',      descricao: 'Faça pedidos e acompanhe suas entregas',      Icon: User,            rota: '/' },
@@ -25,10 +26,22 @@ export default function SelecionarPerfil() {
 
   const roleSelecionada = roles.find(r => r.id === selecionado)
 
-  const continuar = () => {
+  const continuar = async () => {
     if (!roleSelecionada) return
     setCarregando(true)
-    entrar(usuario?.email || 'usuario@foodexpress.com', selecionado)
+    const email = usuario?.email || ''
+    const nome = usuario?.nome || email.split('@')[0] || 'Usuário'
+
+    try {
+      // Cria o registro no banco para restaurante/entregador se ainda não existir
+      if (selecionado === 'restaurante') {
+        await api.restaurantes.cadastroInicial({ email, nome }).catch(() => {})
+      } else if (selecionado === 'entregador') {
+        await api.entregadores.cadastrarInicial({ email, nome }).catch(() => {})
+      }
+    } catch {}
+
+    entrar(email, selecionado)
   }
 
   return (

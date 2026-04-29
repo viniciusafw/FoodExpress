@@ -1,6 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import logoSrc from '../imgs/Logo-site.png';
+import logoSrc from '../imgs/Logo-site.jpeg';
 
 export default function NavBarCliente() {
   const { sair } = useAuth();

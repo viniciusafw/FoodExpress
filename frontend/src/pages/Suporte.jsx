@@ -1,24 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import Header from '../components/Header'
+import api from '../services/api'
 import MobileNavBar from '../components/MobileNavBar'
 import {
   ArrowLeft, MessageCircle, Plus, Send, CheckCircle,
   Clock, AlertCircle, HelpCircle, ChevronRight
 } from 'lucide-react'
-
-// ── Dados de exemplo (back gelado — substituir por fetch /api/tickets) ───────
-const ticketsExemplo = [
-  {
-    id: 1,
-    titulo: 'Pedido não chegou',
-    descricao: 'Realizei um pedido mas ele não chegou até agora.',
-    categoria: 'pedido',
-    status: 'resolvido',
-    created_at: new Date(Date.now() - 86400000).toISOString(),
-  },
-]
 
 const categorias = [
   { id: 'pedido',    nome: 'Problema com Pedido' },
@@ -37,7 +26,13 @@ const statusConfig = {
 
 export default function Suporte() {
   const [aba, setAba] = useState('tickets')
-  const [tickets] = useState(ticketsExemplo)
+  const [tickets, setTickets] = useState([])
+
+  useEffect(() => {
+    api.tickets.listar()
+      .then(setTickets)
+      .catch(() => setTickets([]))
+  }, [])
   const [novoTicket, setNovoTicket] = useState({ titulo: '', descricao: '', categoria: 'outro' })
   const [enviando, setEnviando] = useState(false)
   const [enviado, setEnviado] = useState(false)
@@ -45,13 +40,22 @@ export default function Suporte() {
   const enviar = async () => {
     if (!novoTicket.titulo || !novoTicket.descricao) return
     setEnviando(true)
-    // fetch('/api/tickets', { method: 'POST', ... })
-    await new Promise(r => setTimeout(r, 800)) // simula request
-    setEnviando(false)
-    setEnviado(true)
-    setNovoTicket({ titulo: '', descricao: '', categoria: 'outro' })
-    setAba('tickets')
-    setTimeout(() => setEnviado(false), 4000)
+    try {
+      const novo = await api.tickets.criar({
+        titulo: novoTicket.titulo,
+        descricao: novoTicket.descricao,
+        categoria: novoTicket.categoria,
+      })
+      setTickets(prev => [novo, ...prev])
+      setEnviado(true)
+      setNovoTicket({ titulo: '', descricao: '', categoria: 'outro' })
+      setAba('tickets')
+      setTimeout(() => setEnviado(false), 4000)
+    } catch (e) {
+      alert('Erro ao enviar ticket: ' + e.message)
+    } finally {
+      setEnviando(false)
+    }
   }
 
   return (

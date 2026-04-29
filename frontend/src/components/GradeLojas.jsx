@@ -1,15 +1,52 @@
+import { useState, useEffect } from 'react'
 import StoreCard from './CartaoLoja'
-import { lojas } from '../data/dadosLojas'
-
-const mercados = [
-  { id: 7, nome: 'Mercado Perto', categoria: 'Mercado', avaliacao: 4.3, tempoEntrega: '25-35 min', taxaEntrega: 'R$ 4,00', emoji: '🛒', distancia: '0.5 km' },
-  { id: 8, nome: 'Farmácia 24h', categoria: 'Farmácia', avaliacao: 4.5, tempoEntrega: '15-25 min', taxaEntrega: 'Grátis', emoji: '💊', promo: '24h', distancia: '1.1 km' },
-  { id: 9, nome: 'Conveniência Rápida', categoria: 'Conveniência', avaliacao: 4.1, tempoEntrega: '10-20 min', taxaEntrega: 'R$ 3,00', emoji: '🏪', distancia: '0.3 km' },
-  { id: 10, nome: 'Hortifruti Verde', categoria: 'Hortifruti', avaliacao: 4.7, tempoEntrega: '30-40 min', taxaEntrega: 'Grátis', emoji: '🥦', distancia: '2.0 km' },
-]
+import api from '../services/api'
 
 export default function StoreGrid({ tipo }) {
-  const lista = tipo === 'mercado' ? mercados : lojas
+  const [lista, setLista] = useState([])
+  const [carregando, setCarregando] = useState(true)
+
+  useEffect(() => {
+    api.restaurantes.listar(tipo && tipo !== 'mercado' ? { categoria: tipo } : {})
+      .then(dados => {
+        const normalizados = dados.map(r => ({
+          ...r,
+          emoji: r.emoji || '🍽️',
+          avaliacao: r.avaliacao_media ?? 0,
+          tempoEntrega: r.tempo_medio_preparo ? `${r.tempo_medio_preparo}-${r.tempo_medio_preparo + 10} min` : '30-40 min',
+          taxaEntrega: 'Grátis',
+        }))
+        setLista(normalizados)
+      })
+      .catch(err => {
+        if (err.message?.includes('Backend offline')) {
+          console.warn('⚠️ Backend offline — rode: cd backend && npm run dev')
+        } else {
+          console.error(err)
+        }
+      })
+      .finally(() => setCarregando(false))
+  }, [tipo])
+
+  if (carregando) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="h-48 rounded-2xl bg-surface-2 animate-pulse" />
+        ))}
+      </div>
+    )
+  }
+
+  if (!lista.length) {
+    return (
+      <div className="text-center py-16 text-text-muted">
+        <p className="text-4xl mb-3">🍽️</p>
+        <p className="font-semibold">Nenhum restaurante encontrado</p>
+      </div>
+    )
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
       {lista.map((loja, i) => (

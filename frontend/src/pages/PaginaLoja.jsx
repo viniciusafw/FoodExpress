@@ -5,7 +5,7 @@ import { Star, Clock, Truck, Search, ArrowLeft, Plus, Minus, X, ShoppingBag, Use
 import MobileNavBar from '../components/MobileNavBar'
 import CartDrawer from '../components/GavetaCarrinho'
 import { useCart } from '../contexts/CartContext'
-import { lojas } from '../data/dadosLojas'
+import api from '../services/api'
 
 
 // ─── Modal produto ────────────────────────────────────────────────────────────
@@ -361,7 +361,49 @@ export default function StorePage() {
   const categoriasRef = useRef({})
   const { quantidadeTotal } = useCart()
 
-  const loja = lojas.find(l => l.id === Number(id)) || lojas[0]
+  const [loja, setLoja] = useState(null)
+  const [cardapio, setCardapio] = useState([])
+  const [carregando, setCarregando] = useState(true)
+
+  useEffect(() => {
+    Promise.all([
+      api.restaurantes.buscarPorId(id),
+      api.cardapio.listar(id),
+    ]).then(([rest, itens]) => {
+      // Agrupa itens do cardápio por categoria
+      const cats = {}
+      itens.forEach(item => {
+        if (!cats[item.categoria]) cats[item.categoria] = { id: item.categoria, nome: item.categoria, produtos: [] }
+        cats[item.categoria].produtos.push({
+          id: item.id,
+          nome: item.nome,
+          desc: item.descricao,
+          preco: item.preco,
+          emoji: item.emoji || '🍽️',
+          serve: 1,
+          opcionais: [],
+        })
+      })
+      setLoja({
+        ...rest,
+        categorias: Object.values(cats),
+        avaliacao: rest.avaliacao_media ?? '—',
+        tempoEntrega: rest.tempo_medio_preparo ? `${rest.tempo_medio_preparo}-${rest.tempo_medio_preparo + 10} min` : '30-40 min',
+        taxaEntrega: 'Grátis',
+        sobre: rest.descricao || `${rest.nome} — ${rest.categoria || 'Restaurante'} em ${rest.endereco || 'sua cidade'}`,
+        pedidoMinimo: 'R$ 15,00',
+        superRestaurante: (rest.avaliacao_media || 0) >= 4.8,
+        horarios: [
+          { dia: 'Segunda a Sexta', horario: '11:00 - 23:00' },
+          { dia: 'Sábado',          horario: '11:00 - 00:00' },
+          { dia: 'Domingo',         horario: '12:00 - 22:00' },
+        ],
+        pagamentos: ['Dinheiro', 'Crédito', 'Débito', 'Pix'],
+      })
+      setCardapio(itens)
+    }).catch(console.error)
+      .finally(() => setCarregando(false))
+  }, [id])
 
   const { scrollY } = useScroll()
   useMotionValueEvent(scrollY, 'change', (atual) => {
@@ -379,6 +421,9 @@ export default function StorePage() {
     Object.values(categoriasRef.current).forEach(el => el && observer.observe(el))
     return () => observer.disconnect()
   }, [loja])
+
+  if (carregando) return <div className="min-h-screen flex items-center justify-center"><span className="text-text-muted">Carregando...</span></div>
+  if (!loja) return <div className="min-h-screen flex items-center justify-center"><span className="text-text-muted">Restaurante não encontrado</span></div>
 
   const categoriasFiltradas = loja.categorias
     .map(cat => ({

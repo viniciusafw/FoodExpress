@@ -1,297 +1,146 @@
-# 🍕 FoodExpress - Delivery de Comida
+# FoodExpress — Monorepo
 
-**Versão:** 2.0 | **Data:** 04/02/2026
-
-Um sistema completo de gerenciamento de delivery de alimentos com arquitetura cloud, hospedado na Vercel com banco de dados distribuído Turso.
-
-## 📋 Tabela de Conteúdos
-
-- [Características](#características)
-- [Requisitos do Sistema](#requisitos-do-sistema)
-- [Regras de Negócio](#regras-de-negócio)
-- [Arquitetura Cloud](#arquitetura-cloud)
-- [Identidade Visual](#identidade-visual)
-- [Como Executar](#como-executar)
-- [Dashboards Disponíveis](#dashboards-disponíveis)
-- [Relatórios Gerenciais](#relatórios-gerenciais)
-- [Documentação](#documentação)
-
----
-
-## ✨ Características
-
-### 🎯 Requisitos Funcionais Implementados
-
-| RF | Descrição | Implementação |
-|----|-----------|---|
-| RF001 | Operador: cadastre restaurantes, acompanhe pedidos, gerencie entregadores | ✅ Completo |
-| RF002 | Restaurante: gerencie cardápio, receba pedidos, atualize status | ✅ Completo |
-| RF003 | Gerente: aprove restaurantes, configure taxas, gere relatórios | ✅ Completo |
-| RF004 | Entregador: aceite corridas, navegue, confirme entrega | ✅ Completo |
-| RF005 | Cliente: faça pedidos, acompanhe, avalie | ✅ Completo |
-| RF006 | Sistema: autenticação e controle de acesso | ✅ Completo |
-
-### 🛡️ Requisitos Não Funcionais
-
-| RNF | Descrição |
-|-----|-----------|
-| RNF001 | Hospedagem: Vercel (frontend) + Turso (banco dados) |
-| RNF002 | Autenticação: Clerk.dev com MFA opcional |
-| RNF003 | Backend: API serverless Node.js na Vercel Functions |
-| RNF004 | Performance: Tempo resposta < 2s para rastreamento |
-| RNF005 | Identidade: Laranja vibrante (#FF6B35) + Roxo (#2E294E) |
-
----
-
-## 💼 Requisitos do Sistema
-
-### Casos de Uso Principais
-
-- **UC001:** Cadastrar restaurante
-- **UC002:** Aprovar restaurante
-- **UC003:** Gerenciar cardápio
-- **UC004:** Realizar pedido
-- **UC005:** Aceitar pedido restaurante
-- **UC006:** Atribuir entregador
-- **UC007:** Rastrear entrega
-- **UC008:** Confirmar entrega
-- **UC009:** Processar pagamento
-- **UC010:** Efetuar login
-- **UC011:** Avaliar experiência
-- **UC012:** Calcular rotas
-- **UC013:** Gerenciar disponibilidade entregador
-- **UC014:** Resolver disputa
-
----
-
-## 💰 Regras de Negócio
-
-| ID | Regra | Status |
-|----|-------|--------|
-| **RN001** | Gerente com acesso a todas funcionalidades | ✅ Implementado |
-| **RN002** | Pedidos não atendidos em 5min redirecionados automaticamente | ⚠️ Parcial |
-| **RN003** | Taxa entrega: ≤3km R$5 \| 3-5km R$8 \| 5-8km R$12 | ✅ Implementado |
-| **RN004** | Comissão 15% com repasse em D+7 | ⚠️ Parcial |
-| **RN005** | Entregador recebe por km rodado + gorjeta | ⚠️ Parcial |
-| **RN006** | Cancelamento após 5min gera multa 50% | ❌ Planejado |
-
----
-
-## ☁️ Arquitetura Cloud
+Projeto completo com **frontend** (React + Vite) e **backend** (Express + TypeScript + Turso).
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    FoodExpress v2.0                     │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  Frontend (Next.js 14)  ────→  Vercel              │
-│        ↓                                               │
-│  API Routes + Edge Fn   ────→  Vercel Functions        │
-│        ↓                                               │
-│  Database (Turso)       ────→  SQLite Distribuído     │
-│                                                         │
-│  Auth (Clerk.dev)       ────→  JWT + MFA               │
-│  Storage (Cloudinary)   ────→  25GB Free              │
-│  Pagamento (Stripe)     ────→  Webhooks              │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
+foodexpress/
+├── frontend/              ← React + Vite + Tailwind + React Router
+│   └── src/
+│       ├── pages/         ← Home, Login, Restaurantes, PaginaLoja, Checkout, Gerente...
+│       ├── components/    ← Header, NavBar, GavetaCarrinho, CarrosselCategorias...
+│       ├── contexts/      ← AuthContext, CartContext
+│       ├── data/          ← DadosGerente, DadosPagina, dadosLojas
+│       └── utils/         ← mascaras.js
+├── backend/               ← Express + TypeScript + Turso (SQLite na nuvem)
+│   ├── scripts/
+│   │   ├── migrate.ts     ← cria todas as tabelas
+│   │   └── seed.ts        ← popula com dados de exemplo
+│   └── src/
+│       ├── routes/        ← 13 módulos de rotas (ver tabela abaixo)
+│       ├── lib/           ← db.ts, validacoes.ts
+│       └── middleware/    ← auth.ts (JWT), rateLimit.ts
+├── schema.sql             ← estrutura completa do banco
+└── package.json           ← scripts monorepo (concurrently)
 ```
 
-### Stack Tecnológico
+## Configuração rápida
 
-- **Frontend:** Next.js 14, React 18, TypeScript
-- **Styling:** Tailwind CSS 3 com paleta custom
-- **Backend:** Node.js (Serverless)
-- **Database:** Turso (SQLite distribuído)
-- **Auth:** Clerk.dev (MFA, OAuth)
-- **Payments:** Stripe
-- **Maps:** Leaflet + React-Leaflet
-- **Charts:** Recharts
-- **Forms:** React Hook Form + Zod
-- **Real-time:** Socket.io
-
----
-
-## 🎨 Identidade Visual
-
-### Paleta de Cores
-
-| Cor | Código | Uso |
-|-----|--------|-----|
-| **Primária (Laranja)** | `#FF6B35` | Botões, headers, elementos principais |
-| **Secundária (Roxo)** | `#2E294E` | Backgrounds, textos secundários |
-| **Light Laranja** | `#FF8C5A` | Hover states |
-| **Dark Laranja** | `#E55A24` | Active states |
-
-### Significado
-
-- 🟠 **Laranja Vibrante:** Representa velocidade e energia
-- 🟣 **Roxo Escuro:** Representa confiabilidade e profissionalismo
-
----
-
-## 🚀 Como Executar
-
-### ⚡ Comando Rápido
-
+### 1. Instalar dependências
 ```bash
-cd /Users/joaopedro/FoodExpress/frontend && npm run dev
+npm run install:all
 ```
 
-Ou use o script automático:
+### 2. Configurar variáveis de ambiente
 
+**Backend** (`backend/.env`):
 ```bash
-./start.sh
+cd backend && cp .env.example .env
+# Preencha: TURSO_DATABASE_URL, TURSO_AUTH_TOKEN, STRIPE_SECRET_KEY, JWT_SECRET
 ```
 
-### 📱 Acesse os Dashboards
-
-| Perfil | URL |
-|--------|-----|
-| Home | http://localhost:3000 |
-| Cliente | http://localhost:3000/cliente |
-| Entregador | http://localhost:3000/entregador |
-| Restaurante | http://localhost:3000/restaurante |
-| Operador | http://localhost:3000/operador |
-| Gerente | http://localhost:3000/gerente |
-| Relatórios | http://localhost:3000/relatorios |
-
-### 🔧 Variáveis de Ambiente
-
-Arquivo `.env.local` já configurado com valores de teste. Para produção:
-
-```env
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=seu_valor
-CLERK_SECRET_KEY=seu_valor
-STRIPE_SECRET_KEY=seu_valor
-TURSO_CONNECTION_URL=seu_banco_dados
+**Frontend** (`frontend/.env`):
+```bash
+cd frontend && cp .env.example .env
+# Preencha: VITE_API_URL=http://localhost:3001
 ```
 
----
-
-## 📊 Dashboards Disponíveis
-
-### 👨‍💼 Gerente
-- Aprovação de restaurantes
-- Configuração de taxas
-- Dashboard com estatísticas
-- 12 Relatórios gerenciais
-- Monitoramento financeiro
-
-### 👨‍💻 Operador
-- Monitoramento de pedidos
-- Gestão de entregadores
-- Suporte ao cliente
-- Atribuição de rotas
-
-### 👨‍🍳 Restaurante
-- Gerenciamento de cardápio
-- Recebimento de pedidos
-- Atualizar status de preparo
-- Performance e avaliações
-
-### 🚗 Entregador
-- Aceitar corridas
-- Rastreamento GPS
-- Navegação em tempo real
-- Histórico de entregas
-- Ganhos e disponibilidade
-
-### 👤 Cliente
-- Buscar restaurantes
-- Fazer pedidos
-- Rastrear entrega
-- Avaliar serviço
-- Histórico de pedidos
-
----
-
-## 📈 Relatórios Gerenciais (12 Relatórios)
-
-| ID | Relatório | Filtros |
-|----|-----------|---------|
-| REL001 | Vendas por período | Data, região, categoria |
-| REL002 | Desempenho por restaurante | Restaurante, período |
-| REL003 | Eficiência de entregadores | Entregador, período |
-| REL004 | Mapa de calor de pedidos | Hora, dia, tipo cozinha |
-| REL005 | Taxa de cancelamento | Período, motivo |
-| REL006 | Satisfação do cliente (NPS) | Período, restaurante |
-| REL007 | Financeiro - comissões | Período, status |
-| REL008 | Produtos mais vendidos | Categoria, período |
-| REL009 | Tempo de entrega & SLA | Região, período |
-| REL010 | Fidelização de clientes | Período, segmento |
-| REL011 | Cancelamentos/reembolsos | Status, período |
-| REL012 | Crescimento de base | Mês a mês |
-
-**Acesso:** http://localhost:3000/relatorios
-
----
-
-## 🔌 Rotas de API
-
-Todas as rotas estão documentadas em [ROTAS_API.md](ROTAS_API.md)
-
-### Endpoints Principais
-
+### 3. Criar o banco (Turso)
+```bash
+# Crie conta em https://turso.tech
+turso db create foodexpress
+turso db show foodexpress --url    # → TURSO_DATABASE_URL
+turso db tokens create foodexpress # → TURSO_AUTH_TOKEN
 ```
-POST   /api/restaurantes/cadastro       - Cadastrar restaurante
-GET    /api/restaurantes                - Listar restaurantes
-POST   /api/cardapio                    - Adicionar item cardápio
-POST   /api/pedidos                     - Criar pedido
-GET    /api/pedidos/[id]/rastrear       - Rastrear entrega
-POST   /api/rotas/calcular              - Calcular rota
-GET    /api/relatorios?tipo=...         - Gerar relatórios
+
+### 4. Rodar migrations e seed
+```bash
+cd backend
+npm run migrate   # cria as tabelas
+npm run seed      # insere dados de exemplo (5 restaurantes, 15 itens)
+```
+
+### 5. Rodar em desenvolvimento
+```bash
+# Na raiz — roda frontend (3000) + backend (3001) juntos:
+npm run dev
 ```
 
 ---
 
-## 📚 Documentação
+## API — Endpoints completos
 
-| Documento | Conteúdo |
-|-----------|----------|
-| [ESPECIFICACAO_v2.0.md](ESPECIFICACAO_v2.0.md) | Versão 2.0 completa |
-| [REGRAS_NEGOCIO.md](REGRAS_NEGOCIO.md) | Detalhes de implementação RN |
-| [ROTAS_API.md](ROTAS_API.md) | Documentação de APIs |
-| [INICIAR.md](INICIAR.md) | Guia de inicialização rápido |
+### Restaurantes
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | /api/restaurantes | Listar (filtros: categoria, ordenar, limite) |
+| GET | /api/restaurantes/:id | Detalhe |
+| POST | /api/restaurantes | Criar (auth) |
+| PUT | /api/restaurantes/:id | Atualizar (auth) |
+| DELETE | /api/restaurantes/:id | Desativar (auth) |
+| GET | /api/restaurantes/cadastro | Buscar restaurante do usuário logado |
+| POST | /api/restaurantes/cadastro | Criar registro inicial ao selecionar role |
+| POST | /api/restaurantes/:id/aprovar | Aprovar ou rejeitar restaurante (gerente) |
 
----
+### Cardápio
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | /api/cardapio | Listar (filtros: restauranteId, categoria) |
+| GET | /api/cardapio/:id | Detalhe do item |
+| POST | /api/cardapio | Criar item (auth) |
+| PUT | /api/cardapio/:id | Atualizar item (auth) |
+| DELETE | /api/cardapio/:id | Desativar item (auth) |
 
-## ✅ Status de Implementação
+### Pedidos
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | /api/pedidos | Listar (filtros: status, clienteId, restauranteId, entregadorId) |
+| GET | /api/pedidos/:id | Detalhe |
+| POST | /api/pedidos | Criar + gerar PaymentIntent Stripe |
+| PUT | /api/pedidos/:id | Atualizar status/tempo |
+| DELETE | /api/pedidos/:id | Cancelar (com multa após 5 min) |
+| GET | /api/pedidos/:id/rastrear | Rastrear em tempo real |
+| POST | /api/pedidos/:id/atribuir-entregador | Atribuir entregador manualmente |
+| POST | /api/pedidos/:id/atribuir-entregador-automatico | Atribuir o mais próximo automaticamente |
 
-✅ **6 Dashboards** (Gerente, Operador, Restaurante, Entregador, Cliente, Relatórios)
-✅ **14 Casos de Uso** (UC001-UC014)
-✅ **12 Relatórios Gerenciais** (REL001-REL012)
-✅ **API REST Completa** com 20+ endpoints
-✅ **Autenticação Clerk.dev** com JWT e MFA
-✅ **Rastreamento GPS tempo real** com cálculo de rotas
-✅ **Integração Stripe** para pagamentos
-✅ **Design responsivo** com Tailwind CSS + identidade visual
+### Entregadores
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | /api/entregadores | Listar (filtro: status) |
+| GET | /api/entregadores/:id | Detalhe |
+| POST | /api/entregadores | Criar (auth) |
+| PUT | /api/entregadores/:id | Atualizar (auth) |
+| DELETE | /api/entregadores/:id | Desativar (auth) |
+| GET | /api/entregadores/cadastro | Buscar entregador do usuário logado |
+| POST | /api/entregadores/cadastro | Criar registro inicial ao selecionar role |
+| POST | /api/entregadores/:id/disponibilidade | Toggle online/offline |
 
----
+### Outros
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | /api/clientes | Buscar cliente logado |
+| POST | /api/clientes | Criar cliente |
+| PUT | /api/clientes/:id | Atualizar perfil |
+| GET | /api/avaliacoes | Listar avaliações |
+| POST | /api/avaliacoes | Criar avaliação |
+| GET | /api/cupons?codigo=XXX&total=50 | Validar cupom |
+| POST | /api/cupons | Criar cupom |
+| GET | /api/disputas | Listar disputas |
+| POST | /api/disputas | Abrir disputa |
+| PUT | /api/disputas/:id | Responder/resolver disputa |
+| GET | /api/tickets | Listar tickets de suporte |
+| POST | /api/tickets | Criar ticket |
+| GET | /api/relatorios?tipo=vendas | 12 tipos de relatório gerencial |
+| POST | /api/rotas/calcular | Calcular distância e tempo estimado |
+| POST | /api/documentos/upload | Upload de documento (CNH, CNPJ...) |
+| POST | /api/webhooks/stripe | Webhook de pagamento Stripe |
+| GET | /health | Health check |
 
-## 🔐 Segurança
+## Autenticação
 
-- ✅ TLS 1.3 em todas as comunicações
-- ✅ Senhas com hash bcrypt + salt
-- ✅ MFA via Clerk.dev
-- ✅ Rate limiting nas APIs
-- ✅ Validação de inputs com Zod
-- ✅ Middleware de autenticação
+Inclua o token JWT no header de toda requisição protegida:
+```
+Authorization: Bearer <token>
+```
 
----
-
-## 📞 Suporte
-
-Para dúvidas ou relatórios de bugs, consulte:
-- [INICIAR.md](INICIAR.md) - Guia de inicialização
-- [Documentação FoodExpress](/)
-
----
-
-## 📄 Licença
-
-Sistema proprietário FoodExpress - 2026
-
----
-
-**Status:** 🟢 Pronto para Produção | **Versão:** 2.0 | **Data:** 04/02/2026
+Para gerar tokens, implemente `POST /api/auth/login` que receba email/senha,
+valide no banco e retorne `jwt.sign({ userId, role }, process.env.JWT_SECRET)`.

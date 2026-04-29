@@ -1,11 +1,22 @@
 import { useState } from 'react'
 import { mascaraTelefone } from '../utils/mascaras'
 import { useAuth } from '../contexts/AuthContext'
-import { useNavigate } from 'react-router-dom'
-import { User, Mail, Phone, Lock, Eye, EyeOff, ArrowLeft, Check } from 'lucide-react'
+import { useNavigate, Link } from 'react-router-dom'
+import { Mail, Phone, ArrowLeft, Check, Send } from 'lucide-react'
 import { motion as Motion } from 'framer-motion'
 import logoSrc from '../imgs/Logo-site.png'
-import { camposCadastroUsuario, beneficiosCadastroUsuario } from '../data/DadosPagina'
+
+const camposCadastroUsuario = [
+  { label: 'E-mail', name: 'email', type: 'email', placeholder: 'seu@email.com', Icon: Mail },
+  { label: 'Telefone / WhatsApp', name: 'telefone', type: 'tel', placeholder: '(11) 99999-9999', Icon: Phone },
+]
+const beneficiosCadastroUsuario = [
+  'Peça em centenas de restaurantes',
+  'Acompanhe seu pedido em tempo real',
+  'Pagamento rápido e seguro',
+  'Ofertas exclusivas para membros',
+]
+
 
 // aqui e o back gelado - campos e benefícios fixos devem vir de backend ou CMS
 const itemVariants = {
@@ -17,19 +28,30 @@ const campos = camposCadastroUsuario
 const beneficios = beneficiosCadastroUsuario
 
 export default function CadastroUsuario() {
-  const [dados, setDados] = useState({ nome: '', email: '', telefone: '', senha: '' })
-  const [mostrarSenha, setMostrarSenha] = useState(false)
+  const [dados, setDados] = useState({ email: '', telefone: '' })
+  const [enviado, setEnviado] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [aceitouTermos, setAceitouTermos] = useState(false)
   const { cadastrarCliente } = useAuth()
   const navigate = useNavigate()
 
-  const handleEnviar = (e) => {
+  const handleEnviar = async (e) => {
     e.preventDefault()
     if (!aceitouTermos) return
     setCarregando(true)
-    const fn = cadastrarCliente
-    fn({ name: dados.nome, email: dados.email, phone: dados.telefone, password: dados.senha })
+    try {
+      // Cria o cliente no backend (sem senha — autenticação via link por email)
+      await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/auth/registrar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: dados.email, telefone: dados.telefone }),
+      })
+      setEnviado(true)
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setCarregando(false)
+    }
   }
 
   const handleChange = (e) => {
@@ -100,62 +122,67 @@ export default function CadastroUsuario() {
           <h2 className="font-display text-2xl font-extrabold text-text-primary mb-1 tracking-tight">Criar conta grátis</h2>
           <p className="text-sm text-text-muted font-semibold mb-7">Rápido e fácil, leva menos de 1 minuto</p>
 
-          <form onSubmit={handleEnviar} className="flex flex-col gap-4">
-            {campos.map((field, i) => {
-              const Icon = field.Icon
-              return (
-              <Motion.div key={field.name} className="flex flex-col gap-1.5"
-                variants={itemVariants} initial="hidden" animate="show"
-                transition={{ delay: i * 0.08 }}>
-                <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">{field.label}</label>
-                <div className="relative">
-                  <Icon size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-                  <input name={field.name} type={field.type} placeholder={field.placeholder}
-                    value={dados[field.name]} onChange={handleChange} required className={inputClass} />
-                </div>
-              </Motion.div>
-              )})}
-
-            <Motion.div className="flex flex-col gap-1.5" variants={itemVariants} initial="hidden" animate="show" transition={{ delay: 0.3 }}>
-              <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Senha</label>
-              <div className="relative">
-                <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-                <input name="senha" type={mostrarSenha ? 'text' : 'password'} placeholder="Mínimo 8 caracteres"
-                  value={dados.senha} onChange={handleChange} required
-                  className="w-full pl-10 pr-12 py-3.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,107,53,0.08)] placeholder:text-text-muted placeholder:font-normal" />
-                <button type="button" onClick={() => setMostrarSenha(s => !s)}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted bg-transparent border-none cursor-pointer hover:text-text-primary">
-                  {mostrarSenha ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
+          {enviado ? (
+            <Motion.div
+              className="flex flex-col items-center text-center py-6 gap-4"
+              initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+            >
+              <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
+                <Send size={28} className="text-accent" />
               </div>
+              <div>
+                <h3 className="font-display text-xl font-extrabold text-text-primary mb-1">Verifique seu e-mail!</h3>
+                <p className="text-sm text-text-muted font-semibold leading-relaxed">
+                  Enviamos um link de acesso para<br />
+                  <strong className="text-text-primary">{dados.email}</strong>
+                </p>
+              </div>
+              <p className="text-xs text-text-muted">Não recebeu? Verifique o spam ou <button onClick={() => setEnviado(false)} className="text-primary font-bold bg-transparent border-none cursor-pointer hover:underline">tente novamente</button></p>
             </Motion.div>
+          ) : (
+            <form onSubmit={handleEnviar} className="flex flex-col gap-4">
+              {campos.map((field, i) => {
+                const Icon = field.Icon
+                return (
+                <Motion.div key={field.name} className="flex flex-col gap-1.5"
+                  variants={itemVariants} initial="hidden" animate="show"
+                  transition={{ delay: i * 0.08 }}>
+                  <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">{field.label}</label>
+                  <div className="relative">
+                    <Icon size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                    <input name={field.name} type={field.type} placeholder={field.placeholder}
+                      value={dados[field.name]} onChange={handleChange} required className={inputClass} />
+                  </div>
+                </Motion.div>
+                )})}
 
-            <label className="flex items-start gap-2.5 cursor-pointer">
-              <input type="checkbox" checked={aceitouTermos} onChange={e => setAceitouTermos(e.target.checked)}
-                className="mt-0.5 w-4 h-4 accent-primary shrink-0 cursor-pointer" />
-              <span className="text-xs text-text-secondary font-semibold leading-snug">
-                Li e aceito os <a href="#" className="text-primary font-bold hover:underline">Termos de Uso</a> e a <a href="#" className="text-primary font-bold hover:underline">Política de Privacidade</a>
-              </span>
-            </label>
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input type="checkbox" checked={aceitouTermos} onChange={e => setAceitouTermos(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-primary shrink-0 cursor-pointer" />
+                <span className="text-xs text-text-secondary font-semibold leading-snug">
+                  Li e aceito os <Link to="/termos-uso" target="_blank" rel="noreferrer" className="text-primary font-bold hover:underline">Termos de Uso</Link> e a <Link to="/politica-privacidade" target="_blank" rel="noreferrer" className="text-primary font-bold hover:underline">Política de Privacidade</Link>
+                </span>
+              </label>
 
-            <Motion.button type="submit" disabled={carregando || !aceitouTermos}
-              className="w-full py-4 bg-primary text-white border-none rounded-xl font-display font-bold text-base cursor-pointer disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed"
-              whileHover={{ scale: 1.02, boxShadow: '0 4px 20px rgba(255,107,53,0.35)' }}
-              whileTap={{ scale: 0.98 }}>
-              {carregando ? 'Criando conta...' : 'Criar minha conta'}
-            </Motion.button>
-          </form>
+              <Motion.button type="submit" disabled={carregando || !aceitouTermos}
+                className="w-full py-4 bg-primary text-white border-none rounded-xl font-display font-bold text-base cursor-pointer disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed"
+                whileHover={{ scale: 1.02, boxShadow: '0 4px 20px rgba(255,107,53,0.35)' }}
+                whileTap={{ scale: 0.98 }}>
+                {carregando ? 'Enviando link...' : 'Criar conta — receber link por e-mail'}
+              </Motion.button>
+            </form>
+          )}
 
           <div className="flex items-center gap-4 my-5 text-text-muted text-xs font-bold">
             <div className="flex-1 h-px bg-border" /> já tem conta? <div className="flex-1 h-px bg-border" />
           </div>
 
-          <button onClick={() => navigate('/login')}
+          <button type="button" onClick={() => navigate('/login')}
             className="w-full py-3 bg-transparent border border-border rounded-xl text-sm font-bold text-text-secondary cursor-pointer transition-all hover:border-primary hover:text-primary hover:bg-primary-light">
             Entrar na minha conta
           </button>
 
-          <button onClick={() => navigate('/register/store')}
+          <button type="button" onClick={() => navigate('/register/store')}
             className="mt-2 w-full py-3 bg-transparent border border-border rounded-xl text-sm font-semibold text-text-secondary cursor-pointer transition-all hover:border-secondary hover:text-secondary hover:bg-secondary/5 flex items-center justify-center gap-2">
             🏪 Sou dono de restaurante ou mercado
           </button>

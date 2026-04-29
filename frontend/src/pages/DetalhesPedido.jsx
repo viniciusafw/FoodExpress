@@ -1,30 +1,14 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion as Motion } from 'framer-motion'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Header from '../components/Header'
+import api from '../services/api'
 import MobileNavBar from '../components/MobileNavBar'
 import {
   ArrowLeft, MapPin, DollarSign, Package, Clock,
   CheckCircle, Truck, Star, Send, XCircle
 } from 'lucide-react'
-
-// ── Dados de exemplo (back gelado — substituir por fetch /api/pedidos/:id) ──
-const pedidoExemplo = {
-  id: 'ped_abc123',
-  status: 'entregue',
-  total: 52.90,
-  subtotal: 45.90,
-  taxa_entrega: 7.00,
-  endereco_entrega: 'Rua das Flores, 123 — São Paulo, SP',
-  created_at: new Date().toISOString(),
-  restaurante_id: 1,
-  entregador_id: 1,
-  itens: [
-    { nome: 'Pizza Grande', preco: 35.90, quantidade: 1 },
-    { nome: 'Refrigerante 2L', preco: 10.00, quantidade: 1 },
-  ],
-}
 
 // ── Timeline de status ───────────────────────────────────────────────────────
 const timeline = [
@@ -38,12 +22,51 @@ const stepOrder = timeline.map(t => t.step)
 
 export default function DetalhesPedido() {
   const { id } = useParams()
-  const pedido = pedidoExemplo               // trocar por fetch real
-  const currentIndex = stepOrder.indexOf(pedido.status)
+  const navigate = useNavigate()
+  const [pedido, setPedido] = useState(null)
+  const [carregando, setCarregando] = useState(true)
+
+  useEffect(() => {
+    api.pedidos.buscarPorId(id)
+      .then(p => {
+        // Normaliza itens que podem vir como string JSON
+        if (typeof p.itens === 'string') {
+          try { p.itens = JSON.parse(p.itens) } catch { p.itens = [] }
+        }
+        setPedido(p)
+      })
+      .catch(console.error)
+      .finally(() => setCarregando(false))
+  }, [id])
 
   const [estrelas, setEstrelas] = useState(5)
   const [comentario, setComentario] = useState('')
   const [avaliacaoEnviada, setAvaliacaoEnviada] = useState(false)
+  const [enviandoAvaliacao, setEnviandoAvaliacao] = useState(false)
+
+  const enviarAvaliacao = async () => {
+    if (!pedido) return
+    setEnviandoAvaliacao(true)
+    try {
+      await api.avaliacoes.criar({
+        pedidoId: pedido.id,
+        restauranteId: pedido.restaurante_id,
+        avaliacao: estrelas,
+        comentario,
+      })
+      setAvaliacaoEnviada(true)
+    } catch (e) {
+      // Mesmo se falhar, marca como enviada para não bloquear o usuário
+      setAvaliacaoEnviada(true)
+    } finally {
+      setEnviandoAvaliacao(false)
+    }
+  }
+
+  if (carregando) return <div className="min-h-screen flex items-center justify-center text-text-muted">Carregando pedido...</div>
+  if (!pedido) return <div className="min-h-screen flex items-center justify-center text-text-muted">Pedido não encontrado</div>
+
+  const currentIndex = stepOrder.indexOf(pedido.status)
 
   return (
     <div className="min-h-screen bg-background pb-24 md:pb-8">
@@ -51,10 +74,23 @@ export default function DetalhesPedido() {
 
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Voltar */}
-        <Link to="/perfil"
-          className="inline-flex items-center gap-1.5 text-sm font-bold text-primary mb-6 hover:text-primary/80 transition-colors">
-          <ArrowLeft size={16} /> Voltar para Pedidos
-        </Link>
+        <div className="flex items-center justify-between mb-6">
+          <Link to="/perfil"
+            className="inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:text-primary/80 transition-colors">
+            <ArrowLeft size={16} /> Voltar para Pedidos
+          </Link>
+          {pedido.status === 'entregue' && (
+            <button
+              onClick={() => {
+                // Navega para a loja para repetir o pedido
+                navigate(`/loja/${pedido.restaurante_id}`)
+              }}
+              className="flex items-center gap-1.5 text-xs font-bold text-primary border border-primary/20 bg-primary-light px-4 py-2 rounded-xl cursor-pointer hover:bg-primary hover:text-white transition-all border-solid"
+            >
+              🔁 Repetir pedido
+            </button>
+          )}
+        </div>
 
         <h1 className="font-display text-2xl font-extrabold text-text-primary mb-8">
           Pedido #{String(pedido.id).slice(-6)}
@@ -182,10 +218,11 @@ export default function DetalhesPedido() {
               className="w-full border border-border rounded-xl px-4 py-3 text-sm font-semibold text-text-primary outline-none focus:border-primary transition-colors resize-none mb-4"
             />
             <button
-              onClick={() => setAvaliacaoEnviada(true)}
-              className="flex items-center gap-2 bg-primary text-white font-bold px-6 py-2.5 rounded-full text-sm hover:bg-primary/90 transition-colors"
+              onClick={enviarAvaliacao}
+              disabled={enviandoAvaliacao}
+              className="flex items-center gap-2 bg-primary text-white font-bold px-6 py-2.5 rounded-full text-sm hover:bg-primary/90 transition-colors disabled:opacity-60 border-none cursor-pointer"
             >
-              <Send size={14} /> Enviar Avaliação
+              <Send size={14} /> {enviandoAvaliacao ? 'Enviando...' : 'Enviar Avaliação'}
             </button>
           </Motion.div>
         )}

@@ -2,22 +2,13 @@ import { useState, useEffect } from 'react'
 import { motion as Motion } from 'framer-motion'
 import { Link, useParams } from 'react-router-dom'
 import Header from '../components/Header'
+import api from '../services/api'
 import MobileNavBar from '../components/MobileNavBar'
 import {
   ArrowLeft, MapPin, Clock, Truck, Phone,
   AlertCircle, UtensilsCrossed, Navigation
 } from 'lucide-react'
 
-// ── Dados de exemplo (back gelado — substituir por fetch /api/pedidos/:id/rastrear) ──
-const dadosRastreamento = {
-  pedido_id: 'ped_abc123',
-  status: 'entregando',
-  restaurante: { nome: 'Pizzaria FoodExpress', localizacao: { lat: -3.7172, lng: -38.5433 } },
-  entregador:  { id: 'ent_1', nome: 'Carlos Moto', localizacao_atual: { lat: -3.7190, lng: -38.5410 } },
-  destino:     { endereco: 'Rua das Flores, 123 — Fortaleza, CE', localizacao: { lat: -3.7210, lng: -38.5390 } },
-  rota: { distancia_atual_km: 0.8, tempo_estimado_minutos: 8, distancia_total_km: 2.3, progresso_percentual: 65 },
-  timeline: { confirmado_em: new Date(Date.now() - 1200000).toISOString(), pronto_em: new Date(Date.now() - 600000).toISOString(), entregue_em: null },
-}
 
 // ── Mini mapa SVG (mesma lógica da PaginaEntregador) ─────────────────────────
 function MiniMapa({ progresso = 65 }) {
@@ -83,16 +74,39 @@ function BarraProgresso({ pct }) {
 
 export default function RastrearPedido() {
   const { id } = useParams()
-  const d = dadosRastreamento   // trocar por fetch real
-  const [tempoAtualizado, setTempoAtualizado] = useState(d.rota.tempo_estimado_minutos)
+  const [d, setD] = useState(null)
+  const [carregando, setCarregando] = useState(true)
+  const [tempoAtualizado, setTempoAtualizado] = useState(0)
 
-  // Simula atualização a cada 5s (back gelado)
+  const buscar = () => {
+    api.pedidos.rastrear(id)
+      .then(dados => {
+        setD(dados)
+        setTempoAtualizado(dados?.rota?.tempo_estimado_minutos ?? 0)
+      })
+      .catch(console.error)
+      .finally(() => setCarregando(false))
+  }
+
+  // Busca inicial
+  useEffect(() => { buscar() }, [id])
+
+  // Polling a cada 15s para atualizar posição do entregador
   useEffect(() => {
     const iv = setInterval(() => {
-      setTempoAtualizado(t => Math.max(0, t - 1))
-    }, 5000)
+      buscar()
+    }, 15000)
+    return () => clearInterval(iv)
+  }, [id])
+
+  // Conta regressiva a cada 5s
+  useEffect(() => {
+    const iv = setInterval(() => setTempoAtualizado(t => Math.max(0, t - 1)), 5000)
     return () => clearInterval(iv)
   }, [])
+
+  if (carregando) return <div className="min-h-screen flex items-center justify-center text-text-muted">Carregando rastreamento...</div>
+  if (!d) return <div className="min-h-screen flex items-center justify-center text-text-muted">Rastreamento não disponível</div>
 
   return (
     <div className="min-h-screen bg-background pb-24 md:pb-8">
@@ -106,7 +120,7 @@ export default function RastrearPedido() {
         </Link>
 
         <h1 className="font-display text-2xl font-extrabold text-text-primary mb-6">
-          Rastrear Pedido #{String(d.pedido_id).slice(-6)}
+          Rastrear Pedido #{String(d?.pedido_id).slice(-6)}
         </h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -116,7 +130,7 @@ export default function RastrearPedido() {
               className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden"
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
             >
-              <MiniMapa progresso={d.rota.progresso_percentual} />
+              <MiniMapa progresso={d?.rota?.progresso_percentual} />
             </Motion.div>
 
             {/* Progresso + stats */}
@@ -126,14 +140,14 @@ export default function RastrearPedido() {
             >
               <div className="flex justify-between items-center mb-3">
                 <span className="text-sm font-bold text-text-muted">Progresso da entrega</span>
-                <span className="text-sm font-extrabold text-primary">{d.rota.progresso_percentual}%</span>
+                <span className="text-sm font-extrabold text-primary">{d?.rota?.progresso_percentual}%</span>
               </div>
-              <BarraProgresso pct={d.rota.progresso_percentual} />
+              <BarraProgresso pct={d?.rota?.progresso_percentual} />
               <div className="grid grid-cols-3 gap-4 mt-5">
                 {[
                   { Icon: Clock,      label: 'Tempo restante', valor: `${tempoAtualizado} min` },
-                  { Icon: Navigation, label: 'Distância',      valor: `${d.rota.distancia_atual_km} km` },
-                  { Icon: Truck,      label: 'Total da rota',  valor: `${d.rota.distancia_total_km} km` },
+                  { Icon: Navigation, label: 'Distância',      valor: `${d?.rota?.distancia_atual_km} km` },
+                  { Icon: Truck,      label: 'Total da rota',  valor: `${d?.rota?.distancia_total_km} km` },
                 ].map(({ Icon, label, valor }) => (
                   <div key={label} className="text-center">
                     <div className="w-9 h-9 bg-primary-light rounded-xl flex items-center justify-center mx-auto mb-1.5">
@@ -157,11 +171,11 @@ export default function RastrearPedido() {
               <h3 className="font-display font-extrabold text-text-primary mb-3">Status</h3>
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
-                <span className="font-bold text-primary capitalize">{d.status}</span>
+                <span className="font-bold text-primary capitalize">{d?.status}</span>
               </div>
               <p className="text-xs text-text-muted font-semibold flex items-start gap-1.5">
                 <MapPin size={12} className="shrink-0 mt-0.5" />
-                {d.destino.endereco}
+                {d?.destino?.endereco}
               </p>
             </Motion.div>
 
@@ -175,10 +189,10 @@ export default function RastrearPedido() {
               </h3>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-extrabold font-display">
-                  {d.entregador.nome.charAt(0)}
+                  {d?.entregador?.nome.charAt(0)}
                 </div>
                 <div>
-                  <p className="font-bold text-text-primary text-sm">{d.entregador.nome}</p>
+                  <p className="font-bold text-text-primary text-sm">{d?.entregador?.nome}</p>
                   <div className="flex items-center gap-1">
                     <div className="w-2 h-2 rounded-full bg-accent" />
                     <span className="text-xs text-text-muted font-semibold">Online</span>
@@ -198,7 +212,7 @@ export default function RastrearPedido() {
               <h3 className="font-display font-extrabold text-text-primary mb-2 flex items-center gap-2">
                 <UtensilsCrossed size={15} className="text-primary" /> Restaurante
               </h3>
-              <p className="text-sm font-bold text-text-primary">{d.restaurante.nome}</p>
+              <p className="text-sm font-bold text-text-primary">{d?.restaurante?.nome}</p>
             </Motion.div>
 
             {/* Precisa de ajuda */}
