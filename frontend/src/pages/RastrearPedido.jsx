@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion as Motion } from 'framer-motion'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import Header from '../components/Header'
 import api from '../services/api'
 import MobileNavBar from '../components/MobileNavBar'
@@ -74,6 +74,7 @@ function BarraProgresso({ pct }) {
 
 export default function RastrearPedido() {
   const { id } = useParams()
+  const navigate = useNavigate()
   const [d, setD] = useState(null)
   const [carregando, setCarregando] = useState(true)
   const [tempoAtualizado, setTempoAtualizado] = useState(0)
@@ -105,8 +106,46 @@ export default function RastrearPedido() {
     return () => clearInterval(iv)
   }, [])
 
+  const abrirSuporte = () => navigate(`/suporte?pedido=${encodeURIComponent(id)}&categoria=pedido`)
+  const ligarEntregador = () => {
+    const telefone = d?.entregador?.telefone || d?.entregador?.telefone_entregador
+    if (telefone) {
+      window.location.href = `tel:${telefone}`
+    } else {
+      abrirSuporte()
+    }
+  }
+
   if (carregando) return <div className="min-h-screen flex items-center justify-center text-text-muted">Carregando rastreamento...</div>
   if (!d) return <div className="min-h-screen flex items-center justify-center text-text-muted">Rastreamento não disponível</div>
+
+  if (!d?.entregador) {
+    return (
+      <div className="min-h-screen bg-background pb-24 md:pb-8">
+        <Header />
+        <main className="max-w-3xl mx-auto px-4 py-8">
+          <Link to="/perfil" className="inline-flex items-center gap-1.5 text-sm font-bold text-primary mb-6 hover:text-primary/80 transition-colors">
+            <ArrowLeft size={16} /> Voltar
+          </Link>
+          <div className="bg-white rounded-2xl border border-border shadow-sm p-6 text-center">
+            <Truck size={36} className="text-primary mx-auto mb-3" />
+            <h1 className="font-display text-xl font-extrabold text-text-primary">Entregador ainda não atribuído</h1>
+            <p className="text-sm text-text-muted font-semibold mt-2">
+              {d?.mensagem || 'Aguardando um entregador aceitar o pedido.'}
+            </p>
+            <button
+              type="button"
+              onClick={buscar}
+              className="mt-5 inline-flex items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm font-bold text-white hover:bg-primary/90 transition-colors"
+            >
+              Atualizar rastreamento
+            </button>
+          </div>
+        </main>
+        <MobileNavBar />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-background pb-24 md:pb-8">
@@ -189,7 +228,7 @@ export default function RastrearPedido() {
               </h3>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center text-white font-extrabold font-display">
-                  {d?.entregador?.nome.charAt(0)}
+                  {(d?.entregador?.nome || 'E').charAt(0)}
                 </div>
                 <div>
                   <p className="font-bold text-text-primary text-sm">{d?.entregador?.nome}</p>
@@ -199,8 +238,12 @@ export default function RastrearPedido() {
                   </div>
                 </div>
               </div>
-              <button className="w-full flex items-center justify-center gap-2 bg-secondary/8 border border-secondary/20 text-secondary font-bold text-xs py-2.5 rounded-full hover:bg-secondary/15 transition-colors">
-                <Phone size={13} /> Ligar para Entregador
+              <button
+                type="button"
+                onClick={ligarEntregador}
+                className="w-full flex items-center justify-center gap-2 bg-secondary/8 border border-secondary/20 text-secondary font-bold text-xs py-2.5 rounded-full hover:bg-secondary/15 transition-colors"
+              >
+                <Phone size={13} /> {d?.entregador?.telefone ? 'Ligar para Entregador' : 'Pedir contato no suporte'}
               </button>
             </Motion.div>
 
@@ -223,7 +266,11 @@ export default function RastrearPedido() {
               <h3 className="font-bold text-secondary mb-3 flex items-center gap-2 text-sm">
                 <AlertCircle size={15} /> Precisa de ajuda?
               </h3>
-              <button className="w-full bg-secondary text-white font-bold text-xs py-2.5 rounded-full transition-colors mb-2 hover:bg-secondary/90">
+              <button
+                type="button"
+                onClick={abrirSuporte}
+                className="w-full bg-secondary text-white font-bold text-xs py-2.5 rounded-full transition-colors mb-2 hover:bg-secondary/90"
+              >
                 Reportar Problema
               </button>
               <Link to="/suporte"

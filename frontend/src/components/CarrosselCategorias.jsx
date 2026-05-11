@@ -9,35 +9,49 @@ import {
   IceCream,
   Beef,
   Salad,
-} from 'lucide-react';
-import { motion as Motion } from 'framer-motion';
+} from 'lucide-react'
+import { motion as Motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 
 const categorias = [
-  { Icon: Utensils, nome: 'Restaurantes', bg: '#FFE8D6' },
-  { Icon: ShoppingCart, nome: 'Mercados', bg: '#D6F5F2' },
-  { Icon: Pizza, nome: 'Pizzas', bg: '#FFE0D6' },
-  { Icon: Sandwich, nome: 'Lanches', bg: '#FFF3D6' },
-  { Icon: Coffee, nome: 'Cafés', bg: '#EDD9C0' },
-  { Icon: Fish, nome: 'Frutos do Mar', bg: '#D6E8FF' },
-  { Icon: Apple, nome: 'Saudável', bg: '#D6FFDD' },
-  { Icon: IceCream, nome: 'Sobremesas', bg: '#F5D6FF' },
-  { Icon: Beef, nome: 'Churrasco', bg: '#FFD6D6' },
-  { Icon: Salad, nome: 'Saladas', bg: '#D6FFE8' },
-];
+  { Icon: Utensils, nome: 'Restaurantes', bg: '#FFE8D6', rota: '/Restaurantes' },
+  { Icon: ShoppingCart, nome: 'Mercados', bg: '#D6F5F2', rota: '/Mercados' },
+  { Icon: Pizza, nome: 'Pizzas', bg: '#FFE0D6', categoria: 'Pizza' },
+  { Icon: Sandwich, nome: 'Lanches', bg: '#FFF3D6', categoria: 'Hambúrguer' },
+  { Icon: Coffee, nome: 'Cafés', bg: '#EDD9C0', categoria: 'Café' },
+  { Icon: Fish, nome: 'Frutos do Mar', bg: '#D6E8FF', categoria: 'Frutos do Mar' },
+  { Icon: Apple, nome: 'Saudável', bg: '#D6FFDD', categoria: 'Saudável' },
+  { Icon: IceCream, nome: 'Sobremesas', bg: '#F5D6FF', categoria: 'Sobremesa' },
+  { Icon: Beef, nome: 'Churrasco', bg: '#FFD6D6', categoria: 'Churrasco' },
+  { Icon: Salad, nome: 'Saladas', bg: '#D6FFE8', categoria: 'Salada' },
+]
 
 export default function CategoriesCarousel() {
+  const navigate = useNavigate()
+
+  const abrirCategoria = (cat) => {
+    if (cat.rota) {
+      navigate(cat.rota)
+      return
+    }
+    navigate(`/busca?categoria=${encodeURIComponent(cat.categoria || cat.nome)}`)
+  }
+
   return (
     <div className="overflow-x-auto scrollbar-none -mx-4 px-4 sm:-mx-6 sm:px-6">
       <div className="flex gap-3 pb-1 min-w-max">
         {categorias.map((cat, i) => (
-          <Motion.div
-            key={i}
-            className="flex flex-col items-center gap-2 cursor-pointer min-w-18 p-2 rounded-xl group"
+          <Motion.button
+            type="button"
+            key={cat.nome}
+            onClick={() => abrirCategoria(cat)}
+            className="flex flex-col items-center gap-2 cursor-pointer min-w-18 p-2 rounded-xl group border-none bg-transparent"
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.3, delay: i * 0.04 }}
             whileTap={{ scale: 0.92 }}
+            aria-label={`Explorar ${cat.nome}`}
           >
             <Motion.div
               className="w-14 h-14 rounded-xl border border-border flex items-center justify-center"
@@ -53,9 +67,9 @@ export default function CategoriesCarousel() {
             <span className="text-[0.75rem] font-bold text-text-secondary text-center leading-tight group-hover:text-primary transition-colors">
               {cat.nome}
             </span>
-          </Motion.div>
+          </Motion.button>
         ))}
       </div>
     </div>
-  );
+  )
 }

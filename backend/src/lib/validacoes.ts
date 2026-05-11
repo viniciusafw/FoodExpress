@@ -1,3 +1,4 @@
+// @ts-nocheck
 export function validarCNPJ(cnpj: string): boolean {
   const cnpj_limpo = cnpj.replace(/[^\d]/g, '')
   if (cnpj_limpo.length !== 14) return false

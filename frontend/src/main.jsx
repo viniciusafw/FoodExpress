@@ -19,12 +19,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           redirect_uri: `${window.location.origin}/auth/callback`,
         }}
       >
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <App />
         </BrowserRouter>
       </Auth0Provider>
     ) : (
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <App />
       </BrowserRouter>
     )}

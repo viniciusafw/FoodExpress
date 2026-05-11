@@ -6,6 +6,7 @@ import MobileNavBar from '../components/MobileNavBar'
 import CartDrawer from '../components/GavetaCarrinho'
 import { useCart } from '../contexts/CartContext'
 import api from '../services/api'
+import { imagemRestaurante, imagemProduto, emojiRestaurante, emojiProduto } from '../utils/imagens'
 
 
 // ─── Modal produto ────────────────────────────────────────────────────────────
@@ -42,9 +43,17 @@ function ProdutoModal({ produto, loja, onClose }) {
 
   const precoFinal = (produto.preco + extraTotal) * quantidade
 
+  const lojaFechada = loja?.fechado || loja?.status === 'fechado' || loja?.status === 'inativo'
+
   const handleAdicionar = () => {
+    if (lojaFechada) {
+      alert('Esta loja está fechada no momento.')
+      return
+    }
     adicionarItem({
       id: `${produto.id}-${JSON.stringify(selecionados)}`,
+      cardapioId: produto.id,
+      produtoId: produto.id,
       name: produto.nome,
       price: produto.preco + extraTotal,
       emoji: produto.emoji,
@@ -57,7 +66,7 @@ function ProdutoModal({ produto, loja, onClose }) {
 
   return (
     <Motion.div
-      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-200 flex items-end sm:items-center justify-center p-0 sm:p-4"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={onClose}
     >
@@ -76,8 +85,8 @@ function ProdutoModal({ produto, loja, onClose }) {
         <div className="flex flex-col sm:flex-row overflow-hidden flex-1 min-h-0">
 
           {/* Imagem — desktop fica na esquerda */}
-          <div className="relative sm:w-72 h-52 sm:h-auto bg-linear-to-br from-orange-50 to-orange-100 flex items-center justify-center text-8xl shrink-0">
-            {produto.emoji}
+          <div className="relative sm:w-72 h-52 sm:h-auto bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-8xl shrink-0 overflow-hidden">
+            {produto.imagem ? <img src={produto.imagem} alt={produto.nome} className="absolute inset-0 w-full h-full object-cover" /> : produto.emoji}
             <button onClick={onClose}
               className="absolute top-3 right-3 w-9 h-9 bg-white rounded-full border border-border flex items-center justify-center cursor-pointer hover:bg-surface-2 transition-all shadow-sm">
               <X size={16} className="text-text-secondary" />
@@ -188,7 +197,11 @@ function ProdutoModal({ produto, loja, onClose }) {
                   />
                 </div>
 
-                <button className="text-sm font-bold text-primary hover:underline cursor-pointer bg-transparent border-none mb-2">
+                <button
+                  type="button"
+                  onClick={() => alert('Denúncia registrada. A equipe irá revisar este item.')}
+                  className="text-sm font-bold text-primary hover:underline cursor-pointer bg-transparent border-none mb-2"
+                >
                   Denunciar item
                 </button>
               </div>
@@ -207,12 +220,12 @@ function ProdutoModal({ produto, loja, onClose }) {
                     whileTap={{ scale: 0.85 }}><Plus size={14} /></Motion.button>
                 </div>
 
-                <Motion.button onClick={handleAdicionar} disabled={!opcionaisValidos}
+                <Motion.button onClick={handleAdicionar} disabled={!opcionaisValidos || lojaFechada}
                   className="flex-1 py-3.5 bg-primary text-white border-none rounded-xl font-display font-bold text-base cursor-pointer flex items-center justify-center gap-2 disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed"
-                  whileHover={opcionaisValidos ? { scale: 1.02 } : {}}
-                  whileTap={opcionaisValidos ? { scale: 0.97 } : {}}
+                  whileHover={opcionaisValidos && !lojaFechada ? { scale: 1.02 } : {}}
+                  whileTap={opcionaisValidos && !lojaFechada ? { scale: 0.97 } : {}}
                 >
-                  Adicionar · R$ {precoFinal.toFixed(2).replace('.', ',')}
+                  {lojaFechada ? 'Loja fechada' : `Adicionar · R$ ${precoFinal.toFixed(2).replace('.', ',')}`}
                 </Motion.button>
               </div>
             </div>
@@ -251,10 +264,10 @@ function ProdutoCard({ produto, onAbrir, index }) {
         </div>
       </div>
       <Motion.div
-        className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl flex items-center justify-center text-4xl shrink-0 bg-linear-to-br from-orange-50 to-orange-100 relative overflow-hidden"
+        className="w-24 h-24 sm:w-28 sm:h-28 rounded-xl flex items-center justify-center text-4xl shrink-0 bg-gradient-to-br from-orange-50 to-orange-100 relative overflow-hidden"
         whileHover={{ scale: 1.05 }}
       >
-        {produto.emoji}
+        {produto.imagem ? <img src={produto.imagem} alt={produto.nome} className="absolute inset-0 w-full h-full object-cover" loading="lazy" /> : produto.emoji}
         <div className="absolute bottom-1.5 right-1.5 w-6 h-6 bg-primary rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
           <Plus size={13} className="text-white" />
         </div>
@@ -356,6 +369,7 @@ export default function StorePage() {
   const [produtoAberto, setProdutoAberto] = useState(null)
   const [categoriaAtiva, setCategoriaAtiva] = useState(null)
   const [carrinhoAberto, setCarrinhoAberto] = useState(false)
+  const [tipoEntrega, setTipoEntrega] = useState('Entrega')
   const [navOculta, setNavOculta] = useState(false)
   const [ultimoScroll, setUltimoScroll] = useState(0)
   const [infoAberta, setInfoAberta] = useState(false)
@@ -382,7 +396,8 @@ export default function StorePage() {
           nome: item.nome,
           desc: item.descricao,
           preco: Number(item.preco) || 0,
-          emoji: item.emoji || '🍽️',
+          emoji: emojiProduto(item),
+          imagem: imagemProduto(item),
           serve: 1,
           opcionais: [],
           restauranteId: id,
@@ -390,19 +405,26 @@ export default function StorePage() {
       })
       setLoja({
         ...rest,
+        emoji: emojiRestaurante(rest),
+        imagem: imagemRestaurante(rest),
         categorias: Object.values(cats),
         avaliacao: rest.avaliacao_media ?? '—',
         tempoEntrega: rest.tempo_medio_preparo ? `${rest.tempo_medio_preparo}-${rest.tempo_medio_preparo + 10} min` : '30-40 min',
         taxaEntrega: 'Grátis',
         sobre: rest.descricao || `${rest.nome} — ${rest.categoria || 'Restaurante'} em ${rest.endereco || 'sua cidade'}`,
         pedidoMinimo: 'R$ 15,00',
+        status: rest.status || 'ativo',
+        fechado: rest.status === 'fechado' || rest.status === 'inativo',
         superRestaurante: (rest.avaliacao_media || 0) >= 4.8,
-        horarios: [
-          { dia: 'Segunda a Sexta', horario: '11:00 - 23:00' },
-          { dia: 'Sábado',          horario: '11:00 - 00:00' },
-          { dia: 'Domingo',         horario: '12:00 - 22:00' },
-        ],
-        pagamentos: ['Dinheiro', 'Crédito', 'Débito', 'Pix'],
+        horarios: (() => {
+          let dias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']
+          try { dias = rest.dias_aberto ? JSON.parse(rest.dias_aberto) : dias } catch { dias = String(rest.dias_aberto || '').split(',').map(d => d.trim()).filter(Boolean) || dias }
+          return [{ dia: dias.join(', ') || 'Todos os dias', horario: `${rest.horario_abertura || '18:00'} - ${rest.horario_fechamento || '23:00'}` }]
+        })(),
+        pagamentos: (() => {
+          try { return rest.formas_pagamento ? JSON.parse(rest.formas_pagamento) : ['Dinheiro', 'Crédito', 'Débito', 'Pix'] }
+          catch { return String(rest.formas_pagamento || '').split(',').map(p => p.trim()).filter(Boolean) || ['Dinheiro', 'Crédito', 'Débito', 'Pix'] }
+        })(),
       })
       setCardapio(itens)
     }).catch(err => {
@@ -510,12 +532,16 @@ export default function StorePage() {
       </Motion.div>
 
       {/* Espaçador — altura do sticky navbar para evitar que o conteúdo fique escondido atrás dela */}
-      <div className="h-27" />
+      <div className="h-[108px]" />
 
       {/* Banner */}
-      <div className="relative w-full h-40 sm:h-56 bg-linear-to-br from-secondary to-secondary-light overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center text-[8rem] opacity-20 select-none">{loja.emoji}</div>
-        <div className="absolute inset-0 bg-linear-to-t from-black/60 to-transparent" />
+      <div className="relative w-full h-40 sm:h-56 bg-gradient-to-br from-secondary to-secondary overflow-hidden">
+        {loja.imagem ? (
+          <img src={loja.imagem} alt={loja.nome} className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center text-[8rem] opacity-20 select-none">{loja.emoji}</div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
       </div>
 
       {/* ── Barra de info abaixo do banner ── */}
@@ -525,13 +551,16 @@ export default function StorePage() {
           {/* Linha 1: logo flutuante + nome + avaliação + ver mais + pedido mínimo */}
           <div className="flex items-center gap-4 mb-4">
             {/* Logo flutua sobre o banner */}
-            <div className="w-16 h-16 sm:w-20 sm:h-20 -mt-10 rounded-2xl bg-white border-2 border-border shadow-lg flex items-center justify-center text-4xl shrink-0 relative z-10">
-              {loja.emoji}
+            <div className="w-16 h-16 sm:w-20 sm:h-20 -mt-10 rounded-2xl bg-white border-2 border-border shadow-lg flex items-center justify-center text-4xl shrink-0 relative z-10 overflow-hidden">
+              {loja.imagem ? <img src={loja.imagem} alt={loja.nome} className="w-full h-full object-cover" /> : loja.emoji}
             </div>
 
             <div className="flex-1 min-w-0 pt-1">
               <div className="flex flex-wrap items-center gap-2 mb-0.5">
                 <h2 className="font-display text-xl sm:text-2xl font-extrabold text-text-primary leading-tight">{loja.nome}</h2>
+                {loja.fechado && (
+                  <span className="rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-xs font-extrabold text-red-600">FECHADA</span>
+                )}
                 {loja.superRestaurante && (
                   <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center shrink-0">
                     <Star size={11} fill="white" stroke="white" />
@@ -576,16 +605,21 @@ export default function StorePage() {
             </div>
 
             {/* Entrega */}
-            <button className="hidden sm:flex items-center gap-2 px-4 h-11 bg-surface-2 border border-border rounded-xl text-sm font-bold text-text-primary cursor-pointer hover:border-primary transition-all whitespace-nowrap shrink-0">
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); setTipoEntrega(t => t === 'Entrega' ? 'Retirada' : 'Entrega') }}
+              className="hidden sm:flex items-center gap-2 px-4 h-11 bg-surface-2 border border-border rounded-xl text-sm font-bold text-text-primary cursor-pointer hover:border-primary transition-all whitespace-nowrap shrink-0"
+              title="Alternar entre entrega e retirada"
+            >
               <Truck size={15} className="text-text-muted" />
-              Entrega
+              {tipoEntrega}
               <ChevronDown size={14} className="text-text-muted" />
             </button>
 
             {/* Hoje / horário */}
             <div className="hidden sm:flex flex-col justify-center px-4 h-11 bg-surface-2 border border-border rounded-xl text-xs shrink-0">
               <span className="font-extrabold text-text-primary leading-tight">Hoje</span>
-              <span className="text-text-muted font-semibold">{loja.tempoEntrega} · {loja.taxaEntrega === 'Grátis' ? 'Grátis' : loja.taxaEntrega}</span>
+              <span className="text-text-muted font-semibold">{tipoEntrega === 'Retirada' ? 'Retirar no balcão' : `${loja.tempoEntrega} · ${loja.taxaEntrega === 'Grátis' ? 'Grátis' : loja.taxaEntrega}`}</span>
             </div>
           </div>
 
@@ -598,6 +632,14 @@ export default function StorePage() {
           </button>
         </div>
       </div>
+
+      {loja.fechado && (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
+            Esta loja está fechada agora. O cardápio pode ser consultado, mas novos pedidos estão bloqueados.
+          </div>
+        </div>
+      )}
 
       {/* Conteúdo */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
@@ -627,7 +669,7 @@ export default function StorePage() {
       <AnimatePresence>
         {infoAberta && (
           <Motion.div
-            className="fixed inset-0 bg-black/45 backdrop-blur-sm z-200 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            className="fixed inset-0 bg-black/45 backdrop-blur-sm z-[200] flex items-end sm:items-center justify-center p-0 sm:p-4"
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             onClick={() => setInfoAberta(false)}
           >

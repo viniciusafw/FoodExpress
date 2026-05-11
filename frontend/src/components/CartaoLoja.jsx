@@ -1,7 +1,8 @@
 import { Star, Clock, Truck, Heart } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion as Motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
+import { imagemRestaurante, emojiRestaurante } from '../utils/imagens'
 
 const gradients = [
   'linear-gradient(135deg,#FFE0D0,#FFCAB4)',
@@ -12,7 +13,6 @@ const gradients = [
 ]
 
 export default function StoreCard({ loja, index = 0 }) {
-  const [fav, setFav] = useState(false)
   const navigate = useNavigate()
 
   const loja_ = {
@@ -22,10 +22,38 @@ export default function StoreCard({ loja, index = 0 }) {
     avaliacao: loja?.avaliacao || 4.5,
     tempoEntrega: loja?.tempoEntrega || '30-40 min',
     taxaEntrega: loja?.taxaEntrega || 'R$ 5,00',
-    emoji: loja?.emoji || '🍽️',
+    emoji: emojiRestaurante(loja),
+    imagem: imagemRestaurante(loja),
     promo: loja?.promo || null,
-    fechado: loja?.fechado || false,
+    fechado: loja?.fechado || loja?.status === 'fechado' || loja?.status === 'inativo',
     gratis: loja?.taxaEntrega === 'Grátis' || loja?.gratis,
+  }
+
+  const [fav, setFav] = useState(false)
+
+  useEffect(() => {
+    try {
+      const salvos = JSON.parse(localStorage.getItem('favoritosRestaurantes') || '[]')
+      setFav(salvos.some((item) => String(item.id) === String(loja_.id)))
+    } catch {
+      setFav(false)
+    }
+  }, [loja_.id])
+
+  const alternarFavorito = (e) => {
+    e.stopPropagation()
+    try {
+      const salvos = JSON.parse(localStorage.getItem('favoritosRestaurantes') || '[]')
+      const existe = salvos.some((item) => String(item.id) === String(loja_.id))
+      const proximo = existe
+        ? salvos.filter((item) => String(item.id) !== String(loja_.id))
+        : [{ id: loja_.id, nome: loja_.nome, categoria: loja_.categoria, imagem: loja_.imagem, emoji: loja_.emoji, avaliacao: loja_.avaliacao }, ...salvos]
+      localStorage.setItem('favoritosRestaurantes', JSON.stringify(proximo))
+      setFav(!existe)
+      window.dispatchEvent(new Event('favoritos-atualizados'))
+    } catch {
+      setFav(f => !f)
+    }
   }
 
   return (
@@ -42,9 +70,13 @@ export default function StoreCard({ loja, index = 0 }) {
         className="relative w-full h-40 flex items-center justify-center text-5xl overflow-hidden"
         style={{ background: gradients[index % gradients.length] }}
       >
-        <Motion.span whileHover={{ scale: 1.15 }} transition={{ type: 'spring', stiffness: 300 }}>
-          {loja_.emoji}
-        </Motion.span>
+        {loja_.imagem ? (
+          <img src={loja_.imagem} alt={loja_.nome} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <Motion.span whileHover={{ scale: 1.15 }} transition={{ type: 'spring', stiffness: 300 }}>
+            {loja_.emoji}
+          </Motion.span>
+        )}
 
         {loja_.fechado && (
           <div className="absolute inset-0 bg-black/55 flex items-center justify-center">
@@ -64,7 +96,7 @@ export default function StoreCard({ loja, index = 0 }) {
         )}
 
         <Motion.button
-          onClick={(e) => { e.stopPropagation(); setFav(f => !f) }}
+          onClick={alternarFavorito}
           className="absolute top-2.5 right-2.5 w-8 h-8 rounded-full bg-white border-none flex items-center justify-center shadow-sm cursor-pointer"
           whileTap={{ scale: 0.85 }}
           animate={{ scale: fav ? [1, 1.3, 1] : 1 }}

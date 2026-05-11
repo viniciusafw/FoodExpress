@@ -104,23 +104,58 @@ export default function Checkout() {
     }
   }, [])
 
-  const taxaEntrega = totalCarrinho >= 50 ? 0 : 5.99
-  const desconto = cupomAplicado ? (totalCarrinho * (cupomAplicado.desconto_percentual / 100)) : 0
-  const total = totalCarrinho + taxaEntrega - desconto
+  const taxaEntregaBase = totalCarrinho >= 50 ? 0 : 5.99
+  const cupomFreteGratis = Boolean(cupomAplicado?.frete_gratis || cupomAplicado?.tipo === 'frete_gratis')
+  const taxaEntrega = cupomFreteGratis ? 0 : taxaEntregaBase
+  const desconto = cupomAplicado && !cupomFreteGratis ? (() => {
+    const descontoValor = Number(cupomAplicado.desconto_valor)
+    if (Number.isFinite(descontoValor)) return Math.max(0, descontoValor)
+
+    const percentual = Number(
+      cupomAplicado.desconto_percentual ??
+      (cupomAplicado.tipo === 'percentual' ? cupomAplicado.desconto : 0)
+    )
+    if (Number.isFinite(percentual) && percentual > 0) return (totalCarrinho * percentual) / 100
+
+    const fixo = Number(cupomAplicado.desconto)
+    return Number.isFinite(fixo) ? fixo : 0
+  })() : 0
+  const total = Math.max(0, totalCarrinho + taxaEntrega - desconto)
+  const cupomDescricao = cupomAplicado
+    ? cupomFreteGratis
+      ? 'Frete grátis aplicado'
+      : cupomAplicado.tipo === 'fixo'
+        ? `Desconto de R$ ${desconto.toFixed(2).replace('.', ',')}`
+        : `${Number(cupomAplicado.desconto_percentual ?? cupomAplicado.desconto ?? 0)}% de desconto — economizando R$ ${desconto.toFixed(2).replace('.', ',')}`
+    : ''
 
   const enderecoFinal = enderecoCustom.trim() || enderecoPrincipal || (localizacao ? 'Minha localização atual' : 'Endereço não informado')
 
-  const aplicarCupom = async () => {
-    if (!cupom.trim()) return
+  const validarCupom = async (codigoInformado) => {
+    const codigoNormalizado = String(codigoInformado || '').trim().toUpperCase()
+    if (!codigoNormalizado) return
+
+    setCupom(codigoNormalizado)
     setCupomErro('')
     try {
-      const r = await api.cupons.validar(cupom, totalCarrinho)
+      const r = await api.cupons.validar(codigoNormalizado, totalCarrinho, taxaEntregaBase)
       setCupomAplicado(r)
     } catch (e) {
       setCupomErro(e.message || 'Cupom inválido')
       setCupomAplicado(null)
     }
   }
+
+  const aplicarCupom = () => validarCupom(cupom)
+
+  useEffect(() => {
+    if (totalCarrinho <= 0 || cupomAplicado) return
+    const cupomPromocional = localStorage.getItem('cupomPromocional')
+    if (!cupomPromocional) return
+    localStorage.removeItem('cupomPromocional')
+    validarCupom(cupomPromocional)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalCarrinho])
 
   const getRegionName = (lat, lng) => {
     if (lat >= -23.70 && lat <= -23.45 && lng >= -46.70 && lng <= -46.45) return 'São Paulo'
@@ -176,7 +211,8 @@ export default function Checkout() {
     try {
       const clienteId = usuario?.id
       const itensPedido = itens.map(i => ({
-        id: i.id,
+        id: i.cardapioId || i.produtoId || i.id,
+        cardapioId: i.cardapioId || i.produtoId || i.id,
         nome: i.name || i.nome,
         quantidade: i.quantidade,
         preco: Number(i.price || i.preco || 0),
@@ -198,8 +234,12 @@ export default function Checkout() {
         latitude: localizacao?.latitude || 0,
         longitude: localizacao?.longitude || 0,
         forma_pagamento: pagamentoSelecionado,
+        cupom_codigo: cupomAplicado?.codigo || cupom.trim().toUpperCase() || undefined,
+        taxa_entrega: taxaEntrega,
+        desconto,
       })
 
+      localStorage.removeItem('cupomPromocional')
       limparCarrinho()
       setPedidoConfirmado(`#${String(resultado.id || '').slice(-6) || Math.floor(1000 + Math.random() * 9000)}`)
     } catch (e) {
@@ -335,7 +375,7 @@ export default function Checkout() {
               <div className="flex items-center justify-between bg-accent/10 border border-accent/20 rounded-xl px-4 py-3">
                 <div>
                   <p className="text-sm font-bold text-accent">🎉 Cupom "{cupomAplicado.codigo}" aplicado!</p>
-                  <p className="text-xs text-text-muted font-semibold mt-0.5">{cupomAplicado.desconto_percentual}% de desconto — economizando R$ {desconto.toFixed(2)}</p>
+                  <p className="text-xs text-text-muted font-semibold mt-0.5">{cupomDescricao}</p>
                 </div>
                 <button onClick={() => { setCupomAplicado(null); setCupom('') }}
                   className="w-7 h-7 rounded-full bg-transparent border border-accent/30 flex items-center justify-center cursor-pointer text-accent hover:bg-accent/20 transition-all">

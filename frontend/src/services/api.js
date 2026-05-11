@@ -1,29 +1,68 @@
 // services/api.js — cliente centralizado para o backend FoodExpress
-// Base URL vem da variável de ambiente, com fallback para localhost
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+// Tenta a URL do .env primeiro, mas cai automaticamente para 3001.
+const ENV_BASE_URL = import.meta.env.VITE_API_URL || ''
+
+function normalizarBaseUrl(url) {
+  return String(url || '').trim().replace(/\/$/, '')
+}
+
+const BASE_URLS = Array.from(new Set([
+  normalizarBaseUrl(ENV_BASE_URL),
+  'http://localhost:3001',
+  'http://127.0.0.1:3001',
+  'http://localhost:3002',
+  'http://127.0.0.1:3002',
+].filter(Boolean)))
+
+export function getApiBaseUrl() {
+  return BASE_URLS[0] || 'http://localhost:3001'
+}
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('token')
-  try {
-    const res = await fetch(`${BASE_URL}${path}`, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...options.headers,
-      },
-      ...options,
-    })
-    if (!res.ok) {
-      const erro = await res.json().catch(() => ({ erro: res.statusText }))
-      throw new Error(erro.erro || `Erro ${res.status}`)
+  const usuario = (() => { try { return JSON.parse(localStorage.getItem('usuario') || '{}') } catch { return {} } })()
+  let ultimoErro = null
+
+  for (const baseUrl of BASE_URLS) {
+    try {
+      const res = await fetch(`${baseUrl}${path}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(usuario?.email ? { 'X-User-Email': usuario.email } : {}),
+          ...(usuario?.nome ? { 'X-User-Name': usuario.nome } : {}),
+          ...(options.headers || {}),
+        },
+      })
+
+      if (!res.ok) {
+        const erro = await res.json().catch(() => ({ erro: res.statusText }))
+        const message = erro.erro || `Erro ${res.status}`
+        const e = new Error(message)
+        e.status = res.status
+        e.baseUrl = baseUrl
+        throw e
+      }
+
+      if (res.status === 204) return null
+      return res.json()
+    } catch (e) {
+      ultimoErro = e
+
+      // Só tenta outra porta quando é falha de rede/CORS. Erro HTTP real não deve cair em outra API.
+      if (e instanceof TypeError || e.message?.includes('Failed to fetch') || e.message?.includes('NetworkError')) {
+        continue
+      }
+
+      throw e
     }
-    return res.json()
-  } catch (e) {
-    if (e instanceof TypeError && e.message.includes('fetch')) {
-      throw new Error('Backend offline. Verifique se npm run dev:backend está rodando.')
-    }
-    throw e
   }
+
+  throw new Error(
+    `Backend offline. O frontend tentou: ${BASE_URLS.join(', ')}. ` +
+    'Verifique se o backend está rodando em http://localhost:3001.'
+  )
 }
 
 // ── Restaurantes ──────────────────────────────────────────────────────────────
@@ -38,15 +77,16 @@ export const api = {
     atualizar: (id, dados) => request(`/api/restaurantes/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
     aprovar: (id, acao, extras = {}) => request(`/api/restaurantes/${id}/aprovar`, { method: 'POST', body: JSON.stringify({ acao, ...extras }) }),
     cadastroInicial: (dados) => request('/api/restaurantes/cadastro', { method: 'POST', body: JSON.stringify(dados) }),
-    meuRestaurante: (email) => request(`/api/restaurantes/cadastro?email=${encodeURIComponent(email)}`),
-    meuRestauranteOuCriar: async (email, nome = '') => {
+    meuRestaurante: () => request('/api/restaurantes/meu'),
+    meuRestaurantePorEmail: (email) => request(`/api/restaurantes/cadastro?email=${encodeURIComponent(email)}`),
+    meuRestauranteOuCriar: async (email, nome = 'Minha Loja') => {
       try {
-        return await request(`/api/restaurantes/cadastro?email=${encodeURIComponent(email)}`)
+        return await request('/api/restaurantes/meu')
       } catch (error) {
         if (error.message?.toLowerCase().includes('restaurante não encontrado')) {
           return request('/api/restaurantes/cadastro', {
             method: 'POST',
-            body: JSON.stringify({ email, nome })
+            body: JSON.stringify({ email, nome: nome || 'Minha Loja' })
           })
         }
         throw error
@@ -81,6 +121,7 @@ export const api = {
     atualizarStatus: (id, status) => request(`/api/pedidos/${id}`, { method: 'PUT', body: JSON.stringify({ status }) }),
     cancelar: (id) => request(`/api/pedidos/${id}`, { method: 'DELETE' }),
     rastrear: (id) => request(`/api/pedidos/${id}/rastrear`),
+    listarDisponiveis: () => request('/api/pedidos/disponiveis'),
     atribuirEntregador: (id, entregadorId) => request(`/api/pedidos/${id}/atribuir-entregador`, { method: 'POST', body: JSON.stringify({ entregadorId }) }),
     atribuirAutomatico: (id) => request(`/api/pedidos/${id}/atribuir-entregador-automatico`, { method: 'POST' }),
   },
@@ -118,7 +159,7 @@ export const api = {
 
   // ── Cupons ────────────────────────────────────────────────────────────────
   cupons: {
-    validar: (codigo, total) => request(`/api/cupons?codigo=${codigo}&total=${total}`),
+    validar: (codigo, total, taxaEntrega = 0) => request(`/api/cupons?codigo=${encodeURIComponent(codigo)}&total=${total}&taxaEntrega=${taxaEntrega}`),
   },
 
   // ── Disputas ──────────────────────────────────────────────────────────────

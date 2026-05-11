@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { motion as Motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import Header from '../components/Header'
 import MobileNavBar from '../components/MobileNavBar'
 import api from '../services/api'
+import { formatarDataBanco } from '../utils/datas'
 import {
   User, Mail, Phone, MapPin, ShoppingBag, Heart,
   ChevronRight, LogOut, Star, Clock, Edit3, Check, X
@@ -25,7 +27,7 @@ function SecaoCard({ titulo, children, delay = 0, id }) {
   return (
     <Motion.div
       id={id}
-      className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden"
+      className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden scroll-mt-24"
       initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay }}
     >
@@ -140,6 +142,7 @@ function EditarEndereco({ end, clienteId, onSalvo }) {
 
 export default function PerfilCliente() {
   const { usuario, sair } = useAuth()
+  const navigate = useNavigate()
   const [editando, setEditando] = useState(false)
   const [nome, setNome] = useState(usuario?.nome || 'Usuário')
   const [nomeTemp, setNomeTemp] = useState(nome)
@@ -147,12 +150,26 @@ export default function PerfilCliente() {
   const [enderecos, setEnderecos] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [clienteId, setClienteId] = useState(null)
+  const [favoritos, setFavoritos] = useState([])
 
   useEffect(() => {
     const nomeInicial = formatarNome(usuario?.nome || 'Usuário')
     setNome(nomeInicial)
     setNomeTemp(nomeInicial)
   }, [usuario?.nome])
+
+  useEffect(() => {
+    const carregarFavoritos = () => {
+      try {
+        setFavoritos(JSON.parse(localStorage.getItem('favoritosRestaurantes') || '[]'))
+      } catch {
+        setFavoritos([])
+      }
+    }
+    carregarFavoritos()
+    window.addEventListener('favoritos-atualizados', carregarFavoritos)
+    return () => window.removeEventListener('favoritos-atualizados', carregarFavoritos)
+  }, [])
 
   useEffect(() => {
     let ativo = true
@@ -222,7 +239,7 @@ export default function PerfilCliente() {
       loja: pedido.loja || pedido.restaurante_nome || `Pedido #${String(pedido.id || '').slice(0, 6)}`,
       status: pedido.status || 'Em andamento',
       itens: pedido.itens_texto || itensTexto,
-      data: pedido.created_at ? new Date(pedido.created_at).toLocaleDateString('pt-BR') : '—',
+      data: pedido.created_at ? formatarDataBanco(pedido.created_at) : '—',
       total: Number(pedido.total || 0),
       avaliacao: pedido.avaliacao || pedido.avaliacao_restaurante || 0,
       emoji: '🛍️',
@@ -294,7 +311,7 @@ export default function PerfilCliente() {
                 {[
                   { label: 'Pedidos', valor: pedidos.length },
                   { label: 'Avaliações', valor: pedidos.filter(p => p.avaliacao_restaurante).length },
-                  { label: 'Favoritos', valor: 0 },
+                  { label: 'Favoritos', valor: favoritos.length },
                 ].map(({ label, valor }) => (
                   <div key={label}>
                     <span className="block font-display text-xl font-extrabold text-text-primary">{valor}</span>
@@ -306,14 +323,14 @@ export default function PerfilCliente() {
 
             {/* Menu lateral */}
             <Motion.div
-              className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden"
+              className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden scroll-mt-24"
               initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.4, delay: 0.1 }}
             >
               {[
                 { icon: ShoppingBag, label: 'Meus pedidos', target: 'pedidos' },
                 { icon: MapPin, label: 'Endereços salvos', target: 'enderecos' },
-                { icon: Heart, label: 'Favoritos', target: null },
+                { icon: Heart, label: 'Favoritos', target: 'favoritos' },
               ].map((item) => {
                 const Icon = item.icon
                 return (
@@ -388,7 +405,7 @@ export default function PerfilCliente() {
                     initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.25 + i * 0.07 }}
                   >
-                    <div className="w-12 h-12 rounded-xl bg-linear-to-br from-orange-50 to-orange-100 flex items-center justify-center text-2xl shrink-0">
+                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-2xl shrink-0">
                       {pedido.emoji}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -409,8 +426,12 @@ export default function PerfilCliente() {
                         ))}
                       </div>
                     ) : (
-                      <button className="text-xs font-bold text-primary border border-primary rounded-full px-3 py-1 hover:bg-primary-light transition-all cursor-pointer bg-transparent shrink-0">
-                        Avaliar
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/pedido/${pedido.id}`)}
+                        className="text-xs font-bold text-primary border border-primary rounded-full px-3 py-1 hover:bg-primary-light transition-all cursor-pointer bg-transparent shrink-0"
+                      >
+                        {String(pedido.status).toLowerCase() === 'entregue' ? 'Avaliar' : 'Ver pedido'}
                       </button>
                     )}
                   </Motion.div>
@@ -452,6 +473,36 @@ export default function PerfilCliente() {
                 <div className="px-5 py-4">
                   <AdicionarEndereco clienteId={clienteId} onSalvo={(end) => setEnderecos(prev => [...prev, end])} />
                 </div>
+              </div>
+            </SecaoCard>
+
+            {/* Favoritos */}
+            <SecaoCard titulo="Favoritos" delay={0.35} id="favoritos">
+              <div className="divide-y divide-border">
+                {favoritos.length === 0 && (
+                  <div className="px-5 py-6 text-sm text-text-muted font-semibold">
+                    Nenhum restaurante favoritado. Toque no coração de uma loja para salvar aqui.
+                  </div>
+                )}
+                {favoritos.map((fav) => (
+                  <button
+                    key={fav.id}
+                    type="button"
+                    onClick={() => navigate(`/loja/${fav.id}`)}
+                    className="w-full flex items-center gap-4 px-5 py-4 hover:bg-surface-2 transition-colors cursor-pointer bg-transparent border-none text-left"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-primary-light flex items-center justify-center text-2xl shrink-0 overflow-hidden">
+                      {fav.imagem ? <img src={fav.imagem} alt={fav.nome} className="w-full h-full object-cover" /> : (fav.emoji || '🍽️')}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display text-sm font-bold text-text-primary truncate">{fav.nome}</p>
+                      <p className="text-xs text-text-muted font-semibold truncate">{fav.categoria || 'Restaurante'}</p>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs font-extrabold text-text-primary shrink-0">
+                      <Star size={12} fill="#FFBA08" stroke="#FFBA08" />{fav.avaliacao || '—'}
+                    </div>
+                  </button>
+                ))}
               </div>
             </SecaoCard>
           </div>

@@ -3,6 +3,7 @@
 -- Tabela de restaurantes
 CREATE TABLE restaurantes (
     id TEXT PRIMARY KEY,
+    user_id TEXT,
     nome TEXT NOT NULL,
     cnpj TEXT UNIQUE NOT NULL,
     email TEXT NOT NULL,
@@ -14,9 +15,13 @@ CREATE TABLE restaurantes (
     descricao TEXT,
     logo TEXT,
     capa TEXT,
-    status TEXT DEFAULT 'pendente',
+    status TEXT DEFAULT 'ativo',
     taxa_comissao REAL DEFAULT 15,
     tempo_medio_preparo INTEGER,
+    horario_abertura TEXT,
+    horario_fechamento TEXT,
+    dias_aberto TEXT,
+    formas_pagamento TEXT,
     avaliacao_media REAL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -135,6 +140,7 @@ CREATE TABLE pedidos (
     avaliacao_entregador INTEGER,
     comentario TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (cliente_id) REFERENCES clientes(id),
     FOREIGN KEY (restaurante_id) REFERENCES restaurantes(id),
     FOREIGN KEY (entregador_id) REFERENCES entregadores(id)

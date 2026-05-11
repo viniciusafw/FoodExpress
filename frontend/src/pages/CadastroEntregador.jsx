@@ -14,6 +14,23 @@ const beneficios = [
   { emoji: '📍', texto: 'Rotas otimizadas em tempo real' },
 ]
 
+
+const tiposVeiculo = [
+  { id: 'moto', label: 'Moto', exigePlaca: true },
+  { id: 'carro', label: 'Carro', exigePlaca: true },
+  { id: 'bicicleta', label: 'Bicicleta', exigePlaca: false },
+]
+
+function placaValida(placa) {
+  const valor = String(placa || '').trim().toUpperCase()
+  return /^[A-Z]{3}-?\d{4}$/.test(valor) || /^[A-Z]{3}\d[A-Z]\d{2}$/.test(valor)
+}
+
+function formatarPlaca(valor) {
+  return String(valor || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 7)
+}
+
+
 const itemVariants = {
   hidden: { opacity: 0, y: 14 },
   show: { opacity: 1, y: 0, transition: { duration: 0.35 } },
@@ -35,7 +52,11 @@ export default function CadastroEntregador() {
     const { name, value } = e.target
     let valor = value
     if (name === 'telefone') valor = mascaraTelefone(value)
-    if (name === 'placa') valor = value.toUpperCase().slice(0, 8)
+    if (name === 'placa') valor = formatarPlaca(value)
+    if (name === 'veiculo' && value === 'bicicleta') {
+      setDados({ ...dados, veiculo: value, placa: '', cnh: '' })
+      return
+    }
     setDados({ ...dados, [name]: valor })
   }
 
@@ -51,31 +72,28 @@ export default function CadastroEntregador() {
 
   const handleCadastrar = async (e) => {
     e.preventDefault()
+    if (dados.veiculo !== 'bicicleta') {
+      if (!dados.placa.trim()) { setErro('Informe a placa do veículo. Bicicleta não precisa de placa.'); return }
+      if (!placaValida(dados.placa)) { setErro('Placa inválida. Use o formato ABC1234 ou ABC1D23.'); return }
+    }
     if (!aceitouTermos) { setErro('Aceite os termos para continuar.'); return }
     setErro('')
     setCarregando(true)
     try {
-      // Registra no backend como entregador
       const emailAuto = dados.email.trim() || `${dados.telefone.replace(/\D/g, '')}@entregador.local`
-      await api.entregadores.cadastrarInicial({
+      await entrar(emailAuto, 'entregador', {
         nome: dados.nome,
-        email: emailAuto,
         telefone: dados.telefone,
-        veiculo: dados.veiculo,
-        placa: dados.placa,
-        status: 'offline',
-        disponivel: false,
+        veiculo_tipo: dados.veiculo,
+        veiculo_placa: dados.veiculo === 'bicicleta' ? '' : dados.placa,
       })
-
-      // Faz login automático como entregador
-      await entrar(emailAuto, 'entregador')
       setPasso(3)
     } catch (err) {
       console.error(err)
       // Mesmo com erro no backend, cria sessão local
       try {
         const emailAuto = dados.email.trim() || `${dados.telefone.replace(/\D/g, '')}@entregador.local`
-        await entrar(emailAuto, 'entregador')
+        await entrar(emailAuto, 'entregador', { nome: dados.nome, telefone: dados.telefone, veiculo_tipo: dados.veiculo, veiculo_placa: dados.veiculo === 'bicicleta' ? '' : dados.placa })
         navigate('/entregador')
       } catch {
         setErro('Não foi possível criar sua conta. Tente novamente.')
@@ -228,7 +246,7 @@ export default function CadastroEntregador() {
                     { value: 'carro', label: 'Carro', emoji: '🚗' },
                   ].map(v => (
                     <button key={v.value} type="button"
-                      onClick={() => setDados(d => ({ ...d, veiculo: v.value }))}
+                      onClick={() => setDados(d => ({ ...d, veiculo: v.value, placa: v.value === 'bicicleta' ? '' : d.placa }))}
                       className={`py-3 rounded-xl border-2 text-sm font-bold flex flex-col items-center gap-1 cursor-pointer transition-all ${dados.veiculo === v.value ? 'border-accent bg-accent/10 text-accent' : 'border-border bg-white text-text-secondary hover:border-accent/50'}`}>
                       <span className="text-xl">{v.emoji}</span>
                       {v.label}
@@ -237,15 +255,21 @@ export default function CadastroEntregador() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5">
-                <label className={labelClass}>Placa do veículo</label>
-                <div className="relative">
-                  <FileText size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-                  <input name="placa" type="text" placeholder="ABC-1234"
-                    value={dados.placa} onChange={handleChange} className={inputClass} />
+              {dados.veiculo !== 'bicicleta' ? (
+                <div className="flex flex-col gap-1.5">
+                  <label className={labelClass}>Placa do veículo *</label>
+                  <div className="relative">
+                    <FileText size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                    <input name="placa" type="text" placeholder="ABC1234 ou ABC1D23"
+                      value={dados.placa} onChange={handleChange} className={inputClass} />
+                  </div>
+                  <p className="text-xs text-text-muted">Validação local de formato. Consulta real em base oficial exige integração autenticada com órgão de trânsito.</p>
                 </div>
-                <p className="text-xs text-text-muted">Opcional para bicicleta</p>
-              </div>
+              ) : (
+                <div className="text-xs text-accent font-semibold bg-accent/10 border border-accent/20 rounded-xl px-3 py-2">
+                  Bicicleta selecionada: placa não é necessária.
+                </div>
+              )}
 
               <label className="flex items-start gap-2.5 cursor-pointer">
                 <input type="checkbox" checked={aceitouTermos} onChange={e => setAceitouTermos(e.target.checked)}

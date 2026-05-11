@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { motion as Motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useDarkMode } from '../contexts/DarkModeContext'
-import { Link, useLocation, Routes, Route } from 'react-router-dom'
+import { Link, useLocation, useNavigate, Routes, Route } from 'react-router-dom'
 import api from '../services/api'
+import { formatarHoraBanco, dataISOHojeLocal } from '../utils/datas'
 
 import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, BarChart3,
@@ -27,6 +28,7 @@ const statusConfig = {
 // ── Navbar ────────────────────────────────────────────────────────────────────
 function NavbarGerente({ usuario }) {
   const location = useLocation()
+  const navigate = useNavigate()
   const { sair } = useAuth()
   const { dark, toggle } = useDarkMode()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -99,7 +101,12 @@ function NavbarGerente({ usuario }) {
             {dark ? <Sun size={15} className="text-yellow-400" /> : <Moon size={15} className="text-text-secondary" />}
           </button>
 
-          <button className="relative w-9 h-9 rounded-full bg-transparent border border-border flex items-center justify-center cursor-pointer hover:bg-surface-2 transition-all">
+          <button
+            type="button"
+            onClick={() => navigate('/gerente/pedidos')}
+            title="Ver pedidos pendentes"
+            className="relative w-9 h-9 rounded-full bg-transparent border border-border flex items-center justify-center cursor-pointer hover:bg-surface-2 transition-all"
+          >
             <Bell size={16} className="text-text-secondary" />
             {pendentes > 0 && (
               <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary rounded-full text-white text-[0.55rem] font-extrabold flex items-center justify-center border border-white">{pendentes > 9 ? '9+' : pendentes}</span>
@@ -161,17 +168,15 @@ function PainelPrincipal({ usuario }) {
 
   useEffect(() => {
     // Stats de vendas hoje
-    const hoje = new Date()
-    hoje.setHours(0, 0, 0, 0)
-    const inicio = hoje.toISOString()
-    const fim = new Date().toISOString()
+    const inicio = dataISOHojeLocal(0)
+    const fim = dataISOHojeLocal(0)
 
     api.relatorios.buscar('vendas', inicio, fim)
       .then(r => {
-        const d = r.dados || {}
+        const d = r.dados?.indicadores || r.dados || {}
         setStats([
           { label: 'Pedidos hoje', valor: d.total_pedidos ?? 0, bg: 'bg-primary-light', cor: 'text-primary', icon: ShoppingBag },
-          { label: 'Faturamento', valor: `R$ ${Number(d.faturamento ?? 0).toFixed(2)}`, bg: 'bg-accent/10', cor: 'text-accent', icon: DollarSign },
+          { label: 'Faturamento', valor: `R$ ${Number(d.faturamento_confirmado ?? d.faturamento_bruto ?? d.faturamento ?? 0).toFixed(2)}`, bg: 'bg-accent/10', cor: 'text-accent', icon: DollarSign },
           { label: 'Ticket médio', valor: `R$ ${Number(d.ticket_medio ?? 0).toFixed(2)}`, bg: 'bg-secondary/10', cor: 'text-secondary', icon: TrendingUp },
           { label: 'Avaliação', valor: '—', bg: 'bg-yellow-50', cor: 'text-yellow-500', icon: Star },
         ])
@@ -183,11 +188,11 @@ function PainelPrincipal({ usuario }) {
         id: `#${String(p.id).slice(-4)}`,
         cliente: p.cliente_id,
         valor: Number(p.total),
-        status: p.status === 'confirmado' ? 'Preparando'
+        status: ['pendente','confirmado','preparando'].includes(p.status) ? 'Preparando'
               : p.status === 'entregando' ? 'Entregando'
               : p.status === 'entregue'   ? 'Entregue'
               : 'Cancelado',
-        horario: new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        horario: formatarHoraBanco(p.created_at),
         itens: (() => { try { return JSON.parse(p.itens).map(i => i.nome || i.id).join(', ') } catch { return '' } })(),
       }))
       setPedidosRecentes(recentes)
@@ -205,7 +210,7 @@ function PainelPrincipal({ usuario }) {
 
     // Gráfico por hora
     api.relatorios.buscar('mapa-calor').then(r => {
-      setGrafico((r.dados || []).map(d => ({ hora: `${d.hora}h`, valor: (d.quantidade ?? 0) * 50 })))
+      setGrafico(((r.dados?.series?.por_hora || r.dados || [])).map(d => ({ hora: `${d.hora}h`, valor: (d.quantidade ?? 0) * 50 })))
     }).catch(console.error)
   }, [])
 

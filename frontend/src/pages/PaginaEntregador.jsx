@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import logoSrc from '../imgs/Logo-site.png'
 import api from '../services/api'
+import { formatarHoraBanco, parseDataBanco, mesmoDiaLocal } from '../utils/datas'
 
 // aqui e o back gelado - dados de entregador devem vir do backend
 // dados carregados do backend no componente principal
@@ -189,7 +190,7 @@ function EntregaAtiva({ entrega, onAvançar, localizacao }) {
 }
 
 // ── Fila de pedidos ────────────────────────────────────────────────────────────
-function FilaPedidos({ fila = [] }) {
+function FilaPedidos({ fila = [], onAceitar }) {
   return (
     <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
       <div className="px-5 py-4 border-b border-border flex items-center justify-between">
@@ -197,6 +198,9 @@ function FilaPedidos({ fila = [] }) {
         <span className="text-xs font-extrabold text-primary bg-primary-light px-2 py-0.5 rounded-full">{fila.length} na fila</span>
       </div>
       <div className="divide-y divide-border">
+        {fila.length === 0 && (
+          <div className="px-5 py-6 text-sm text-text-muted font-semibold">Nenhum pedido disponível agora.</div>
+        )}
         {fila.map((pedido, i) => (
           <Motion.div key={pedido.id}
             className="flex items-center gap-3 px-5 py-4"
@@ -215,7 +219,8 @@ function FilaPedidos({ fila = [] }) {
             </div>
             <div className="text-right shrink-0">
               <p className="font-display text-sm font-extrabold text-accent">R$ {Number(pedido.valor || 0).toFixed(2).replace('.', ',')}</p>
-              <p className="text-xs text-text-muted font-semibold">{pedido.distancia}</p>
+              <p className="text-xs text-text-muted font-semibold mb-1">{pedido.distancia}</p>
+              <button type="button" onClick={() => onAceitar?.(pedido)} className="px-2.5 py-1 rounded-lg bg-accent text-white text-[10px] font-extrabold border-none cursor-pointer">Aceitar</button>
             </div>
           </Motion.div>
         ))}
@@ -335,6 +340,13 @@ export default function PaginaEntregador() {
   const [fila, setFila] = useState([])
   const [historico, setHistorico] = useState([])
   const [stats, setStats] = useState([])
+  const [ganhosSemana, setGanhosSemana] = useState([
+    { dia: 'Seg', val: 0, valor: 0 }, { dia: 'Ter', val: 0, valor: 0 }, { dia: 'Qua', val: 0, valor: 0 },
+    { dia: 'Qui', val: 0, valor: 0 }, { dia: 'Sex', val: 0, valor: 0 }, { dia: 'Sáb', val: 0, valor: 0 },
+    { dia: 'Dom', val: 0, valor: 0 },
+  ])
+  const [totalSemana, setTotalSemana] = useState(0)
+  const [tendenciaSemana, setTendenciaSemana] = useState(null)
   const [entregadorId, setEntregadorId] = useState(null)
 
   useEffect(() => {
@@ -346,7 +358,13 @@ export default function PaginaEntregador() {
       } catch {
         // Entregador não existe no banco ainda — cria automaticamente
         try {
-          ent = await api.entregadores.cadastrarInicial({})
+          ent = await api.entregadores.cadastrarInicial({
+            nome: usuario?.nome || 'Entregador',
+            email: usuario?.email || '',
+            telefone: usuario?.telefone || '',
+            veiculo_tipo: usuario?.veiculo_tipo || 'moto',
+            veiculo_placa: usuario?.veiculo_placa || '',
+          })
         } catch (e2) {
           console.warn('Não foi possível criar entregador no backend:', e2)
           return
@@ -354,6 +372,10 @@ export default function PaginaEntregador() {
       }
       if (!ent?.id) return
       setEntregadorId(ent.id)
+      if (ent.latitude !== undefined && ent.longitude !== undefined && Number(ent.latitude) !== 0 && Number(ent.longitude) !== 0) {
+        setLocalizacao({ latitude: Number(ent.latitude), longitude: Number(ent.longitude) })
+      }
+      if (ent.status === 'disponivel' || ent.status === 'ocupado') setOnline(true)
       // Pedido ativo (entregando)
       try {
         const pedidosAtivos = await api.pedidos.listar({ entregadorId: ent.id, status: 'entregando' })
@@ -361,8 +383,8 @@ export default function PaginaEntregador() {
           const p = pedidosAtivos[0]
           setEntregaAtiva({
             id: `#${String(p.id).slice(-4)}`,
-            cliente: { nome: p.cliente_id, telefone: '', avatar: 'CL' },
-            loja: { nome: p.restaurante_id, emoji: '🍽️', endereco: '' },
+            cliente: { nome: p.cliente_nome || p.cliente_id || 'Cliente', telefone: '', avatar: 'CL' },
+            loja: { nome: p.restaurante_nome || p.restaurante_id || 'Restaurante', emoji: '🍽️', endereco: '' },
             destino: { rua: p.endereco_entrega, bairro: '', cidade: '' },
             itens: typeof p.itens === 'string' ? p.itens : JSON.stringify(p.itens),
             valor: p.total,
@@ -385,29 +407,70 @@ export default function PaginaEntregador() {
     api.pedidos.listar({ entregadorId, status: 'entregue' })
       .then(lista => setHistorico(lista.slice(0, 10).map(p => ({
         id: `#${String(p.id).slice(-4)}`,
-        loja: p.restaurante_id, emoji: '🍽️',
-        cliente: p.cliente_id,
+        loja: p.restaurante_nome || p.restaurante_id, emoji: '🍽️',
+        cliente: p.cliente_nome || p.cliente_id,
         valor: p.total,
         tempo: p.tempo_entrega_estimado ? `${p.tempo_entrega_estimado} min` : '--',
         avaliacao: p.avaliacao_entregador || 5,
-        horario: new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+        horario: formatarHoraBanco(p.created_at),
       })))
     ).catch(() => {})
     // Stats calculados a partir do histórico
     api.pedidos.listar({ entregadorId, status: 'entregue' })
       .then(lista => {
-        const hoje = new Date().toDateString()
-        const hoje_lista = lista.filter(p => new Date(p.created_at).toDateString() === hoje)
-        const ganhos = hoje_lista.reduce((s, p) => s + Number(p.total || 0) * 0.8, 0) // 80% vai para o entregador
-        const totalEntregas = hoje_lista.length
+        const inicioDoDia = (data) => {
+          const d = parseDataBanco(data) || new Date()
+          d.setHours(0, 0, 0, 0)
+          return d
+        }
+        const inicioDaSemana = (data = new Date()) => {
+          const d = inicioDoDia(data)
+          const dia = d.getDay() || 7 // segunda = início da semana
+          d.setDate(d.getDate() - dia + 1)
+          return d
+        }
+        const comissaoPedido = (p) => Number(p.taxa_entrega ?? 0) || Number(p.total || 0) * 0.2
+        const hoje = inicioDoDia(new Date())
+        const hojeLista = lista.filter(p => inicioDoDia(p.created_at).getTime() === hoje.getTime())
+        const ganhos = hojeLista.reduce((s, p) => s + comissaoPedido(p), 0)
+        const totalEntregas = hojeLista.length
+
+        const semanaAtualInicio = inicioDaSemana(new Date())
+        const semanaAtualFim = new Date(semanaAtualInicio)
+        semanaAtualFim.setDate(semanaAtualInicio.getDate() + 7)
+        const semanaAnteriorInicio = new Date(semanaAtualInicio)
+        semanaAnteriorInicio.setDate(semanaAtualInicio.getDate() - 7)
+
+        const nomesDias = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+        const baseSemana = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'].map(dia => ({ dia, valor: 0, val: 0 }))
+        let totalAnterior = 0
+
+        lista.forEach(p => {
+          const data = parseDataBanco(p.created_at) || new Date(0)
+          const valorComissao = comissaoPedido(p)
+          if (data >= semanaAtualInicio && data < semanaAtualFim) {
+            const dia = nomesDias[data.getDay()]
+            const item = baseSemana.find(x => x.dia === dia)
+            if (item) item.valor += valorComissao
+          } else if (data >= semanaAnteriorInicio && data < semanaAtualInicio) {
+            totalAnterior += valorComissao
+          }
+        })
+
+        const maxSemana = Math.max(1, ...baseSemana.map(x => x.valor))
+        const semanaFinal = baseSemana.map(x => ({ ...x, val: Math.round((x.valor / maxSemana) * 100) }))
+        const totalAtual = baseSemana.reduce((s, x) => s + x.valor, 0)
+        setGanhosSemana(semanaFinal)
+        setTotalSemana(totalAtual)
+        setTendenciaSemana(totalAnterior > 0 ? Math.round(((totalAtual - totalAnterior) / totalAnterior) * 100) : null)
         setHistorico(lista.slice(0, 10).map(p => ({
           id: `#${String(p.id).slice(-4)}`,
-          loja: p.restaurante_id, emoji: '🍽️',
-          cliente: p.cliente_id,
+          loja: p.restaurante_nome || p.restaurante_id, emoji: '🍽️',
+          cliente: p.cliente_nome || p.cliente_id,
           valor: p.total,
           tempo: p.tempo_entrega_estimado ? `${p.tempo_entrega_estimado} min` : '--',
           avaliacao: 5,
-          horario: new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+          horario: formatarHoraBanco(p.created_at),
         })))
         setStats([
           { label: 'Ganhos hoje', valor: `R$ ${ganhos.toFixed(2)}`, icon: DollarSign, cor: 'text-accent', bg: 'bg-accent/10', variacao: '' },
@@ -416,6 +479,13 @@ export default function PaginaEntregador() {
           { label: 'Avaliação', valor: '5.0', icon: Star, cor: 'text-yellow-500', bg: 'bg-yellow-50', variacao: 'média' },
         ])
       }).catch(() => {
+        setGanhosSemana([
+          { dia: 'Seg', val: 0, valor: 0 }, { dia: 'Ter', val: 0, valor: 0 }, { dia: 'Qua', val: 0, valor: 0 },
+          { dia: 'Qui', val: 0, valor: 0 }, { dia: 'Sex', val: 0, valor: 0 }, { dia: 'Sáb', val: 0, valor: 0 },
+          { dia: 'Dom', val: 0, valor: 0 },
+        ])
+        setTotalSemana(0)
+        setTendenciaSemana(null)
         setStats([
           { label: 'Ganhos hoje', valor: 'R$ 0,00', icon: DollarSign, cor: 'text-accent', bg: 'bg-accent/10', variacao: '' },
           { label: 'Entregas hoje', valor: '0', icon: Package, cor: 'text-primary', bg: 'bg-primary-light', variacao: '' },
@@ -424,6 +494,67 @@ export default function PaginaEntregador() {
         ])
       })
   }, [entregadorId])
+
+
+
+  const carregarFilaDisponivel = async () => {
+    if (!online || !entregadorId) {
+      setFila([])
+      return
+    }
+    try {
+      const lista = await api.pedidos.listarDisponiveis()
+      setFila((Array.isArray(lista) ? lista : []).map(p => ({
+        id: `#${String(p.id).slice(-6)}`,
+        _id: p.id,
+        loja: p.restaurante_nome || p.restaurante_id || 'Restaurante',
+        emoji: '🍽️',
+        destino: p.endereco_entrega || 'Endereço não informado',
+        cliente: p.cliente_nome || p.cliente_id || 'Cliente',
+        valor: Number(p.total || 0) * 0.2,
+        distancia: p.distancia_km ? `${Number(p.distancia_km).toFixed(1)} km` : 'sem distância',
+      })))
+    } catch (e) {
+      console.warn('Erro ao carregar pedidos disponíveis:', e)
+      setFila([])
+    }
+  }
+
+  useEffect(() => {
+    carregarFilaDisponivel()
+    if (!online || !entregadorId) return
+    const id = setInterval(carregarFilaDisponivel, 10000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [online, entregadorId])
+
+  const aceitarPedido = async (pedido) => {
+    if (!pedido?._id || !entregadorId) return
+    try {
+      await api.entregadores.atualizarDisponibilidade(entregadorId, true).catch(() => {})
+      await api.pedidos.atribuirEntregador(pedido._id, entregadorId)
+      const atualizados = await api.pedidos.listar({ entregadorId, status: 'entregando' })
+      const p = atualizados.find(x => x.id === pedido._id) || atualizados[0]
+      if (p) {
+        setEntregaAtiva({
+          id: `#${String(p.id).slice(-4)}`,
+          cliente: { nome: p.cliente_nome || p.cliente_id || 'Cliente', telefone: '', avatar: 'CL' },
+          loja: { nome: p.restaurante_nome || p.restaurante_id || 'Restaurante', emoji: '🍽️', endereco: '' },
+          destino: { rua: p.endereco_entrega, bairro: '', cidade: '' },
+          itens: typeof p.itens === 'string' ? p.itens : JSON.stringify(p.itens),
+          valor: p.total,
+          distancia: p.distancia_km ? `${p.distancia_km} km` : '--',
+          tempoEstimado: p.tempo_entrega_estimado ? `${p.tempo_entrega_estimado} min` : '--',
+          etapa: 'coletando',
+          _id: p.id,
+        })
+      }
+      setFila(prev => prev.filter(x => x._id !== pedido._id))
+      setOnline(true)
+    } catch (e) {
+      setLocErro(e.message || 'Não foi possível aceitar o pedido.')
+    }
+  }
 
   const entrega = entregaAtiva ? { ...entregaAtiva, etapa } : null
 
@@ -434,6 +565,9 @@ export default function PaginaEntregador() {
       if (!navigator.geolocation) {
         setLocErro('Seu navegador não suporta geolocalização')
         setOnline(true) // fica online mesmo assim
+        if (entregadorId) {
+          api.entregadores.atualizarDisponibilidade(entregadorId, true).catch(console.error)
+        }
         return
       }
       navigator.geolocation.getCurrentPosition(
@@ -455,6 +589,9 @@ export default function PaginaEntregador() {
             setLocErro('Não foi possível obter sua localização.')
           }
           setOnline(true) // fica online mesmo sem localização
+          if (entregadorId) {
+            api.entregadores.atualizarDisponibilidade(entregadorId, true).catch(console.error)
+          }
         },
         { enableHighAccuracy: true, timeout: 8000 }
       )
@@ -588,7 +725,7 @@ export default function PaginaEntregador() {
 
           {/* Coluna direita */}
           <div className="flex flex-col gap-5">
-            <FilaPedidos fila={fila} />
+            <FilaPedidos fila={fila} onAceitar={aceitarPedido} />
 
             {/* Card ganhos da semana */}
             <Motion.div
@@ -598,17 +735,15 @@ export default function PaginaEntregador() {
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-display text-base font-bold text-text-primary">Ganhos da semana</h3>
-                <span className="text-xs font-bold text-accent bg-accent/10 px-2.5 py-1 rounded-full flex items-center gap-1">
-                  <TrendingUp size={11} /> +18%
-                </span>
+                {tendenciaSemana !== null && (
+                  <span className={`text-xs font-bold px-2.5 py-1 rounded-full flex items-center gap-1 ${tendenciaSemana >= 0 ? 'text-accent bg-accent/10' : 'text-red-500 bg-red-50'}`}>
+                    <TrendingUp size={11} /> {tendenciaSemana >= 0 ? '+' : ''}{tendenciaSemana}%
+                  </span>
+                )}
               </div>
               {/* Gráfico de barras simples */}
               <div className="flex items-end gap-2 h-24">
-                {[
-                  { dia: 'Seg', val: 65 }, { dia: 'Ter', val: 82 }, { dia: 'Qua', val: 45 },
-                  { dia: 'Qui', val: 91 }, { dia: 'Sex', val: 78 }, { dia: 'Sáb', val: 100 },
-                  { dia: 'Dom', val: 38 },
-                ].map((d, i) => (
+                {ganhosSemana.map((d, i) => (
                   <div key={d.dia} className="flex flex-col items-center gap-1 flex-1">
                     <Motion.div
                       className={`w-full rounded-t-md ${i === 5 ? 'bg-primary' : 'bg-primary/25'} hover:bg-primary transition-colors`}
@@ -616,7 +751,7 @@ export default function PaginaEntregador() {
                       initial={{ scaleY: 0 }}
                       animate={{ scaleY: 1 }}
                       transition={{ delay: 0.4 + i * 0.06, duration: 0.4, ease: 'easeOut' }}
-                      title={`${d.dia}: R$ ${d.val}`}
+                      title={`${d.dia}: R$ ${Number(d.valor || 0).toFixed(2)}`}
                     />
                     <span className="text-[9px] text-text-muted font-semibold">{d.dia}</span>
                   </div>
@@ -624,7 +759,7 @@ export default function PaginaEntregador() {
               </div>
               <div className="mt-3 pt-3 border-t border-border flex items-center justify-between">
                 <span className="text-xs text-text-muted font-semibold">Total esta semana</span>
-                <span className="font-display text-base font-extrabold text-accent">R$ 412,80</span>
+                <span className="font-display text-base font-extrabold text-accent">R$ {totalSemana.toFixed(2).replace('.', ',')}</span>
               </div>
             </Motion.div>
 

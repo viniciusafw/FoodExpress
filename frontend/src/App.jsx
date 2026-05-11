@@ -46,12 +46,22 @@ function RotaProtegida({ children, perfil }) {
   return children
 }
 
+
+function HomeOuPainel() {
+  const { usuario, carregando } = useAuth()
+  if (carregando) return null
+  if (usuario?.perfil === 'gerente') return <Navigate to="/gerente" replace />
+  if (usuario?.perfil === 'entregador') return <Navigate to="/entregador" replace />
+  if (usuario?.perfil === 'restaurante') return <Navigate to="/painel-restaurante" replace />
+  return <Home />
+}
+
 function AnimatedRoutes() {
   const location = useLocation()
   return (
     <AnimatePresence mode="wait">
       <Routes location={location} key={location.pathname}>
-        <Route path="/" element={<PageWrapper><Home /></PageWrapper>} />
+        <Route path="/" element={<PageWrapper><HomeOuPainel /></PageWrapper>} />
         <Route path="/login" element={<PageWrapper><Login /></PageWrapper>} />
         <Route path="/register/user" element={<PageWrapper><CadastroUsuario /></PageWrapper>} />
         <Route path="/register/store" element={<PageWrapper><CadastroEstabelecimento /></PageWrapper>} />

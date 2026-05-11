@@ -26,6 +26,21 @@ async function signHmacSha256(message, secret) {
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+
+function normalizarIdentificador(valor) {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'usuario'
+}
+
+function idEstavelPorEmail(email, perfil) {
+  return `${perfil}-${normalizarIdentificador(email)}`
+}
+
 async function gerarTokenLocal(payload) {
   const header = await base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const body = await base64UrlEncode(JSON.stringify({
@@ -119,20 +134,23 @@ export function AuthProvider({ children }) {
     sincronizarAuth0();
   }, [auth0Configurado, auth0Loading, isAuthenticated, auth0User]);
 
-  const entrar = async (email, perfil) => {
+  const entrar = async (email, perfil, extras = {}) => {
     const novoUsuario = {
-      id: perfil + '-' + Date.now(),
-      nome: email.split('@')[0] || perfil,
+      id: idEstavelPorEmail(email, perfil),
+      nome: extras.nome || email.split('@')[0] || perfil,
       email,
+      telefone: extras.telefone || '',
+      veiculo_tipo: extras.veiculo_tipo || extras.veiculo || '',
+      veiculo_placa: extras.veiculo_placa || extras.placa || '',
       perfil,
     }
-    const token = await gerarTokenLocal({ userId: novoUsuario.id, role: perfil })
+    const token = await gerarTokenLocal({ userId: novoUsuario.id, role: perfil, email: novoUsuario.email, nome: novoUsuario.nome })
     localStorage.setItem('usuario', JSON.stringify(novoUsuario))
     localStorage.setItem('token', token)
     setUsuario(novoUsuario)
 
     if (perfil === 'gerente') {
-      api.restaurantes.meuRestauranteOuCriar(novoUsuario.email, novoUsuario.nome)
+      api.restaurantes.meuRestauranteOuCriar(novoUsuario.email, 'Minha Loja')
         .catch(err => console.warn('Restaurante será criado no próximo acesso:', err))
     }
 
@@ -157,13 +175,13 @@ export function AuthProvider({ children }) {
 
   const cadastrarCliente = async (dados) => {
     const novoUsuario = {
-      id: 'cliente-' + Date.now(),
+      id: idEstavelPorEmail(dados.email, 'cliente'),
       nome: dados.nome || dados.name,
       email: dados.email,
       telefone: dados.telefone || dados.phone,
       perfil: 'cliente',
     };
-    const token = await gerarTokenLocal({ userId: novoUsuario.id, role: 'cliente' })
+    const token = await gerarTokenLocal({ userId: novoUsuario.id, role: 'cliente', email: novoUsuario.email, nome: novoUsuario.nome })
     localStorage.setItem('usuario', JSON.stringify(novoUsuario));
     localStorage.setItem('token', token);
     setUsuario(novoUsuario);
@@ -172,18 +190,22 @@ export function AuthProvider({ children }) {
 
   const cadastrarGerente = async (dados) => {
     const novoUsuario = {
-      id: 'gerente-' + Date.now(),
+      id: idEstavelPorEmail(dados.emailDono || dados.ownerEmail || dados.email || dados.nomeDono || 'gerente', 'gerente'),
       nome: dados.nomeDono || dados.ownerName,
       email: dados.emailDono || dados.ownerEmail,
       telefone: dados.telefoneDono || dados.ownerPhone,
       perfil: 'gerente',
       loja: {
         nome: dados.nomeLoja || dados.storeName,
-        nomeFicticio: dados.nomeFicticio || dados.fantasia || dados.nomeFantasia,
+        nomeFicticio: dados.nomeFicticio || dados.storeFantasyName || dados.fantasia || dados.nomeFantasia,
         endereco: dados.enderecoLoja || dados.storeAddress,
+        telefone: dados.telefoneLoja || dados.storePhone,
+        cnpj: dados.cnpjLoja || dados.storeCnpj,
+        categoria: dados.categoria || 'Geral',
+        descricao: dados.descricao || '',
       },
     };
-    const token = await gerarTokenLocal({ userId: novoUsuario.id, role: 'gerente' })
+    const token = await gerarTokenLocal({ userId: novoUsuario.id, role: 'gerente', email: novoUsuario.email, nome: novoUsuario.nome })
     localStorage.setItem('usuario', JSON.stringify(novoUsuario));
     localStorage.setItem('token', token);
     setUsuario(novoUsuario);
@@ -192,6 +214,15 @@ export function AuthProvider({ children }) {
       await api.restaurantes.cadastroInicial({
         email: novoUsuario.email,
         nome: novoUsuario.loja.nome || novoUsuario.nome,
+        nomeFicticio: novoUsuario.loja.nomeFicticio,
+        cnpj: novoUsuario.loja.cnpj,
+        telefone: novoUsuario.loja.telefone,
+        endereco: novoUsuario.loja.endereco,
+        categoria: novoUsuario.loja.categoria || 'Geral',
+        descricao: novoUsuario.loja.descricao || '',
+        ownerName: novoUsuario.nome,
+        ownerEmail: novoUsuario.email,
+        ownerPhone: novoUsuario.telefone,
       })
     } catch (error) {
       // Não bloqueia o cadastro se o backend falhar — o gerente ainda pode usar o painel

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import logoSrc from '../imgs/Logo-site.png'
 import api from '../services/api'
+import { formatarHoraBanco, mesmoDiaLocal } from '../utils/datas'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 const statusConfig = {
@@ -64,7 +65,7 @@ function AbaPedidos({ restauranteId, avaliacao }) {
 
   const ativos = pedidos.filter(p => !['entregue', 'cancelado'].includes(p.status))
   const faturamentoHoje = pedidos
-    .filter(p => p.status === 'entregue' && new Date(p.created_at).toDateString() === new Date().toDateString())
+    .filter(p => p.status === 'entregue' && mesmoDiaLocal(p.created_at))
     .reduce((acc, p) => acc + Number(p.total), 0)
 
   const avancarStatus = async (pedidoId, proximo) => {
@@ -122,7 +123,7 @@ function AbaPedidos({ restauranteId, avaliacao }) {
                   <div>
                     <p className="text-xs text-text-muted font-semibold">#{String(pedido.id).slice(-6)}</p>
                     <p className="text-xs text-text-muted mt-0.5">
-                      {new Date(pedido.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      {formatarHoraBanco(pedido.created_at)}
                     </p>
                   </div>
                   <span className={`flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border ${cfg.cor}`}>
@@ -341,7 +342,7 @@ export default function PainelRestaurante() {
     const email = usuario?.email || JSON.parse(localStorage.getItem('usuario') || '{}')?.email
     if (!email) { setCarregando(false); return }
 
-    api.restaurantes.meuRestaurante(email)
+    api.restaurantes.meuRestaurante()
       .then(rest => setRestaurante(rest))
       .catch(console.error)
       .finally(() => setCarregando(false))

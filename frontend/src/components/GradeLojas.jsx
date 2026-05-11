@@ -9,7 +9,7 @@ export default function StoreGrid({ tipo }) {
 
   useEffect(() => {
     setErro('')
-    api.restaurantes.listar(tipo && tipo !== 'mercado' ? { categoria: tipo } : {})
+    api.restaurantes.listar(tipo ? { categoria: tipo } : {})
       .then(dados => {
         const normalizados = dados.map(r => ({
           ...r,

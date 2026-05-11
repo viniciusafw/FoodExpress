@@ -3,6 +3,7 @@ import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { Plus, Pencil, Trash2, Search, ToggleLeft, ToggleRight, X, Check, FolderPlus } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import api from '../../services/api'
+import { imagemProduto } from '../../utils/imagens'
 
 // ── Modal produto ─────────────────────────────────────────────────────────────
 function ModalProduto({ produto, categoriaId, categorias, restauranteId, onFechar, onSalvo }) {
@@ -10,6 +11,7 @@ function ModalProduto({ produto, categoriaId, categorias, restauranteId, onFecha
   const [preco, setPreco] = useState(produto?.preco ? String(produto.preco) : '')
   const [categoria, setCategoria] = useState(produto?.categoria || categoriaId || '')
   const [descricao, setDescricao] = useState(produto?.descricao || '')
+  const [imagem, setImagem] = useState(produto?.imagem || '')
   const [salvando, setSalvando] = useState(false)
 
   const handleSalvar = async () => {
@@ -21,11 +23,11 @@ function ModalProduto({ produto, categoriaId, categorias, restauranteId, onFecha
     try {
       if (produto?.id) {
         await api.cardapio.atualizar(produto.id, {
-          nome, preco: parseFloat(preco), categoria, descricao,
+          nome, preco: parseFloat(preco), categoria, descricao, imagem,
         })
       } else {
         await api.cardapio.criar({
-          restauranteId, nome, preco: parseFloat(preco), categoria, descricao, tempo_preparo: 30,
+          restauranteId, nome, preco: parseFloat(preco), categoria, descricao, imagem, tempo_preparo: 30,
         })
       }
       onSalvo()
@@ -79,6 +81,11 @@ function ModalProduto({ produto, categoriaId, categorias, restauranteId, onFecha
           <div>
             <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Descrição</label>
             <input type="text" value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Breve descrição do produto"
+              className="w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Imagem do produto</label>
+            <input type="text" value={imagem} onChange={e => setImagem(e.target.value)} placeholder="URL da imagem ou caminho salvo"
               className="w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all" />
           </div>
         </div>
@@ -204,7 +211,7 @@ export default function CardapioGerente() {
     const usr = usuario || JSON.parse(localStorage.getItem('usuario') || '{}')
     if (!usr?.email) { setCarregando(false); return }
 
-    api.restaurantes.meuRestauranteOuCriar(usr.email, usr.nome || usr.email)
+    api.restaurantes.meuRestauranteOuCriar(usr.email, 'Minha Loja')
       .then(rest => {
         setRestauranteId(rest.id)
         return carregarCardapio(rest.id)
@@ -322,6 +329,9 @@ export default function CardapioGerente() {
             <div className="divide-y divide-border">
               {cat.produtos.map(produto => (
                 <div key={produto.id} className="flex items-center gap-4 px-5 py-3">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-2xl overflow-hidden shrink-0">
+                    {imagemProduto(produto) ? <img src={imagemProduto(produto)} alt={produto.nome} className="w-full h-full object-cover" /> : '🍽️'}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm font-bold truncate ${produto.disponivel ? 'text-text-primary' : 'text-text-muted line-through'}`}>
                       {produto.nome}

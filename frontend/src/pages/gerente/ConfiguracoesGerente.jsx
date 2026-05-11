@@ -1,12 +1,23 @@
 import { useState, useEffect } from 'react'
 import { motion as Motion } from 'framer-motion'
-import { Check, Store, Clock, CreditCard, Sun, Moon, User } from 'lucide-react'
+import { Check, Store, Clock, CreditCard, Sun, Moon, MapPin, Power } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { useDarkMode } from '../../contexts/DarkModeContext'
 import api from '../../services/api'
 
 const diasSemana = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
 const formasPagamentoOpcoes = ['Dinheiro', 'Crédito', 'Débito', 'Pix', 'Vale Refeição']
+
+function lerLista(valor, padrao = []) {
+  if (Array.isArray(valor)) return valor
+  if (!valor) return padrao
+  try {
+    const parsed = JSON.parse(valor)
+    return Array.isArray(parsed) ? parsed : padrao
+  } catch {
+    return String(valor).split(',').map(v => v.trim()).filter(Boolean)
+  }
+}
 
 export default function ConfiguracoesGerente() {
   const { usuario } = useAuth()
@@ -18,6 +29,11 @@ export default function ConfiguracoesGerente() {
   const [telefone, setTelefone] = useState('')
   const [endereco, setEndereco] = useState('')
   const [categoria, setCategoria] = useState('')
+  const [logo, setLogo] = useState('')
+  const [capa, setCapa] = useState('')
+  const [latitude, setLatitude] = useState('')
+  const [longitude, setLongitude] = useState('')
+  const [statusLoja, setStatusLoja] = useState('ativo')
 
   const [diasAberto, setDiasAberto] = useState(['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'])
   const [horarioAbertura, setHorarioAbertura] = useState('18:00')
@@ -28,12 +44,13 @@ export default function ConfiguracoesGerente() {
   const [salvo, setSalvo] = useState(false)
   const [erro, setErro] = useState(null)
   const [carregando, setCarregando] = useState(true)
+  const [buscandoLocalizacao, setBuscandoLocalizacao] = useState(false)
 
   useEffect(() => {
     const usr = usuario || JSON.parse(localStorage.getItem('usuario') || '{}')
     if (!usr?.email) { setCarregando(false); return }
 
-    api.restaurantes.meuRestauranteOuCriar(usr.email, usr.nome || usr.email)
+    api.restaurantes.meuRestauranteOuCriar(usr.email, 'Minha Loja')
       .then(rest => {
         setRestauranteId(rest.id)
         setNome(rest.nome || '')
@@ -41,11 +58,19 @@ export default function ConfiguracoesGerente() {
         setTelefone(rest.telefone || '')
         setEndereco(rest.endereco || '')
         setCategoria(rest.categoria || '')
+        setLogo(rest.logo || '')
+        setCapa(rest.capa || '')
+        setLatitude(rest.latitude ?? '')
+        setLongitude(rest.longitude ?? '')
+        setStatusLoja(rest.status || 'ativo')
+        setHorarioAbertura(rest.horario_abertura || '18:00')
+        setHorarioFechamento(rest.horario_fechamento || '23:00')
+        setDiasAberto(lerLista(rest.dias_aberto, ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']))
+        setPagamentos(lerLista(rest.formas_pagamento, ['Dinheiro', 'Crédito', 'Débito', 'Pix']))
       })
       .catch(err => {
-        // Backend offline ou token inválido — mostra formulário vazio sem bloquear
         console.warn('Não foi possível carregar restaurante:', err)
-        setErro('Backend offline. Os dados serão sincronizados quando o servidor estiver disponível.')
+        setErro('Não foi possível carregar os dados da loja: ' + (err.message || 'erro desconhecido'))
       })
       .finally(() => setCarregando(false))
   }, [usuario])
@@ -55,6 +80,46 @@ export default function ConfiguracoesGerente() {
 
   const togglePagamento = (forma) =>
     setPagamentos(prev => prev.includes(forma) ? prev.filter(f => f !== forma) : [...prev, forma])
+
+
+  const preencherComLocalizacaoAtual = () => {
+    if (!navigator.geolocation) {
+      setErro('Seu navegador não suporta geolocalização.')
+      return
+    }
+    setErro(null)
+    setBuscandoLocalizacao(true)
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = pos.coords.latitude
+        const lng = pos.coords.longitude
+        setLatitude(String(lat))
+        setLongitude(String(lng))
+
+        let enderecoAutomatico = `Localização atual (${lat.toFixed(5)}, ${lng.toFixed(5)})`
+        try {
+          const resp = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lng}&localityLanguage=pt`)
+          if (resp.ok) {
+            const data = await resp.json()
+            const partes = [data.locality, data.city, data.principalSubdivision, data.countryName].filter(Boolean)
+            if (partes.length) enderecoAutomatico = partes.join(', ')
+          }
+        } catch {
+          // Sem internet ou API indisponível: mantém o texto com coordenadas.
+        }
+
+        setEndereco(prev => prev?.trim() ? prev : enderecoAutomatico)
+        localStorage.setItem('localizacao', JSON.stringify({ latitude: lat, longitude: lng }))
+        setBuscandoLocalizacao(false)
+      },
+      (err) => {
+        setBuscandoLocalizacao(false)
+        if (err.code === 1) setErro('Permissão de localização negada. Ative no navegador.')
+        else setErro('Não foi possível obter sua localização.')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 300000 }
+    )
+  }
 
   const handleSalvar = async () => {
     if (!restauranteId) {
@@ -70,6 +135,15 @@ export default function ConfiguracoesGerente() {
         telefone: telefone || undefined,
         endereco: endereco || undefined,
         categoria: categoria || undefined,
+        logo: logo || undefined,
+        capa: capa || undefined,
+        latitude: latitude !== '' ? Number(latitude) : undefined,
+        longitude: longitude !== '' ? Number(longitude) : undefined,
+        horario_abertura: horarioAbertura,
+        horario_fechamento: horarioFechamento,
+        dias_aberto: diasAberto,
+        formas_pagamento: pagamentos,
+        status: statusLoja,
       })
       setSalvo(true)
       setTimeout(() => setSalvo(false), 3000)
@@ -126,6 +200,37 @@ export default function ConfiguracoesGerente() {
           </div>
         </Motion.div>
 
+
+        {/* Status da loja */}
+        <Motion.div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden"
+          initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.03 }}>
+          <div className="px-5 py-4 border-b border-border flex items-center gap-2">
+            <Power size={16} className={statusLoja === 'ativo' ? 'text-accent' : 'text-red-500'} />
+            <h3 className="font-display text-base font-bold text-text-primary">Status da loja</h3>
+          </div>
+          <div className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-text-primary">
+                {statusLoja === 'ativo' ? 'Loja aberta para pedidos' : 'Loja fechada para pedidos'}
+              </p>
+              <p className="text-xs text-text-muted font-semibold mt-0.5">
+                Quando estiver fechada, a loja aparece como fechada e o cliente não consegue adicionar itens ao carrinho.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setStatusLoja(s => s === 'ativo' ? 'fechado' : 'ativo')}
+              className={`px-5 py-2.5 rounded-xl text-sm font-extrabold border transition-all cursor-pointer ${
+                statusLoja === 'ativo'
+                  ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                  : 'bg-accent text-white border-accent hover:opacity-90'
+              }`}
+            >
+              {statusLoja === 'ativo' ? 'Fechar loja' : 'Abrir loja'}
+            </button>
+          </div>
+        </Motion.div>
+
         {/* Informações da loja */}
         <Motion.div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden"
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
@@ -141,6 +246,11 @@ export default function ConfiguracoesGerente() {
               <label className={labelCls}>Nome da loja *</label>
               <input type="text" value={nome} onChange={e => setNome(e.target.value)}
                 placeholder="Ex: Pizzaria do João" className={inputCls} />
+              {['Minha Loja', 'Meu Restaurante'].includes(String(nome).trim()) && (
+                <p className="mt-2 text-xs font-semibold text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+                  Troque o nome padrão pelo nome real da loja. É esse nome que aparece para o cliente.
+                </p>
+              )}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -160,9 +270,48 @@ export default function ConfiguracoesGerente() {
                 placeholder="Ex: Av. Principal, 123 - Aldeota, Fortaleza" className={inputCls} />
             </div>
             <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <MapPin size={14} className="text-primary" />
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wide">Localização da loja</label>
+              </div>
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <p className="text-xs text-text-muted font-semibold">Use a localização atual da loja para preencher coordenadas.</p>
+                <button type="button" onClick={preencherComLocalizacaoAtual}
+                  disabled={buscandoLocalizacao}
+                  className="px-3 py-1.5 rounded-lg bg-primary-light text-primary text-xs font-bold border border-primary/20 cursor-pointer disabled:opacity-60">
+                  {buscandoLocalizacao ? 'Buscando...' : 'Usar localização atual'}
+                </button>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelCls}>Latitude</label>
+                  <input type="number" step="any" value={latitude} onChange={e => setLatitude(e.target.value)}
+                    placeholder="Ex: -3.7319" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Longitude</label>
+                  <input type="number" step="any" value={longitude} onChange={e => setLongitude(e.target.value)}
+                    placeholder="Ex: -38.5267" className={inputCls} />
+                </div>
+              </div>
+              <p className="text-xs text-text-muted font-semibold mt-2">Esses valores são salvos no banco e usados no cálculo de rotas/frete.</p>
+            </div>
+            <div>
               <label className={labelCls}>Categoria</label>
               <input type="text" value={categoria} onChange={e => setCategoria(e.target.value)}
                 placeholder="Ex: Pizzas, Hambúrgueres, Japonesa…" className={inputCls} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className={labelCls}>Logo da loja</label>
+                <input type="text" value={logo} onChange={e => setLogo(e.target.value)}
+                  placeholder="URL da logo" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Imagem de capa</label>
+                <input type="text" value={capa} onChange={e => setCapa(e.target.value)}
+                  placeholder="URL da capa" className={inputCls} />
+              </div>
             </div>
           </div>
         </Motion.div>
@@ -173,7 +322,6 @@ export default function ConfiguracoesGerente() {
           <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <Clock size={16} className="text-primary" />
             <h3 className="font-display text-base font-bold text-text-primary">Horário de funcionamento</h3>
-            <span className="ml-auto text-xs text-text-muted font-semibold italic">Salvo localmente</span>
           </div>
           <div className="p-5 flex flex-col gap-4">
             <div>
@@ -210,7 +358,6 @@ export default function ConfiguracoesGerente() {
           <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <CreditCard size={16} className="text-primary" />
             <h3 className="font-display text-base font-bold text-text-primary">Formas de pagamento aceitas</h3>
-            <span className="ml-auto text-xs text-text-muted font-semibold italic">Salvo localmente</span>
           </div>
           <div className="p-5">
             <div className="flex flex-wrap gap-2">

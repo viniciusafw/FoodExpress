@@ -131,7 +131,7 @@ export default function Header() {
         animate={{ y: oculto ? '-100%' : '0%' }}
         transition={{ duration: 0.3, ease: 'easeInOut' }}
       >
-        <div className="max-7xl mx-auto px-4 sm:px-6 h-18 flex items-center gap-3 sm:gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[72px] flex items-center gap-3 sm:gap-6">
 
           <Link to="/" className="shrink-0 rounded-xl p-1.5 hover:bg-surface-2 transition-colors">
             <img src={logoSrc} alt="FoodExpress" className="h-10 sm:h-11 w-auto object-contain" />
@@ -142,7 +142,7 @@ export default function Header() {
               const eAtivo = ativo(to)
               return (
                 <Link key={label} to={to}
-                  className={`px-3 h-18 flex items-center text-sm font-bold transition-all whitespace-nowrap border-b-2 ${
+                  className={`px-3 h-[72px] flex items-center text-sm font-bold transition-all whitespace-nowrap border-b-2 ${
                     eAtivo ? 'text-primary border-primary' : 'text-text-secondary border-transparent hover:text-primary hover:border-primary'
                   }`}
                 >{label}</Link>
@@ -160,7 +160,7 @@ export default function Header() {
             />
           </form>
 
-          <button className="hidden xl:flex items-center gap-1.5 px-2 py-1.5 rounded-xl transition-all hover:bg-primary-light shrink-0 cursor-pointer border-none bg-transparent">
+          <button type="button" onClick={solicitarLocalizacao} className="hidden xl:flex items-center gap-1.5 px-2 py-1.5 rounded-xl transition-all hover:bg-primary-light shrink-0 cursor-pointer border-none bg-transparent">
             <MapPin size={18} className="text-primary" />
             <div className="flex flex-col items-start">
               <span className="text-[0.68rem] text-text-muted font-semibold leading-none">Próximo de</span>
@@ -322,7 +322,7 @@ export default function Header() {
       </Motion.header>
 
       {/* Espaçador para compensar o header fixed */}
-      <div className="h-18" />
+      <div className="h-[72px]" />
 
       <CartDrawer isOpen={carrinhoAberto} onClose={() => setCarrinhoAberto(false)} />
     </>

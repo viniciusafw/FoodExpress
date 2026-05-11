@@ -105,11 +105,17 @@ export default function CadastroLoja() {
     setCarregando(true)
     try {
       await cadastrarGerente({
-        storeName: dados.nomeLoja, storeFantasyName: dados.nomeFicticio, storeAddress: dados.enderecoLoja,
-        storePhone: dados.telefoneLoja, storeCnpj: dados.cnpjLoja,
-        ownerName: dados.nomeDono, ownerEmail: dados.emailDono,
-        ownerPhone: dados.telefoneDono, ownerCpf: dados.cpfDono, password: dados.senha,
+        storeName: dados.nomeLoja,
         nomeFicticio: dados.nomeFicticio,
+        storeAddress: dados.enderecoLoja,
+        storePhone: dados.telefoneLoja,
+        storeCnpj: dados.cnpjLoja,
+        categoria: dados.tipoLoja || 'restaurante',
+        ownerName: dados.nomeDono,
+        ownerEmail: dados.emailDono,
+        ownerPhone: dados.telefoneDono,
+        ownerCpf: dados.cpfDono,
+        password: dados.senha,
       })
     } catch (error) {
       console.error('Erro ao cadastrar gerente:', error)

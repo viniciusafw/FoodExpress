@@ -5,6 +5,7 @@ import { Search, Star, Clock, Truck, X, SlidersHorizontal, MapPin } from 'lucide
 import Header from '../components/Header'
 import api from '../services/api'
 import MobileNavBar from '../components/MobileNavBar'
+import { imagemRestaurante, imagemProduto, emojiRestaurante, emojiProduto } from '../utils/imagens'
 
 const filtros = ['Entrega Grátis', 'Mais Avaliados', 'Mais Próximos']
 
@@ -18,8 +19,8 @@ function LojaCard({ loja, index }) {
       transition={{ duration: 0.25, delay: index * 0.05 }}
       onClick={() => navigate(`/loja/${loja.id}`)}
     >
-      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-4xl flex-shrink-0 group-hover:scale-105 transition-transform">
-        {loja.emoji}
+      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-4xl flex-shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+        {loja.imagem ? <img src={loja.imagem} alt={loja.nome} className="w-full h-full object-cover" loading="lazy" /> : loja.emoji}
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
@@ -57,8 +58,8 @@ function ProdutoCard({ produto, index }) {
       transition={{ duration: 0.25, delay: index * 0.05 }}
       onClick={() => navigate(`/loja/${produto.loja.id}`)}
     >
-      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-4xl flex-shrink-0 group-hover:scale-105 transition-transform">
-        {produto.emoji}
+      <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-4xl flex-shrink-0 group-hover:scale-105 transition-transform overflow-hidden">
+        {produto.imagem ? <img src={produto.imagem} alt={produto.nome} className="w-full h-full object-cover" loading="lazy" /> : produto.emoji}
       </div>
       <div className="flex-1 min-w-0">
         <h3 className="font-semibold text-sm text-text-primary group-hover:text-primary transition-colors mb-0.5 leading-snug">{produto.nome}</h3>
@@ -80,17 +81,21 @@ function ProdutoCard({ produto, index }) {
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const query = searchParams.get('q') || ''
+  const categoria = searchParams.get('categoria') || ''
+  const termoAtivo = query || categoria
   const [inputValue, setInputValue] = useState(query)
   const [abaAtiva, setAbaAtiva] = useState('lojas')
   const [filtrosAtivos, setFiltrosAtivos] = useState([])
   const [todasLojas, setTodasLojas] = useState([])
   const [todosProdutos, setTodosProdutos] = useState([])
+  const [categoriasPorLoja, setCategoriasPorLoja] = useState({})
 
   useEffect(() => {
     api.restaurantes.listar().then(dados => {
       const lojas = dados.map(r => ({
         ...r,
-        emoji: r.emoji || '🍽️',
+        emoji: emojiRestaurante(r),
+        imagem: imagemRestaurante(r),
         avaliacao: r.avaliacao_media ?? 0,
         tempoEntrega: r.tempo_medio_preparo ? `${r.tempo_medio_preparo}-${r.tempo_medio_preparo + 10} min` : '30-40 min',
         taxaEntrega: 'Grátis',
@@ -103,39 +108,58 @@ export default function SearchPage() {
           nome: item.nome,
           desc: item.descricao || '',
           preco: Number(item.preco),
-          emoji: item.emoji || '🍽️',
+          emoji: emojiProduto(item),
+          imagem: imagemProduto(item),
+          categoria: item.categoria || '',
           loja: { id: l.id, nome: l.nome },
         }))
       ))).then(results => {
         const todos = results.flatMap(r => r.status === 'fulfilled' ? r.value : [])
         setTodosProdutos(todos)
+        const mapa = {}
+        todos.forEach(item => {
+          const lojaId = item.loja.id
+          if (!mapa[lojaId]) mapa[lojaId] = new Set()
+          if (item.categoria) mapa[lojaId].add(String(item.categoria).toLowerCase())
+          if (item.nome) mapa[lojaId].add(String(item.nome).toLowerCase())
+        })
+        setCategoriasPorLoja(Object.fromEntries(Object.entries(mapa).map(([id, set]) => [id, Array.from(set)])))
       })
     }).catch(console.error)
   }, [])
 
   const lojasResultado = useMemo(() => {
-    if (!query.trim()) return todasLojas
-    return todasLojas.filter(l =>
-      l.nome.toLowerCase().includes(query.toLowerCase()) ||
-      l.categoria.toLowerCase().includes(query.toLowerCase())
-    ).filter(l => {
+    const termo = termoAtivo.trim().toLowerCase()
+    const filtradasPorTermo = termo
+      ? todasLojas.filter(l => {
+          const categoriasItens = categoriasPorLoja[l.id] || []
+          return String(l.nome || '').toLowerCase().includes(termo) ||
+            String(l.categoria || '').toLowerCase().includes(termo) ||
+            String(l.descricao || '').toLowerCase().includes(termo) ||
+            categoriasItens.some(c => c.includes(termo))
+        })
+      : todasLojas
+
+    return filtradasPorTermo.filter(l => {
       if (filtrosAtivos.includes('Entrega Grátis') && l.taxaEntrega !== 'Grátis') return false
       if (filtrosAtivos.includes('Super Restaurante') && !l.superRestaurante) return false
       return true
     }).sort((a, b) => {
       if (filtrosAtivos.includes('Mais Avaliados')) return b.avaliacao - a.avaliacao
-      if (filtrosAtivos.includes('Mais Próximos')) return parseFloat(a.distancia) - parseFloat(b.distancia)
+      if (filtrosAtivos.includes('Mais Próximos')) return parseFloat(a.distancia || 0) - parseFloat(b.distancia || 0)
       return 0
     })
-  }, [query, filtrosAtivos])
+  }, [termoAtivo, filtrosAtivos, todasLojas, categoriasPorLoja])
 
   const produtosResultado = useMemo(() => {
-    if (!query.trim()) return []
+    const termo = termoAtivo.trim().toLowerCase()
+    if (!termo) return []
     return todosProdutos.filter(p =>
-      p.nome.toLowerCase().includes(query.toLowerCase()) ||
-      p.desc?.toLowerCase().includes(query.toLowerCase())
+      String(p.nome || '').toLowerCase().includes(termo) ||
+      String(p.desc || '').toLowerCase().includes(termo) ||
+      String(p.categoria || '').toLowerCase().includes(termo)
     )
-  }, [query, todosProdutos])
+  }, [termoAtivo, todosProdutos])
 
   const toggleFiltro = (f) => {
     setFiltrosAtivos(prev => prev.includes(f) ? prev.filter(x => x !== f) : [...prev, f])
@@ -143,7 +167,8 @@ export default function SearchPage() {
 
   const handleBusca = (e) => {
     e.preventDefault()
-    setSearchParams({ q: inputValue })
+    const valor = inputValue.trim()
+    setSearchParams(valor ? { q: valor } : {})
   }
 
   return (
@@ -168,12 +193,12 @@ export default function SearchPage() {
         </form>
 
         {/* Título */}
-        {query ? (
+        {termoAtivo ? (
           <Motion.h1
             className="font-display text-2xl font-extrabold text-text-primary mb-5"
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
           >
-            Buscando por <span className="text-primary">"{query}"</span>
+            {categoria ? 'Explorando categoria ' : 'Buscando por '}<span className="text-primary">"{termoAtivo}"</span>
           </Motion.h1>
         ) : (
           <h1 className="font-display text-2xl font-extrabold text-text-primary mb-5">Explore tudo</h1>

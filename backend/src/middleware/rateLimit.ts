@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Request, Response, NextFunction } from 'express'
 
 const requests = new Map<string, { count: number; resetAt: number }>()

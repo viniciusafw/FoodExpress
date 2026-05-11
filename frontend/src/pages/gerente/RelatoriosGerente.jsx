@@ -1,247 +1,281 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion as Motion } from 'framer-motion'
-import { TrendingUp, TrendingDown, ShoppingBag, DollarSign, BarChart2, Star, AlertCircle } from 'lucide-react'
+import { BarChart2, Download, RefreshCw, AlertTriangle, TrendingUp } from 'lucide-react'
 import api from '../../services/api'
+import { dataISOHojeLocal, formatarDataHoraBanco } from '../../utils/datas'
+
+const RELATORIOS = [
+  { id: 'vendas', codigo: 'REL001', nome: 'Vendas por período', descricao: 'Total de pedidos, ticket médio, faturamento, status e formas de pagamento' },
+  { id: 'desempenho-restaurantes', codigo: 'REL002', nome: 'Desempenho da loja', descricao: 'Pedidos, faturamento, ticket médio, avaliação e preparo da própria loja' },
+  { id: 'eficiencia-entregadores', codigo: 'REL003', nome: 'Eficiência de entregadores', descricao: 'Entregas realizadas, ganhos estimados, distância e avaliação' },
+  { id: 'mapa-calor', codigo: 'REL004', nome: 'Mapa de calor de pedidos', descricao: 'Concentração por horário e dia da semana' },
+  { id: 'taxa-cancelamento', codigo: 'REL005', nome: 'Taxa de cancelamento', descricao: 'Cancelamentos, percentual, valor perdido e pedidos afetados' },
+  { id: 'satisfacao-cliente', codigo: 'REL006', nome: 'Satisfação do cliente', descricao: 'Média de avaliações, NPS estimado, promotores e detratores' },
+  { id: 'financeiro-comissoes', codigo: 'REL007', nome: 'Financeiro - comissões', descricao: 'Faturamento, comissão, repasse, taxa de entrega e DRE diária' },
+  { id: 'produtos-top', codigo: 'REL008', nome: 'Produtos mais vendidos', descricao: 'Ranking de itens, categoria, preço e receita associada' },
+  { id: 'tempo-entrega', codigo: 'REL009', nome: 'Tempo de entrega', descricao: 'Preparo médio, entrega média, total médio, mínimo e máximo' },
+  { id: 'fidelizacao', codigo: 'REL010', nome: 'Fidelização de clientes', descricao: 'Clientes únicos, recorrentes, VIPs, taxa de retorno e churn operacional' },
+  { id: 'cancelamentos-reembolsos', codigo: 'REL011', nome: 'Cancelamentos e reembolsos', descricao: 'Pedidos cancelados, valor médio, motivo e resolução' },
+  { id: 'crescimento-base', codigo: 'REL012', nome: 'Crescimento de base', descricao: 'Clientes, pedidos, produtos e avaliações da loja' },
+]
+
+const moedaKeys = ['faturamento', 'valor', 'total', 'ticket', 'comissao', 'repasse', 'taxa', 'ganhos', 'receita', 'subtotal', 'desconto']
+
+function rotuloCampo(campo) {
+  return String(campo)
+    .replaceAll('_', ' ')
+    .replace(/\b\w/g, l => l.toUpperCase())
+}
+
+function formatarValor(valor, campo = '') {
+  if (valor == null || valor === '') return '—'
+  if (String(campo).includes('created_at') || String(campo).includes('ultimo_pedido')) return formatarDataHoraBanco(valor)
+  const numero = Number(valor)
+  const pareceMoeda = moedaKeys.some(k => String(campo).toLowerCase().includes(k))
+  if (Number.isFinite(numero) && pareceMoeda) return `R$ ${numero.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  if (Number.isFinite(numero) && typeof valor !== 'string') return numero.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+  return String(valor)
+}
+
+function linhasPrincipais(dados) {
+  if (!dados) return []
+  if (Array.isArray(dados)) return dados
+  if (Array.isArray(dados.detalhes)) return dados.detalhes
+  if (Array.isArray(dados.resumo)) return dados.resumo
+  if (dados.indicadores && typeof dados.indicadores === 'object') return [dados.indicadores]
+  return []
+}
+
+function gerarCSV(linhas) {
+  if (!linhas.length) return ''
+  const colunas = Array.from(new Set(linhas.flatMap(linha => Object.keys(linha))))
+  return [
+    colunas.join(','),
+    ...linhas.map(linha => colunas.map(coluna => `"${String(linha[coluna] ?? '').replace(/"/g, '""')}"`).join(','))
+  ].join('\n')
+}
+
+function baixarCSV(conteudo, nomeArquivo) {
+  const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = nomeArquivo
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function Metricas({ resumo = [], indicadores = {} }) {
+  const metricas = resumo.length
+    ? resumo
+    : Object.entries(indicadores).map(([indicador, valor]) => ({ indicador, valor }))
+
+  if (!metricas.length) return null
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
+      {metricas.slice(0, 8).map((m, index) => (
+        <div key={`${m.indicador}-${index}`} className="rounded-2xl border border-border bg-white p-4 shadow-sm">
+          <p className="text-[0.7rem] font-extrabold uppercase tracking-wide text-text-muted">{rotuloCampo(m.indicador)}</p>
+          <p className="mt-2 font-display text-xl font-extrabold text-text-primary break-words">{formatarValor(m.valor, m.indicador)}</p>
+          {m.descricao && <p className="mt-1 text-xs font-semibold text-text-muted">{m.descricao}</p>}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+function Tabela({ titulo, linhas }) {
+  const colunas = useMemo(() => Array.from(new Set((linhas || []).flatMap(linha => Object.keys(linha || {})))), [linhas])
+  if (!linhas?.length) return null
+
+  return (
+    <div className="rounded-2xl border border-border bg-white shadow-sm overflow-hidden mb-5">
+      <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+        <h4 className="font-display text-sm font-extrabold text-text-primary">{titulo}</h4>
+        <span className="text-xs font-bold text-text-muted">{linhas.length} registros</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border bg-surface-2">
+              {colunas.map(coluna => (
+                <th key={coluna} className="px-4 py-3 text-left text-xs font-extrabold text-text-muted uppercase tracking-wide whitespace-nowrap">
+                  {rotuloCampo(coluna)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.map((linha, i) => (
+              <tr key={i} className="border-b border-border last:border-none hover:bg-surface-2 transition-colors">
+                {colunas.map(coluna => (
+                  <td key={coluna} className="px-4 py-3 font-semibold text-text-primary whitespace-nowrap">
+                    {formatarValor(linha[coluna], coluna)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function Series({ series }) {
+  if (!series || typeof series !== 'object') return null
+  return Object.entries(series).map(([nome, linhas]) => (
+    <Tabela key={nome} titulo={rotuloCampo(nome)} linhas={Array.isArray(linhas) ? linhas : []} />
+  ))
+}
 
 export default function RelatoriosGerente() {
-  const [cards, setCards] = useState(null)
-  const [grafico, setGrafico] = useState([])
-  const [topProdutos, setTopProdutos] = useState([])
-  const [cancelamentos, setCancelamentos] = useState(null)
-  const [tempoEntrega, setTempoEntrega] = useState(null)
-  const [carregando, setCarregando] = useState(true)
-  const [erro, setErro] = useState(null)
+  const [tipoSelecionado, setTipoSelecionado] = useState('vendas')
+  const [inicio, setInicio] = useState(dataISOHojeLocal(30))
+  const [fim, setFim] = useState(dataISOHojeLocal(0))
+  const [resultado, setResultado] = useState(null)
+  const [carregando, setCarregando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  const relatorioAtual = RELATORIOS.find(r => r.id === tipoSelecionado) || RELATORIOS[0]
+  const dadosRelatorio = resultado?.dados || {}
+  const detalhes = useMemo(() => linhasPrincipais(dadosRelatorio), [dadosRelatorio])
+
+  const carregarRelatorio = async () => {
+    setCarregando(true)
+    setErro('')
+    try {
+      const dados = await api.relatorios.buscar(tipoSelecionado, inicio, fim)
+      setResultado(dados)
+    } catch (e) {
+      setErro(e.message || 'Erro ao carregar relatório')
+      setResultado(null)
+    } finally {
+      setCarregando(false)
+    }
+  }
 
   useEffect(() => {
-    setCarregando(true)
-    setErro(null)
+    carregarRelatorio()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipoSelecionado, inicio, fim])
 
-    Promise.allSettled([
-      api.relatorios.buscar('vendas'),
-      api.relatorios.buscar('mapa-calor'),
-      api.relatorios.buscar('produtos-top'),
-      api.relatorios.buscar('taxa-cancelamento'),
-      api.relatorios.buscar('tempo-entrega'),
-    ]).then(([vendas, mapaCalor, produtos, cancel, tempo]) => {
-      // Vendas
-      if (vendas.status === 'fulfilled') {
-        const d = vendas.value?.dados || {}
-        setCards([
-          { label: 'Total de Pedidos', valor: d.total_pedidos ?? 0, icon: ShoppingBag, cor: 'text-primary', bg: 'bg-primary-light' },
-          { label: 'Faturamento', valor: `R$ ${Number(d.faturamento ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, cor: 'text-accent', bg: 'bg-accent/10' },
-          { label: 'Ticket Médio', valor: `R$ ${Number(d.ticket_medio ?? 0).toFixed(2)}`, icon: BarChart2, cor: 'text-secondary', bg: 'bg-secondary/10' },
-        ])
-      }
-
-      // Gráfico por hora
-      if (mapaCalor.status === 'fulfilled') {
-        const dados = mapaCalor.value?.dados || []
-        setGrafico(dados.map(d => ({
-          hora: `${String(d.hora).padStart(2,'0')}h`,
-          pedidos: d.quantidade ?? 0,
-          valor: (d.quantidade ?? 0) * 50,
-        })))
-      }
-
-      // Top produtos
-      if (produtos.status === 'fulfilled') {
-        setTopProdutos((produtos.value?.dados || []).map(p => ({
-          nome: p.nome,
-          categoria: p.categoria || '—',
-          preco: Number(p.preco ?? 0),
-        })))
-      }
-
-      // Cancelamentos
-      if (cancel.status === 'fulfilled') {
-        setCancelamentos(cancel.value?.dados || null)
-      }
-
-      // Tempo de entrega
-      if (tempo.status === 'fulfilled') {
-        setTempoEntrega(tempo.value?.dados || null)
-      }
-
-      setCarregando(false)
-    })
-  }, [])
-
-  const maxGrafico = Math.max(...grafico.map(g => g.valor), 1)
-
-  if (carregando) {
-    return (
-      <div>
-        <div className="mb-6">
-          <h1 className="font-display text-2xl font-extrabold text-text-primary">Relatórios</h1>
-          <p className="text-sm text-text-muted font-semibold mt-1">Acompanhe o desempenho da sua loja</p>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          {[1,2,3].map(i => <div key={i} className="h-28 rounded-2xl bg-surface-2 animate-pulse" />)}
-        </div>
-        <div className="h-56 rounded-2xl bg-surface-2 animate-pulse mb-4" />
-        <div className="h-56 rounded-2xl bg-surface-2 animate-pulse" />
-      </div>
-    )
+  const exportarCSV = () => {
+    const todasLinhas = [
+      ...(dadosRelatorio.resumo || []),
+      ...(dadosRelatorio.detalhes || []),
+      ...Object.values(dadosRelatorio.series || {}).flatMap(v => Array.isArray(v) ? v : []),
+    ]
+    const csv = gerarCSV(todasLinhas)
+    if (!csv) return
+    baixarCSV(csv, `${relatorioAtual.codigo}-${relatorioAtual.id}.csv`)
   }
 
   return (
     <div>
       <div className="mb-6">
-        <h1 className="font-display text-2xl font-extrabold text-text-primary">Relatórios</h1>
-        <p className="text-sm text-text-muted font-semibold mt-1">Acompanhe o desempenho da sua loja — últimos 30 dias</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h1 className="font-display text-2xl font-extrabold text-text-primary">Relatórios Gerenciais</h1>
+            <p className="text-sm text-text-muted font-semibold mt-1">
+              Relatórios filtrados pela loja vinculada ao gerente logado, com resumo, indicadores, séries e detalhes.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button type="button" onClick={carregarRelatorio}
+              className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-text-primary transition hover:bg-surface-2">
+              <RefreshCw size={15} /> Atualizar
+            </button>
+            <button type="button" onClick={exportarCSV}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:bg-primary-dark">
+              <Download size={15} /> Exportar CSV
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Cards resumo */}
-      {cards && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-          {cards.map((s, i) => (
-            <Motion.div key={s.label} className="bg-white rounded-2xl border border-border shadow-sm p-5"
-              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.08 }}>
-              <div className="flex items-start justify-between mb-3">
-                <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center`}>
-                  <s.icon size={17} className={s.cor} />
-                </div>
-                <span className="text-xs font-bold text-text-muted uppercase tracking-wide">{s.label}</span>
-              </div>
-              <div className="font-display text-2xl font-extrabold text-text-primary leading-tight">{s.valor}</div>
-              <div className="text-xs text-text-muted opacity-60 mt-1">Últimos 30 dias</div>
-            </Motion.div>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <p className="text-xs font-bold text-text-muted uppercase tracking-wide">Relatórios implementados</p>
+          <p className="font-display text-3xl font-extrabold text-text-primary mt-2">12/12</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <p className="text-xs font-bold text-text-muted uppercase tracking-wide">Selecionado</p>
+          <p className="font-display text-xl font-extrabold text-primary mt-2">{relatorioAtual.codigo}</p>
+        </div>
+        <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+          <p className="text-xs font-bold text-text-muted uppercase tracking-wide">Período</p>
+          <p className="font-display text-base font-extrabold text-text-primary mt-2">{inicio} até {fim}</p>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-4">
+          {RELATORIOS.map(relatorio => (
+            <button key={relatorio.id} type="button" onClick={() => setTipoSelecionado(relatorio.id)}
+              className={`text-left rounded-xl border p-3 transition-all cursor-pointer ${
+                tipoSelecionado === relatorio.id
+                  ? 'border-primary bg-primary-light text-primary'
+                  : 'border-border bg-white hover:border-primary hover:bg-surface-2 text-text-primary'
+              }`}>
+              <div className="text-xs font-extrabold uppercase tracking-wide opacity-75">{relatorio.codigo}</div>
+              <div className="text-sm font-extrabold mt-1">{relatorio.nome}</div>
+              <div className="text-xs font-semibold text-text-muted mt-1">{relatorio.descricao}</div>
+            </button>
           ))}
         </div>
-      )}
 
-      {/* Gráfico pedidos por hora */}
-      <Motion.div className="bg-white rounded-2xl border border-border shadow-sm p-5 mb-6"
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}>
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h3 className="font-display text-base font-bold text-text-primary">Pedidos por hora</h3>
-            <p className="text-xs text-text-muted font-semibold">Distribuição ao longo do dia</p>
-          </div>
-          {grafico.length > 0 && (
-            <span className="text-xs font-bold text-primary bg-primary-light px-3 py-1 rounded-full">
-              {grafico.reduce((a, g) => a + g.pedidos, 0)} pedidos
-            </span>
-          )}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 border-t border-border pt-4">
+          <label className="text-xs font-bold text-text-muted uppercase tracking-wide">
+            Início
+            <input type="date" value={inicio} onChange={e => setInicio(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm font-semibold text-text-primary outline-none focus:border-primary" />
+          </label>
+          <label className="text-xs font-bold text-text-muted uppercase tracking-wide">
+            Fim
+            <input type="date" value={fim} onChange={e => setFim(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-border px-3 py-2 text-sm font-semibold text-text-primary outline-none focus:border-primary" />
+          </label>
         </div>
-        {grafico.length === 0 ? (
-          <div className="h-40 flex flex-col items-center justify-center gap-2 text-text-muted">
-            <BarChart2 size={32} className="opacity-30" />
-            <span className="text-sm font-semibold">Nenhum dado de pedidos ainda</span>
-          </div>
-        ) : (
-          <div className="flex items-end gap-1.5 h-40">
-            {grafico.map((d, i) => (
-              <div key={d.hora} className="flex flex-col items-center gap-1 flex-1">
-                <Motion.div
-                  className="w-full bg-primary/80 hover:bg-primary rounded-t-lg transition-colors cursor-pointer"
-                  style={{ height: `${(d.valor / maxGrafico) * 100}%`, minHeight: 4, transformOrigin: 'bottom' }}
-                  initial={{ scaleY: 0 }} animate={{ scaleY: 1 }}
-                  transition={{ delay: 0.3 + i * 0.03, duration: 0.4, ease: 'easeOut' }}
-                  title={`${d.hora}: ${d.pedidos} pedido${d.pedidos !== 1 ? 's' : ''}`}
-                />
-                <span className="text-[0.6rem] font-bold text-text-muted">{d.hora}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </Motion.div>
-
-      {/* Cards secundários */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-        {/* Taxa de cancelamento */}
-        <Motion.div className="bg-white rounded-2xl border border-border shadow-sm p-5"
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-          <div className="flex items-center gap-2 mb-4">
-            <AlertCircle size={16} className="text-red-400" />
-            <h3 className="font-display text-base font-bold text-text-primary">Cancelamentos</h3>
-          </div>
-          {cancelamentos ? (
-            <div className="flex flex-col gap-2">
-              {[
-                { label: 'Total de pedidos', valor: cancelamentos.total_pedidos ?? 0 },
-                { label: 'Cancelados', valor: cancelamentos.cancelados ?? 0 },
-                { label: 'Taxa', valor: `${cancelamentos.percentual_cancelamento ?? 0}%` },
-                { label: 'Valor perdido', valor: `R$ ${Number(cancelamentos.valor_cancelado ?? 0).toFixed(2)}` },
-              ].map(({ label, valor }) => (
-                <div key={label} className="flex justify-between items-center py-1.5 border-b border-border last:border-none">
-                  <span className="text-sm text-text-muted font-semibold">{label}</span>
-                  <span className="text-sm font-bold text-text-primary">{valor}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-text-muted font-semibold">Sem dados disponíveis</p>
-          )}
-        </Motion.div>
-
-        {/* Tempo de entrega */}
-        <Motion.div className="bg-white rounded-2xl border border-border shadow-sm p-5"
-          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
-          <div className="flex items-center gap-2 mb-4">
-            <TrendingUp size={16} className="text-accent" />
-            <h3 className="font-display text-base font-bold text-text-primary">Tempo de entrega</h3>
-          </div>
-          {tempoEntrega ? (
-            <div className="flex flex-col gap-2">
-              {[
-                { label: 'Tempo médio', valor: `${Math.round(tempoEntrega.tempo_medio_minutos ?? 0)} min` },
-                { label: 'Mais rápido', valor: `${tempoEntrega.tempo_minimo ?? 0} min` },
-                { label: 'Mais lento', valor: `${tempoEntrega.tempo_maximo ?? 0} min` },
-              ].map(({ label, valor }) => (
-                <div key={label} className="flex justify-between items-center py-1.5 border-b border-border last:border-none">
-                  <span className="text-sm text-text-muted font-semibold">{label}</span>
-                  <span className="text-sm font-bold text-text-primary">{valor}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-text-muted font-semibold">Sem dados disponíveis</p>
-          )}
-        </Motion.div>
       </div>
 
-      {/* Produtos do cardápio */}
-      <Motion.div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden"
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
-        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
+      <Motion.div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden mb-5"
+        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}>
+        <div className="px-5 py-4 border-b border-border flex items-center justify-between gap-3">
           <div>
-            <h3 className="font-display text-base font-bold text-text-primary">Produtos no cardápio</h3>
-            <p className="text-xs text-text-muted font-semibold">Lista atualizada do banco</p>
+            <h3 className="font-display text-base font-bold text-text-primary">{relatorioAtual.codigo} — {relatorioAtual.nome}</h3>
+            <p className="text-xs text-text-muted font-semibold">{relatorioAtual.descricao}</p>
           </div>
-          <span className="text-xs font-bold text-primary bg-primary-light px-3 py-1 rounded-full">
-            {topProdutos.length} itens
-          </span>
+          <BarChart2 size={18} className="text-primary shrink-0" />
         </div>
-        {topProdutos.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-4xl mb-3">🍽️</p>
-            <p className="text-text-muted font-semibold text-sm">Nenhum produto cadastrado ainda</p>
-          </div>
+        {erro ? (
+          <div className="p-5 text-sm font-semibold text-red-600 bg-red-50 border-b border-red-100">{erro}</div>
+        ) : carregando ? (
+          <div className="p-8 text-center text-sm font-semibold text-text-muted">Carregando relatório...</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-surface-2">
-                  {['#', 'Produto', 'Categoria', 'Preço'].map(col => (
-                    <th key={col} className="px-5 py-3 text-left text-xs font-extrabold text-text-muted uppercase tracking-wide whitespace-nowrap">{col}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {topProdutos.map((p, i) => (
-                  <Motion.tr key={i} className="border-b border-border last:border-none hover:bg-surface-2 transition-colors"
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 + i * 0.04 }}>
-                    <td className="px-5 py-3.5 font-bold text-text-muted">#{i + 1}</td>
-                    <td className="px-5 py-3.5 font-semibold text-text-primary">{p.nome}</td>
-                    <td className="px-5 py-3.5 text-text-muted font-semibold">{p.categoria}</td>
-                    <td className="px-5 py-3.5 font-display font-extrabold text-accent whitespace-nowrap">
-                      R$ {p.preco.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </td>
-                  </Motion.tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="p-5 bg-surface-1">
+            {dadosRelatorio.alertas?.length > 0 && (
+              <div className="mb-5 rounded-2xl border border-yellow-200 bg-yellow-50 p-4">
+                <div className="flex items-center gap-2 text-sm font-extrabold text-yellow-800 mb-2">
+                  <AlertTriangle size={16} /> Alertas de gestão
+                </div>
+                <ul className="space-y-1 text-xs font-semibold text-yellow-800">
+                  {dadosRelatorio.alertas.map((a, i) => <li key={i}>• {a}</li>)}
+                </ul>
+              </div>
+            )}
+            <Metricas resumo={dadosRelatorio.resumo || []} indicadores={dadosRelatorio.indicadores || {}} />
+            <div className="flex items-center gap-2 mb-3 text-sm font-extrabold text-text-primary">
+              <TrendingUp size={16} className="text-primary" /> Detalhamento
+            </div>
+            <Tabela titulo="Dados principais" linhas={detalhes} />
+            <Series series={dadosRelatorio.series} />
+            {!detalhes.length && !dadosRelatorio.resumo?.length && (
+              <div className="p-8 text-center text-sm font-semibold text-text-muted">Sem dados para o filtro selecionado.</div>
+            )}
           </div>
         )}
       </Motion.div>

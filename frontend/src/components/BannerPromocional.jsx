@@ -1,20 +1,25 @@
-import { ArrowRight } from 'lucide-react';
-import { motion as Motion } from 'framer-motion';
+import { ArrowRight } from 'lucide-react'
+import { motion as Motion } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 
 const banners = [
   {
     eyebrow: 'Promoção',
     titulo: 'Frete Grátis',
-    desc: 'Na primeira compra acima de R$ 50',
+    desc: 'Use o cupom FRETEGRATIS no checkout',
     emoji: '🚀',
     bg: 'linear-gradient(135deg,#FF6B35,#e55a2b)',
+    cupom: 'FRETEGRATIS',
+    rota: '/Restaurantes',
   },
   {
     eyebrow: 'Oferta do dia',
     titulo: '30% OFF',
-    desc: 'Em restaurantes selecionados hoje',
+    desc: 'Use o cupom OFERTA30 em restaurantes selecionados',
     emoji: '🎉',
     bg: 'linear-gradient(135deg,#1B998B,#14756a)',
+    cupom: 'OFERTA30',
+    rota: '/Restaurantes',
   },
   {
     eyebrow: 'Novo',
@@ -22,23 +27,38 @@ const banners = [
     desc: 'Hortifruti e bebidas em até 20min',
     emoji: '🛒',
     bg: 'linear-gradient(135deg,#2E294E,#1a1640)',
+    rota: '/Mercados',
   },
-];
+]
 
 export default function PromotionalBanner() {
+  const navigate = useNavigate()
+
+  const abrirOferta = (banner) => {
+    if (banner.cupom) {
+      localStorage.setItem('cupomPromocional', banner.cupom)
+      window.dispatchEvent(new CustomEvent('cupom-promocional', { detail: banner.cupom }))
+    }
+    navigate(banner.rota || '/Restaurantes')
+  }
+
   return (
     <div className="mt-8 overflow-x-auto scrollbar-none -mx-4 px-4 sm:-mx-6 sm:px-6">
       <div className="flex gap-3 sm:gap-4 pb-1" style={{ minWidth: 'max-content' }}>
         {banners.map((b, i) => (
-          <Motion.div
-            key={i}
-            className="shrink-0 w-70 sm:w-90 md:w-120 rounded-2xl p-5 sm:p-7 flex items-center justify-between gap-3 cursor-pointer relative overflow-hidden"
+          <Motion.button
+            key={b.titulo}
+            type="button"
+            onClick={() => abrirOferta(b)}
+            aria-label={`Abrir oferta: ${b.titulo}`}
+            className="shrink-0 w-70 sm:w-90 md:w-120 rounded-2xl p-5 sm:p-7 flex items-center justify-between gap-3 cursor-pointer relative overflow-hidden border-none text-left"
             style={{ background: b.bg }}
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.4, delay: i * 0.1, ease: 'easeOut' }}
             whileHover={{ y: -4, boxShadow: '0 16px 40px rgba(0,0,0,0.25)' }}
+            whileTap={{ scale: 0.98 }}
           >
             <div
               className="absolute inset-0 pointer-events-none"
@@ -55,13 +75,9 @@ export default function PromotionalBanner() {
                 {b.titulo}
               </h3>
               <p className="text-xs sm:text-sm opacity-85 font-semibold mb-3">{b.desc}</p>
-              <Motion.div
-                className="inline-flex items-center gap-1.5 bg-white/20 border border-white/25 text-white px-3 py-1.5 rounded-full text-xs font-bold"
-                whileHover={{ backgroundColor: 'rgba(255,255,255,0.3)' }}
-                transition={{ duration: 0.2 }}
-              >
-                Ver oferta <ArrowRight size={12} />
-              </Motion.div>
+              <span className="inline-flex items-center gap-1.5 bg-white/20 border border-white/25 text-white px-3 py-1.5 rounded-full text-xs font-bold">
+                {b.cupom ? 'Usar cupom' : 'Ver mercados'} <ArrowRight size={12} />
+              </span>
             </div>
             <Motion.div
               className="text-4xl sm:text-5xl leading-none opacity-90 shrink-0 relative z-10 select-none"
@@ -70,9 +86,9 @@ export default function PromotionalBanner() {
             >
               {b.emoji}
             </Motion.div>
-          </Motion.div>
+          </Motion.button>
         ))}
       </div>
     </div>
-  );
+  )
 }

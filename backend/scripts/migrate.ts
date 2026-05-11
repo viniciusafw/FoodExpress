@@ -5,13 +5,25 @@ import { join } from 'path'
 
 config()
 
+async function ensureColumn(table: string, column: string, definition: string) {
+  try {
+    const info = await db.execute(`PRAGMA table_info(${table})`)
+    const exists = info.rows.some((row: any) => row.name === column)
+    if (!exists) {
+      await db.execute(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+      console.log(`  ➕ Coluna criada: ${table}.${column}`)
+    }
+  } catch (e: any) {
+    console.error(`  ⚠️  Coluna ${table}.${column}:`, e.message)
+  }
+}
+
 async function migrate() {
   console.log('🗄️  Executando migrations...')
 
-  // Testa a conexão primeiro
   try {
     await db.execute('SELECT 1')
-    console.log('✅ Conexão com Turso OK')
+    console.log('✅ Conexão com banco OK')
   } catch (e: any) {
     console.error('\n❌ Erro de conexão com o banco de dados!')
     console.error('   Verifique as variáveis no arquivo backend/.env:')
@@ -21,28 +33,31 @@ async function migrate() {
     process.exit(1)
   }
 
-  // Lê o schema.sql — caminho relativo ao CWD (execute sempre de dentro de backend/)
-  const schemaPath = join(process.cwd(), '../schema.sql')
-  let schema: string
+  const candidatePaths = [
+    join(process.cwd(), '../database/schema.sql'),
+    join(process.cwd(), 'database/schema.sql'),
+    join(process.cwd(), '../schema.sql'),
+    join(process.cwd(), 'schema.sql'),
+  ]
 
-  try {
-    schema = readFileSync(schemaPath, 'utf-8')
-    console.log('📄 schema.sql encontrado')
-  } catch (e) {
-    // Tenta path alternativo (caso rode de outro lugar)
+  let schema = ''
+  for (const path of candidatePaths) {
     try {
-      schema = readFileSync(join(process.cwd(), 'schema.sql'), 'utf-8')
-    } catch {
-      console.error('❌ schema.sql não encontrado. Execute de dentro da pasta backend/')
-      process.exit(1)
-    }
+      schema = readFileSync(path, 'utf-8')
+      console.log(`📄 schema.sql encontrado: ${path}`)
+      break
+    } catch {}
   }
 
-  // Remove comentários de linha e executa cada statement
+  if (!schema) {
+    console.error('❌ schema.sql não encontrado.')
+    process.exit(1)
+  }
+
   const statements = schema
     .split(';')
     .map(s => s.replace(/--[^\n]*/g, '').trim())
-    .filter(s => s.length > 10) // ignora linhas muito curtas/vazias
+    .filter(s => s.length > 10)
 
   let ok = 0, skip = 0, fail = 0
   for (const stmt of statements) {
@@ -53,14 +68,28 @@ async function migrate() {
       if (e.message?.includes('already exists') || e.message?.includes('duplicate')) {
         skip++
       } else {
-        console.error(`  ⚠️  ${stmt.substring(0, 50)}... → ${e.message}`)
+        console.error(`  ⚠️  ${stmt.substring(0, 70)}... → ${e.message}`)
         fail++
       }
     }
   }
   console.log(`✅ Schema: ${ok} criados, ${skip} já existentes, ${fail} erros`)
 
-  // Tabelas extras que não estão no schema.sql original
+  await ensureColumn('restaurantes', 'user_id', 'TEXT')
+  await ensureColumn('restaurantes', 'horario_abertura', 'TEXT')
+  await ensureColumn('restaurantes', 'horario_fechamento', 'TEXT')
+  await ensureColumn('restaurantes', 'dias_aberto', 'TEXT')
+  await ensureColumn('restaurantes', 'formas_pagamento', 'TEXT')
+  await ensureColumn('restaurantes', 'logo', 'TEXT')
+  await ensureColumn('restaurantes', 'capa', 'TEXT')
+
+  await ensureColumn('cardapio', 'imagem', 'TEXT')
+  await ensureColumn('pedidos', 'desconto', 'REAL DEFAULT 0')
+  await ensureColumn('pedidos', 'avaliacao_restaurante', 'INTEGER')
+  await ensureColumn('pedidos', 'avaliacao_entregador', 'INTEGER')
+  await ensureColumn('pedidos', 'comentario', 'TEXT')
+  await ensureColumn('pedidos', 'updated_at', 'DATETIME')
+
   const extras = [
     `CREATE TABLE IF NOT EXISTS cupons (
       id TEXT PRIMARY KEY,
@@ -94,6 +123,25 @@ async function migrate() {
       }
     }
   }
+
+  await db.execute("UPDATE restaurantes SET status = 'ativo' WHERE status IS NULL OR status = '' OR status = 'pendente'")
+  await db.execute("UPDATE restaurantes SET user_id = substr(id, 6) WHERE (user_id IS NULL OR user_id = '') AND id LIKE 'rest_%'")
+  await db.execute("UPDATE entregadores SET cpf = 'AUTO-' || user_id WHERE cpf = '000.000.000-00' AND user_id IS NOT NULL AND user_id != ''")
+
+  await db.execute(`INSERT OR IGNORE INTO gerentes
+    (id, user_id, nome, email, telefone, cargo, restaurante_id, permissoes, status)
+    SELECT
+      'ger_' || r.user_id,
+      r.user_id,
+      COALESCE(NULLIF(r.nome, ''), 'Gerente'),
+      COALESCE(NULLIF(r.email, ''), r.user_id || '@local.dev'),
+      COALESCE(r.telefone, ''),
+      'gerente',
+      r.id,
+      'admin',
+      'ativo'
+    FROM restaurantes r
+    WHERE r.user_id IS NOT NULL AND r.user_id != ''`)
 
   console.log('🎉 Migrations concluídas!')
 }

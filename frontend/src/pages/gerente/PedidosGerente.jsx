@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { Clock, CheckCircle, XCircle, Truck, ShoppingBag, Search, ChevronDown } from 'lucide-react'
 import api from '../../services/api'
+import { formatarHoraBanco } from '../../utils/datas'
 
 const statusConfig = {
   Preparando: { cor: 'text-primary bg-primary-light border-primary/20', icon: Clock, texto: 'Preparando' },
@@ -23,7 +24,7 @@ const statusParaBanco = {
 function normalizarPedido(p) {
   return {
     ...p,
-    status: p.status === 'confirmado' ? 'Preparando'
+    status: ['pendente', 'confirmado', 'preparando'].includes(p.status) ? 'Preparando'
           : p.status === 'entregando' ? 'Entregando'
           : p.status === 'entregue'   ? 'Entregue'
           : p.status === 'cancelado'  ? 'Cancelado'
@@ -31,7 +32,7 @@ function normalizarPedido(p) {
     loja: p.restaurante_id,
     cliente: p.cliente_id,
     valorNum: Number(p.total),
-    horario: new Date(p.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    horario: formatarHoraBanco(p.created_at),
     itens: (() => {
       try { return typeof p.itens === 'string' ? JSON.parse(p.itens).map(i => i.nome || i.id) : (p.itens || []) }
       catch { return [] }

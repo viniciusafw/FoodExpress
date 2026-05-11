@@ -4,6 +4,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import Header from '../components/Header'
 import api from '../services/api'
+import { formatarDataHoraBanco } from '../utils/datas'
 import MobileNavBar from '../components/MobileNavBar'
 import {
   ArrowLeft, MapPin, DollarSign, Package, Clock,
@@ -43,21 +44,29 @@ export default function DetalhesPedido() {
   const [comentario, setComentario] = useState('')
   const [avaliacaoEnviada, setAvaliacaoEnviada] = useState(false)
   const [enviandoAvaliacao, setEnviandoAvaliacao] = useState(false)
+  const [erroAvaliacao, setErroAvaliacao] = useState('')
 
   const enviarAvaliacao = async () => {
-    if (!pedido) return
+    if (!pedido || enviandoAvaliacao) return
+    setErroAvaliacao('')
     setEnviandoAvaliacao(true)
     try {
       await api.avaliacoes.criar({
         pedidoId: pedido.id,
         restauranteId: pedido.restaurante_id,
-        avaliacao: estrelas,
-        comentario,
+        estrelas,
+        tipo: 'restaurante',
+        comentario: comentario.trim(),
       })
+      setPedido(p => p ? { ...p, avaliacao_restaurante: estrelas } : p)
       setAvaliacaoEnviada(true)
     } catch (e) {
-      // Mesmo se falhar, marca como enviada para não bloquear o usuário
-      setAvaliacaoEnviada(true)
+      const mensagem = e?.message || 'Erro ao enviar avaliação'
+      if (mensagem.toLowerCase().includes('já avaliou')) {
+        setAvaliacaoEnviada(true)
+      } else {
+        setErroAvaliacao(mensagem)
+      }
     } finally {
       setEnviandoAvaliacao(false)
     }
@@ -141,7 +150,7 @@ export default function DetalhesPedido() {
             </h3>
             <p className="text-sm font-bold text-text-primary mb-1">{pedido.endereco_entrega}</p>
             <p className="text-xs text-text-muted font-semibold">
-              {new Date(pedido.created_at).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+              {formatarDataHoraBanco(pedido.created_at)}
             </p>
           </Motion.div>
 
@@ -217,7 +226,13 @@ export default function DetalhesPedido() {
               rows={3}
               className="w-full border border-border rounded-xl px-4 py-3 text-sm font-semibold text-text-primary outline-none focus:border-primary transition-colors resize-none mb-4"
             />
+            {erroAvaliacao && (
+              <p className="mb-3 rounded-xl border border-red-200 bg-red-50 px-4 py-2 text-sm font-semibold text-red-600">
+                {erroAvaliacao}
+              </p>
+            )}
             <button
+              type="button"
               onClick={enviarAvaliacao}
               disabled={enviandoAvaliacao}
               className="flex items-center gap-2 bg-primary text-white font-bold px-6 py-2.5 rounded-full text-sm hover:bg-primary/90 transition-colors disabled:opacity-60 border-none cursor-pointer"

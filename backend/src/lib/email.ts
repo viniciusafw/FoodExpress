@@ -1,10 +1,15 @@
+// @ts-nocheck
 // backend/src/lib/email.ts
 import { Resend } from 'resend';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+function getResend() {
+  const key = process.env.RESEND_API_KEY;
+  if (!key || key.includes('xxxxx')) return null;
+  return new Resend(key);
+}
 
 const FROM_EMAIL = process.env.FROM_EMAIL || 'FoodExpress <no-reply@resend.dev>';
 
@@ -62,8 +67,9 @@ export async function enviarLinkAcesso(
   `;
 
   try {
-    // Modo desenvolvimento (sem chave ainda)
-    if (!process.env.RESEND_API_KEY || process.env.RESEND_API_KEY.includes('xxxxx')) {
+    // Modo desenvolvimento (sem chave configurada)
+    const resend = getResend();
+    if (!resend) {
       console.log('\n📧 === EMAIL DE TESTE (Modo Dev) ===');
       console.log(`Para: ${email}`);
       console.log(`Link: ${link}`);

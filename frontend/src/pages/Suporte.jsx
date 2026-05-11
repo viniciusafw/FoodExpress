@@ -3,6 +3,7 @@ import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import Header from '../components/Header'
 import api from '../services/api'
+import { formatarDataBanco } from '../utils/datas'
 import MobileNavBar from '../components/MobileNavBar'
 import {
   ArrowLeft, MessageCircle, Plus, Send, CheckCircle,
@@ -138,7 +139,7 @@ export default function Suporte() {
                         <p className="text-xs text-text-muted font-semibold mb-3">{ticket.descricao}</p>
                         <div className="flex justify-between text-xs text-text-muted font-semibold">
                           <span className="capitalize">{categorias.find(c => c.id === ticket.categoria)?.nome ?? ticket.categoria}</span>
-                          <span>{new Date(ticket.created_at).toLocaleDateString('pt-BR')}</span>
+                          <span>{formatarDataBanco(ticket.created_at)}</span>
                         </div>
                       </Motion.div>
                     )
