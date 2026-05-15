@@ -6,27 +6,6 @@ import api from '../services/api';
 
 const AuthContext = createContext();
 
-async function base64UrlEncode(value) {
-  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-async function signHmacSha256(message, secret) {
-  const encoder = new TextEncoder()
-  const key = await crypto.subtle.importKey(
-    'raw',
-    encoder.encode(secret),
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  )
-  const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(message))
-  const bytes = new Uint8Array(signature)
-  let binary = ''
-  bytes.forEach((byte) => { binary += String.fromCharCode(byte) })
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
-
 function normalizarIdentificador(valor) {
   return String(valor || '')
     .trim()
@@ -41,15 +20,14 @@ function idEstavelPorEmail(email, perfil) {
   return `${perfil}-${normalizarIdentificador(email)}`
 }
 
-async function gerarTokenLocal(payload) {
-  const header = await base64UrlEncode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
-  const body = await base64UrlEncode(JSON.stringify({
-    ...payload,
-    exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 30,
-  }))
-  const secret = import.meta.env.VITE_JWT_SECRET || 'fallback_dev_secret'
-  const signature = await signHmacSha256(`${header}.${body}`, secret)
-  return `${header}.${body}.${signature}`
+async function criarTokenBackend(usuario) {
+  const data = await api.auth.criarSessao({
+    userId: usuario.id,
+    perfil: usuario.perfil,
+    email: usuario.email,
+    nome: usuario.nome,
+  })
+  return data.token
 }
 
 export function AuthProvider({ children }) {
@@ -144,7 +122,7 @@ export function AuthProvider({ children }) {
       veiculo_placa: extras.veiculo_placa || extras.placa || '',
       perfil,
     }
-    const token = await gerarTokenLocal({ userId: novoUsuario.id, role: perfil, email: novoUsuario.email, nome: novoUsuario.nome })
+    const token = await criarTokenBackend(novoUsuario)
     localStorage.setItem('usuario', JSON.stringify(novoUsuario))
     localStorage.setItem('token', token)
     setUsuario(novoUsuario)
@@ -181,7 +159,7 @@ export function AuthProvider({ children }) {
       telefone: dados.telefone || dados.phone,
       perfil: 'cliente',
     };
-    const token = await gerarTokenLocal({ userId: novoUsuario.id, role: 'cliente', email: novoUsuario.email, nome: novoUsuario.nome })
+    const token = await criarTokenBackend(novoUsuario)
     localStorage.setItem('usuario', JSON.stringify(novoUsuario));
     localStorage.setItem('token', token);
     setUsuario(novoUsuario);
@@ -205,7 +183,7 @@ export function AuthProvider({ children }) {
         descricao: dados.descricao || '',
       },
     };
-    const token = await gerarTokenLocal({ userId: novoUsuario.id, role: 'gerente', email: novoUsuario.email, nome: novoUsuario.nome })
+    const token = await criarTokenBackend(novoUsuario)
     localStorage.setItem('usuario', JSON.stringify(novoUsuario));
     localStorage.setItem('token', token);
     setUsuario(novoUsuario);

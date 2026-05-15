@@ -10,17 +10,23 @@ export interface AuthRequest extends Request {
 }
 
 function getSecrets() {
-  return Array.from(new Set([
-    process.env.JWT_SECRET,
-    process.env.VITE_JWT_SECRET,
-    'fallback_dev_secret',
-    'dev_secret',
-  ].filter(Boolean)))
+  const secrets = [process.env.JWT_SECRET].filter(Boolean)
+
+  if (process.env.NODE_ENV !== 'production') {
+    secrets.push('dev_secret')
+  }
+
+  return Array.from(new Set(secrets))
 }
 
 function verificarTokenLocal(token: string) {
+  const secrets = getSecrets()
+  if (!secrets.length) {
+    throw new Error('JWT_SECRET não configurado')
+  }
+
   let ultimoErro: any = null
-  for (const secret of getSecrets()) {
+  for (const secret of secrets) {
     try {
       return jwt.verify(token, secret as string) as { userId: string; role?: string; email?: string; nome?: string; name?: string }
     } catch (e) {

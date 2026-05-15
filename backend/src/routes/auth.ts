@@ -8,12 +8,32 @@ import { enviarLinkAcesso } from '../lib/email';
 
 const router = Router();
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dev_secret';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const PERFIS_VALIDOS = new Set(['cliente', 'gerente', 'entregador', 'restaurante', 'operador']);
 
 // ── Helper ───────────────────────────────────────────────────────────────────
-function gerarToken(userId: string, role: string) {
-  return jwt.sign({ userId, role }, JWT_SECRET, { expiresIn: '30d' });
+function getJwtSecret() {
+  if (process.env.JWT_SECRET) return process.env.JWT_SECRET;
+  if (process.env.NODE_ENV !== 'production') return 'dev_secret';
+  throw new Error('JWT_SECRET não configurado');
+}
+
+function gerarToken(userId: string, role: string, extras: Record<string, string> = {}) {
+  return jwt.sign({ userId, role, ...extras }, getJwtSecret(), { expiresIn: '30d' });
+}
+
+function normalizarIdentificador(valor: string) {
+  return String(valor || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'usuario';
+}
+
+function idEstavelPorEmail(email: string, perfil: string) {
+  return `${perfil}-${normalizarIdentificador(email)}`;
 }
 
 // ── POST /api/auth/registrar ─────────────────────────────────────────────────
@@ -169,6 +189,32 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// ── POST /api/auth/session ───────────────────────────────────────────────────
+// Emite JWT no backend para fluxos locais/perfis internos sem expor JWT_SECRET no bundle.
+router.post('/session', async (req, res) => {
+  try {
+    const { email, nome, perfil, userId } = req.body;
+    const emailLimpo = String(email || '').toLowerCase().trim();
+    const perfilNormalizado = String(perfil || 'cliente').toLowerCase().trim();
+
+    if (!emailLimpo) return res.status(400).json({ erro: 'E-mail obrigatório' });
+    if (!PERFIS_VALIDOS.has(perfilNormalizado)) {
+      return res.status(400).json({ erro: 'Perfil inválido' });
+    }
+
+    const id = userId || idEstavelPorEmail(emailLimpo, perfilNormalizado);
+    const token = gerarToken(id, perfilNormalizado, {
+      email: emailLimpo,
+      nome: nome || emailLimpo.split('@')[0],
+    });
+
+    res.json({ token });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ erro: 'Erro ao criar sessão' });
+  }
+});
+
 // ── POST /api/auth/auth0-sync ─────────────────────────────────────────────────
 router.post('/auth0-sync', async (req, res) => {
   try {
@@ -183,7 +229,10 @@ router.post('/auth0-sync', async (req, res) => {
 
     if (existente.rows.length) {
       const cliente = existente.rows[0];
-      const token = gerarToken(cliente.id, 'cliente');
+      const token = gerarToken(cliente.id, 'cliente', {
+        email: cliente.email,
+        nome: cliente.nome,
+      });
       return res.json({ token, usuario: {
         id: cliente.id,
         nome: cliente.nome,
@@ -200,7 +249,10 @@ router.post('/auth0-sync', async (req, res) => {
       args: [clienteId, clienteId, nome || emailLimpo.split('@')[0], emailLimpo, '']
     });
 
-    const token = gerarToken(clienteId, 'cliente');
+    const token = gerarToken(clienteId, 'cliente', {
+      email: emailLimpo,
+      nome: nome || emailLimpo.split('@')[0],
+    });
     res.json({ token, usuario: {
       id: clienteId,
       nome: nome || emailLimpo.split('@')[0],

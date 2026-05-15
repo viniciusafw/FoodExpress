@@ -28,8 +28,12 @@ import { ensureDatabaseHealth } from './lib/schema'
 
 const app = express()
 const PORT = process.env.PORT || 3001
+const configuredOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim().replace(/\/$/, ''))
+  .filter(Boolean)
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:3000',
+  ...configuredOrigins,
   'http://127.0.0.1:3000',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -45,7 +49,8 @@ app.use(cors({
   origin(origin, callback) {
     // Permite requests sem Origin (health checks/curl/apps locais)
     if (!origin) return callback(null, true)
-    if (allowedOrigins.includes(origin)) return callback(null, true)
+    const normalizedOrigin = origin.replace(/\/$/, '')
+    if (allowedOrigins.includes(normalizedOrigin)) return callback(null, true)
     return callback(new Error(`Origin não permitida: ${origin}`))
   },
   credentials: true,

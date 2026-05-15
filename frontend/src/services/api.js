@@ -67,6 +67,10 @@ async function request(path, options = {}) {
 
 // ── Restaurantes ──────────────────────────────────────────────────────────────
 export const api = {
+  auth: {
+    criarSessao: (dados) => request('/api/auth/session', { method: 'POST', body: JSON.stringify(dados) }),
+  },
+
   restaurantes: {
     listar: (params = {}) => {
       const qs = new URLSearchParams(params).toString()
