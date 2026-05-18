@@ -236,15 +236,19 @@ export function AuthProvider({ children }) {
   };
 
   const sair = () => {
+    localStorage.removeItem('usuario');
+    localStorage.removeItem('token');
+    setUsuario(null);
+
     if (usuario?.provider === 'auth0' && auth0Configurado) {
       auth0Logout({
         logoutParams: {
-          returnTo: `${window.location.origin}/login`,
+          returnTo: window.location.origin,
         },
       });
+      return;
     }
-    localStorage.removeItem('usuario');
-    setUsuario(null);
+
     navigate('/login');
   };
 
