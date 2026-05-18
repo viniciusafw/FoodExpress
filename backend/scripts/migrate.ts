@@ -124,6 +124,15 @@ async function migrate() {
     }
   }
 
+  await ensureColumn('avaliacoes', 'cliente_id', 'TEXT')
+  await ensureColumn('avaliacoes', 'pedido_id', 'TEXT')
+  await ensureColumn('avaliacoes', 'restaurante_id', 'TEXT')
+  await ensureColumn('avaliacoes', 'entregador_id', 'TEXT')
+  await ensureColumn('avaliacoes', 'estrelas', 'INTEGER')
+  await ensureColumn('avaliacoes', 'comentario', 'TEXT')
+  await ensureColumn('avaliacoes', 'tipo', "TEXT DEFAULT 'restaurante'")
+  await ensureColumn('avaliacoes', 'created_at', 'DATETIME')
+
   await db.execute("UPDATE restaurantes SET status = 'ativo' WHERE status IS NULL OR status = '' OR status = 'pendente'")
   await db.execute("UPDATE restaurantes SET user_id = substr(id, 6) WHERE (user_id IS NULL OR user_id = '') AND id LIKE 'rest_%'")
   await db.execute("UPDATE entregadores SET cpf = 'AUTO-' || user_id WHERE cpf = '000.000.000-00' AND user_id IS NOT NULL AND user_id != ''")
