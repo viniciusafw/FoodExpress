@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useUser } from '@clerk/nextjs'
+import { useAuth0 } from "@auth0/auth0-react"
 
 interface Restaurante {
   id: string
@@ -21,7 +21,7 @@ export default function AprovacaoRestaurantesModal({ restauranteId, onClose, onA
   onClose: () => void
   onAprovado: () => void
 }) {
-  const { user, isLoaded } = useUser()
+  const { isAuthenticated, isLoading } = useAuth0()
   const [restaurante, setRestaurante] = useState<Restaurante | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [processando, setProcessando] = useState(false)
@@ -106,11 +106,27 @@ export default function AprovacaoRestaurantesModal({ restauranteId, onClose, onA
     }
   }
 
-  if (carregando) {
+  if (isLoading || carregando) {
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
         <div className="bg-white rounded-lg p-8 max-w-md">
           <p>Carregando...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
+        <div className="bg-white rounded-lg p-8 max-w-md">
+          <p className="text-red-600">Usuário não autenticado</p>
+          <button
+            onClick={onClose}
+            className="mt-4 w-full bg-gray-600 text-white py-2 rounded hover:bg-gray-700"
+          >
+            Fechar
+          </button>
         </div>
       </div>
     )

@@ -1,17 +1,22 @@
 'use client'
 
-import { useUser } from '@clerk/nextjs'
+import { useAuth0 } from "@auth0/auth0-react"
+
+function getUserRole(user: ReturnType<typeof useAuth0>['user']) {
+  const claims = user as Record<string, unknown> | undefined
+  return (claims?.role || claims?.['https://foodexpress.com/role'] || 'cliente') as string
+}
 
 export default function ClienteInfo() {
-  const { user } = useUser()
+  const { user, isAuthenticated, isLoading } = useAuth0()
   
-  if (!user) return null
+  if (isLoading || !isAuthenticated || !user) return null
   
-  const role = user?.publicMetadata?.role || 'cliente'
+  const role = getUserRole(user)
   
   return (
     <div className="text-sm text-gray-600">
-      Logado como: {user.emailAddresses[0]?.emailAddress} 
+      Logado como: {user.email || user.name || 'Usuário'} 
       ({role})
     </div>
   )

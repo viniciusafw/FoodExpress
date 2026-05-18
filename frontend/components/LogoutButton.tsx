@@ -1,7 +1,6 @@
 'use client'
 
-import { useClerk } from '@clerk/nextjs'
-import { useRouter } from 'next/navigation'
+import { useAuth0 } from "@auth0/auth0-react"
 
 interface LogoutButtonProps {
   className?: string
@@ -9,13 +8,15 @@ interface LogoutButtonProps {
 }
 
 export default function LogoutButton({ className = '', children }: LogoutButtonProps) {
-  const { signOut } = useClerk()
-  const router = useRouter()
+  const { logout } = useAuth0()
 
-  const handleLogout = async () => {
+  const handleLogout = () => {
     try {
-      await signOut()
-      router.push('/sign-in')
+      logout({
+        logoutParams: {
+          returnTo: window.location.origin,
+        },
+      })
     } catch (error) {
       console.error('Erro ao fazer logout:', error)
     }

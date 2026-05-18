@@ -1,6 +1,6 @@
 'use client'
 
-import { useUser } from '@clerk/nextjs'
+import { useAuth0 } from "@auth0/auth0-react"
 import { useState } from 'react'
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, 
@@ -15,7 +15,13 @@ interface GerenteDashboardProps {
   vendasPorPeriodo: any[]
 }
 
+function getUserRole(user: ReturnType<typeof useAuth0>['user']) {
+  const claims = user as Record<string, unknown> | undefined
+  return (claims?.role || claims?.['https://foodexpress.com/role'] || 'cliente') as string
+}
+
 export default function GerenteDashboard({ gerente, relatorios, vendasPorPeriodo }: GerenteDashboardProps) {
+  const { user, isAuthenticated, isLoading } = useAuth0()
   const [periodo, setPeriodo] = useState('30')
   const [relatorioAtivo, setRelatorioAtivo] = useState('vendas')
 
@@ -161,8 +167,9 @@ export default function GerenteDashboard({ gerente, relatorios, vendasPorPeriodo
       </div>
     )
   }
-      const { user } = useUser()
-      const role = user?.publicMetadata?.role || 'cliente'
+  const role = isAuthenticated ? getUserRole(user) : 'cliente'
+  const email = isLoading ? '' : user?.email
+
   return (
     <div className="min-h-screen bg-gray-50">
             {/* Header */}
@@ -183,7 +190,7 @@ export default function GerenteDashboard({ gerente, relatorios, vendasPorPeriodo
               </div>
             </div>
             <div className="text-sm text-gray-500">
-              {user?.emailAddresses[0]?.emailAddress}
+              {email}
             </div>
           </div>
         </div>
