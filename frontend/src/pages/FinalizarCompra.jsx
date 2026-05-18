@@ -164,7 +164,7 @@ export default function Checkout() {
   })() : 0
   const total = Math.max(0, totalCarrinho + taxaEntrega - desconto)
   const valorTotalFormatado = `R$ ${total.toFixed(2).replace('.', ',')}`
-  const imagemQrPix = import.meta.env.VITE_PIX_QR_CODE_URL || ''
+  const imagemQrPix = import.meta.env.VITE_PIX_QR_CODE_URL || '/pix-qr.png'
   const codigoPix = useMemo(() => gerarCodigoPix(total), [total])
   const linhaBoleto = useMemo(() => gerarLinhaBoleto(total), [total])
   const cupomDescricao = cupomAplicado
