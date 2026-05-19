@@ -30,6 +30,12 @@ async function criarTokenBackend(usuario) {
   return data.token
 }
 
+async function enviarLinkLoginPorEmail(email) {
+  const emailLimpo = String(email || '').trim()
+  if (!emailLimpo) throw new Error('E-mail obrigatório para login.')
+  return api.auth.login({ email: emailLimpo })
+}
+
 export function AuthProvider({ children }) {
   const auth0Domain = import.meta.env.VITE_AUTH0_DOMAIN;
   const auth0ClientId = import.meta.env.VITE_AUTH0_CLIENT_ID;
@@ -256,6 +262,7 @@ export function AuthProvider({ children }) {
     usuario,
     entrar,
     entrarComGoogle,
+    entrarComEmail: enviarLinkLoginPorEmail,
     cadastrarCliente,
     cadastrarGerente,
     sair,

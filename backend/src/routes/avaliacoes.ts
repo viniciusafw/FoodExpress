@@ -2,6 +2,7 @@
 import { Router, Response } from 'express'
 import { db } from '../lib/db'
 import { requireAuth, AuthRequest } from '../middleware/auth'
+import { ensureDatabaseHealth } from '../lib/schema'
 
 const router = Router()
 
@@ -24,6 +25,7 @@ router.get('/', async (req, res: Response) => {
 // POST /api/avaliacoes
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    await ensureDatabaseHealth()
     const { pedidoId, comentario } = req.body
     const estrelas = Number(req.body.estrelas ?? req.body.avaliacao)
     const tipo = req.body.tipo || (req.body.entregadorId ? 'entregador' : 'restaurante')

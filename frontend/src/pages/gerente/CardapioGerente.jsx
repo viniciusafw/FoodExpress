@@ -14,6 +14,20 @@ function ModalProduto({ produto, categoriaId, categorias, restauranteId, onFecha
   const [imagem, setImagem] = useState(produto?.imagem || '')
   const [salvando, setSalvando] = useState(false)
 
+  const handleImagemArquivo = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (reader.result) setImagem(String(reader.result))
+    }
+    reader.onerror = () => {
+      alert('Não foi possível carregar a imagem. Tente outro arquivo ou URL.')
+    }
+    reader.readAsDataURL(file)
+  }
+
   const handleSalvar = async () => {
     if (!nome.trim() || !preco || !categoria.trim()) {
       alert('Preencha nome, preço e categoria.')
@@ -85,8 +99,19 @@ function ModalProduto({ produto, categoriaId, categorias, restauranteId, onFecha
           </div>
           <div>
             <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Imagem do produto</label>
-            <input type="text" value={imagem} onChange={e => setImagem(e.target.value)} placeholder="URL da imagem ou caminho salvo"
-              className="w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all" />
+            <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+              <input type="text" value={imagem} onChange={e => setImagem(e.target.value)} placeholder="URL da imagem ou caminho salvo"
+                className="w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all" />
+              <label className="inline-flex items-center justify-center px-4 py-2 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 cursor-pointer hover:bg-surface-3 transition-all">
+                Upload
+                <input type="file" accept="image/*" className="hidden" onChange={handleImagemArquivo} />
+              </label>
+            </div>
+            {imagem && (
+              <div className="mt-3 overflow-hidden rounded-2xl border border-border">
+                <img src={imagem} alt="Preview do produto" className="w-full h-40 object-cover" />
+              </div>
+            )}
           </div>
         </div>
 

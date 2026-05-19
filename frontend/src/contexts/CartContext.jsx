@@ -18,6 +18,12 @@ export function CartProvider({ children }) {
   const adicionarItem = (item) => {
     setItens((anterior) => {
       const existente = anterior.find((i) => i.id === item.id);
+      const restauranteAtual = anterior[0]?.restauranteId || anterior[0]?.restaurante_id || anterior[0]?.loja?.id;
+      const restauranteNovo = item.restauranteId || item.restaurante_id || item.loja?.id;
+      if (restauranteAtual && restauranteNovo && restauranteAtual !== restauranteNovo) {
+        alert('Você só pode adicionar itens de um restaurante por vez. Limpe o carrinho para trocar de restaurante.');
+        return anterior;
+      }
       if (existente) {
         return anterior.map((i) =>
           i.id === item.id ? { ...i, quantidade: i.quantidade + (item.quantidade || 1) } : i

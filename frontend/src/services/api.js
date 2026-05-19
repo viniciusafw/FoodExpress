@@ -69,6 +69,8 @@ async function request(path, options = {}) {
 export const api = {
   auth: {
     criarSessao: (dados) => request('/api/auth/session', { method: 'POST', body: JSON.stringify(dados) }),
+    login: (dados) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(dados) }),
+    registrar: (dados) => request('/api/auth/registrar', { method: 'POST', body: JSON.stringify(dados) }),
   },
 
   restaurantes: {

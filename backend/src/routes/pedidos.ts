@@ -130,6 +130,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       forma_pagamento = 'cartao',
       taxa_entrega: taxaEntregaInformada,
       desconto: descontoInformado,
+      troco: trocoInformado = 0,
     } = req.body
     if (!clienteId || !restauranteId || !itens?.length) return res.status(400).json({ erro: 'Dados obrigatórios faltando' }) as any
 
@@ -162,6 +163,12 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       : 0
     const total = Number(Math.max(0, subtotal + taxa_entrega - desconto).toFixed(2))
 
+    const trocoSolicitado = Number(trocoInformado || 0)
+    const troco = Number.isFinite(trocoSolicitado) && trocoSolicitado > 0 ? trocoSolicitado : 0
+    if (forma_pagamento === 'dinheiro' && troco > 0 && troco < total) {
+      return res.status(400).json({ erro: 'O valor do troco deve ser maior ou igual ao valor total do pedido.' }) as any
+    }
+
     let pagamento_id = null
     let clientSecret = null
 
@@ -184,10 +191,10 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     await db.execute({
       sql: `INSERT INTO pedidos
             (id, cliente_id, restaurante_id, status, itens, endereco_entrega, latitude_entrega, longitude_entrega,
-             subtotal, taxa_entrega, desconto, total, forma_pagamento, pagamento_id, pagamento_status)
-            VALUES (?, ?, ?, 'pendente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente')`,
+             subtotal, taxa_entrega, desconto, troco, total, forma_pagamento, pagamento_id, pagamento_status)
+            VALUES (?, ?, ?, 'pendente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente')`,
       args: [pedidoId, clienteId, restauranteId, JSON.stringify(itens), endereco_entrega || '', latitude || 0, longitude || 0,
-             subtotal, taxa_entrega, desconto, total, forma_pagamento, pagamento_id]
+             subtotal, taxa_entrega, desconto, troco, total, forma_pagamento, pagamento_id]
     })
 
     res.status(201).json({ mensagem: 'Pedido criado com sucesso', id: pedidoId, clientSecret, subtotal, taxa_entrega, desconto, total })

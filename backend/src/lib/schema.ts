@@ -31,6 +31,7 @@ export async function ensureDatabaseHealth() {
 
       await ensureColumn('cardapio', 'imagem', 'TEXT')
       await ensureColumn('pedidos', 'desconto', 'REAL DEFAULT 0')
+      await ensureColumn('pedidos', 'troco', 'REAL DEFAULT 0')
       await ensureColumn('pedidos', 'avaliacao_restaurante', 'INTEGER')
       await ensureColumn('pedidos', 'avaliacao_entregador', 'INTEGER')
       await ensureColumn('pedidos', 'comentario', 'TEXT')

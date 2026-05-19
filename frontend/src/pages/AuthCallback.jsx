@@ -56,6 +56,7 @@ export default function AuthCallback() {
         id: payload.userId,
         perfil: payload.role || perfil,
         email: payload.email || '',
+        nome: payload.nome || payload.email?.split('@')[0] || '',
       }))
     } catch {
       // não bloqueia o fluxo se o decode falhar

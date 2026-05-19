@@ -23,6 +23,15 @@ function gerarLinhaBoleto(total) {
   return `34191.79001 01043.510047 91020.150008 8 ${centavos}`
 }
 
+function parseMonetario(valor) {
+  const texto = String(valor || '')
+    .replace(/\./g, '')
+    .replace(/,/g, '.')
+    .replace(/[^0-9.]/g, '')
+    .trim()
+  return Number(texto) || 0
+}
+
 function QrPixVisual({ codigo, imagem }) {
   const pontos = useMemo(() => {
     const tamanho = 17
@@ -260,7 +269,22 @@ export default function Checkout() {
     if (!estaLogado) { navigate('/login'); return }
     if (itens.length === 0) return
 
-    const restauranteId = itens[0]?.restauranteId || itens[0]?.loja?.id || null
+    const restaurantes = Array.from(new Set(itens
+      .map(i => i.restauranteId || i.loja?.id)
+      .filter(Boolean)
+    ))
+    if (restaurantes.length > 1) {
+      setErro('Seu carrinho contém itens de mais de um restaurante. Limpe o carrinho antes de finalizar o pedido.')
+      return
+    }
+
+    const restauranteId = restaurantes[0] || null
+
+    const trocoValor = parseMonetario(troco)
+    if (pagamentoSelecionado === 'dinheiro' && trocoValor > 0 && trocoValor < total) {
+      setErro('Troco inválido. O valor deve ser igual ou superior ao total do pedido.')
+      return
+    }
 
     setErro('')
     setCarregando(true)
@@ -290,6 +314,7 @@ export default function Checkout() {
         latitude: localizacao?.latitude || 0,
         longitude: localizacao?.longitude || 0,
         forma_pagamento: pagamentoSelecionado,
+        troco: pagamentoSelecionado === 'dinheiro' ? trocoValor : 0,
         cupom_codigo: cupomAplicado?.codigo || cupom.trim().toUpperCase() || undefined,
         taxa_entrega: taxaEntrega,
         desconto,

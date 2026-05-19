@@ -36,6 +36,29 @@ function idEstavelPorEmail(email: string, perfil: string) {
   return `${perfil}-${normalizarIdentificador(email)}`;
 }
 
+function normalizarEmail(email: string) {
+  return String(email || '').trim().toLowerCase();
+}
+
+async function buscarPerfisPorEmail(email: string) {
+  const emailLimpo = normalizarEmail(email);
+  const perfis: string[] = [];
+
+  const cliente = await db.execute({ sql: 'SELECT id FROM clientes WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
+  if (cliente.rows.length) perfis.push('cliente');
+
+  const entregador = await db.execute({ sql: 'SELECT id FROM entregadores WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
+  if (entregador.rows.length) perfis.push('entregador');
+
+  const restaurante = await db.execute({ sql: 'SELECT id FROM restaurantes WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
+  if (restaurante.rows.length) perfis.push('restaurante');
+
+  const gerente = await db.execute({ sql: 'SELECT id FROM gerentes WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
+  if (gerente.rows.length) perfis.push('gerente');
+
+  return perfis;
+}
+
 // ── POST /api/auth/registrar ─────────────────────────────────────────────────
 // Etapa 1: Salva email como pendente e envia link de confirmação
 router.post('/registrar', async (req, res) => {
@@ -46,13 +69,13 @@ router.post('/registrar', async (req, res) => {
     const emailLimpo = email.toLowerCase().trim();
 
     // Verifica se já existe conta confirmada
-    const existente = await db.execute({
-      sql: 'SELECT id FROM clientes WHERE email = ?',
-      args: [emailLimpo]
-    });
-
-    if (existente.rows.length) {
+    const perfisExistentes = await buscarPerfisPorEmail(emailLimpo);
+    if (perfisExistentes.includes('cliente')) {
       return res.status(409).json({ erro: 'Este e-mail já está cadastrado' });
+    }
+    const outrosPerfis = perfisExistentes.filter(p => p !== 'cliente');
+    if (outrosPerfis.length) {
+      return res.status(409).json({ erro: `Este e-mail já está cadastrado como perfil ${outrosPerfis.join(', ')}.` });
     }
 
     // Cria registro pendente
@@ -122,14 +145,35 @@ router.get('/ativar', async (req, res) => {
     const email = row.email as string;
     const telefone = row.telefone as string;
 
-    // Cria o cliente de verdade
-    const clienteId = `cli_${crypto.randomUUID().slice(0, 8)}`;
-
-    await db.execute({
-      sql: `INSERT INTO clientes (id, user_id, nome, email, telefone, total_pedidos)
-            VALUES (?, ?, ?, ?, ?, 0)`,
-      args: [clienteId, clienteId, email.split('@')[0], email, telefone]
+    const emailLimpo = normalizarEmail(email);
+    const existenteCliente = await db.execute({
+      sql: 'SELECT id, nome, telefone FROM clientes WHERE lower(email) = ? LIMIT 1',
+      args: [emailLimpo]
     });
+
+    let clienteId = `cli_${crypto.randomUUID().slice(0, 8)}`;
+    let clienteNome = email.split('@')[0];
+    let clienteTelefone = telefone || '';
+
+    if (existenteCliente.rows.length) {
+      const cliente = existenteCliente.rows[0] as any;
+      clienteId = cliente.id;
+      clienteNome = cliente.nome || clienteNome;
+      clienteTelefone = cliente.telefone || clienteTelefone;
+
+      if (!cliente.nome && clienteNome) {
+        await db.execute({ sql: 'UPDATE clientes SET nome = ? WHERE id = ?', args: [clienteNome, clienteId] });
+      }
+      if (!cliente.telefone && clienteTelefone) {
+        await db.execute({ sql: 'UPDATE clientes SET telefone = ? WHERE id = ?', args: [clienteTelefone, clienteId] });
+      }
+    } else {
+      await db.execute({
+        sql: `INSERT INTO clientes (id, user_id, nome, email, telefone, total_pedidos)
+              VALUES (?, ?, ?, ?, ?, 0)`,
+        args: [clienteId, clienteId, clienteNome, emailLimpo, clienteTelefone]
+      });
+    }
 
     // Marca token como usado
     await db.execute({
@@ -154,11 +198,16 @@ router.post('/login', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ erro: 'E-mail obrigatório' });
 
-    const emailLimpo = email.toLowerCase().trim();
+    const emailLimpo = normalizarEmail(email);
+
+    const perfisExistentes = await buscarPerfisPorEmail(emailLimpo);
+    if (perfisExistentes.some(p => p !== 'cliente')) {
+      return res.status(400).json({ erro: 'Este e-mail pertence a outro tipo de conta. Use o perfil correto ou cadastre um e-mail diferente.' });
+    }
 
     // Verifica se existe conta confirmada
     const existente = await db.execute({
-      sql: 'SELECT id FROM clientes WHERE email = ?',
+      sql: 'SELECT id FROM clientes WHERE lower(email) = ?',
       args: [emailLimpo]
     });
 
@@ -194,12 +243,18 @@ router.post('/login', async (req, res) => {
 router.post('/session', async (req, res) => {
   try {
     const { email, nome, perfil, userId } = req.body;
-    const emailLimpo = String(email || '').toLowerCase().trim();
+    const emailLimpo = normalizarEmail(String(email || ''));
     const perfilNormalizado = String(perfil || 'cliente').toLowerCase().trim();
 
     if (!emailLimpo) return res.status(400).json({ erro: 'E-mail obrigatório' });
     if (!PERFIS_VALIDOS.has(perfilNormalizado)) {
       return res.status(400).json({ erro: 'Perfil inválido' });
+    }
+
+    const perfisExistentes = await buscarPerfisPorEmail(emailLimpo);
+    const perfisDiferentes = perfisExistentes.filter(p => p !== perfilNormalizado);
+    if (perfisDiferentes.length) {
+      return res.status(409).json({ erro: `Este e-mail já está cadastrado como perfil ${perfisDiferentes.join(', ')}.` });
     }
 
     const id = userId || idEstavelPorEmail(emailLimpo, perfilNormalizado);
