@@ -22,6 +22,7 @@ CREATE TABLE restaurantes (
     horario_fechamento TEXT,
     dias_aberto TEXT,
     formas_pagamento TEXT,
+    motivo_rejeicao TEXT,
     avaliacao_media REAL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -222,3 +223,16 @@ CREATE INDEX idx_pedidos_created ON pedidos(created_at);
 CREATE INDEX idx_disputas_status ON disputas(status);
 CREATE INDEX idx_disputas_pedido ON disputas(pedido_id);
 CREATE INDEX idx_disputas_criador ON disputas(criador_id);
+
+CREATE TABLE IF NOT EXISTS usuarios_pendentes (
+    id TEXT PRIMARY KEY,
+    email TEXT UNIQUE,
+    nome TEXT,
+    telefone TEXT,
+    token TEXT NOT NULL,
+    codigo TEXT,
+    tipo TEXT DEFAULT 'email',
+    expira_em DATETIME NOT NULL,
+    usado INTEGER DEFAULT 0,
+    criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+);

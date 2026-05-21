@@ -10,13 +10,14 @@ import {
   LayoutDashboard, ShoppingBag, UtensilsCrossed, BarChart3,
   Settings, LogOut, TrendingUp, TrendingDown, Clock,
   CheckCircle, XCircle, Truck, Star, DollarSign,
-  Bell, Menu, X, Moon, Sun
+  Bell, Menu, X, Moon, Sun, ShieldCheck
 } from 'lucide-react'
 import logoSrc from '../imgs/Logo-site.png'
 import PedidosGerente from './gerente/PedidosGerente'
 import CardapioGerente from './gerente/CardapioGerente'
 import RelatoriosGerente from './gerente/RelatoriosGerente'
 import ConfiguracoesGerente from './gerente/ConfiguracoesGerente'
+import AprovacoesGerente from './gerente/AprovacoesGerente'
 
 const statusConfig = {
   'Preparando': { cor: 'text-primary bg-primary-light', icon: Clock },
@@ -60,6 +61,7 @@ function NavbarGerente({ usuario }) {
 
   const links = [
     { to: '/gerente', label: 'Painel', Icon: LayoutDashboard, exato: true },
+    { to: '/gerente/aprovacoes', label: 'Aprovações', Icon: ShieldCheck },
     { to: '/gerente/pedidos', label: 'Pedidos', Icon: ShoppingBag },
     { to: '/gerente/cardapio', label: 'Cardápio', Icon: UtensilsCrossed },
     { to: '/gerente/relatorios', label: 'Relatórios', Icon: BarChart3 },
@@ -400,6 +402,7 @@ export default function DashboardGerente() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <Routes>
           <Route index element={<PainelPrincipal usuario={usuario} />} />
+          <Route path="aprovacoes" element={<AprovacoesGerente />} />
           <Route path="pedidos" element={<PedidosGerente />} />
           <Route path="cardapio" element={<CardapioGerente />} />
           <Route path="relatorios" element={<RelatoriosGerente />} />

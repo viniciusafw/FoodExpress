@@ -2,6 +2,7 @@
 import { Router, Response } from 'express'
 import { db } from '../lib/db'
 import { requireAuth, AuthRequest } from '../middleware/auth'
+import crypto from 'crypto'
 
 const router = Router()
 
@@ -37,13 +38,16 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { restauranteId, nome, preco, categoria, descricao, imagem, tempo_preparo } = req.body
     if (!restauranteId || !nome || !preco || !categoria) return res.status(400).json({ erro: 'Campos obrigatórios faltando' }) as any
-    const result = await db.execute({
+    const id = `card_${crypto.randomUUID().slice(0, 12)}`
+    await db.execute({
       sql: `INSERT INTO cardapio (id, restaurante_id, nome, preco, categoria, descricao, imagem, tempo_preparo, disponivel)
-            VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, 1)`,
-      args: [restauranteId, nome, preco, categoria, descricao || '', imagem || '', tempo_preparo || 30]
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      args: [id, restauranteId, nome, preco, categoria, descricao || '', imagem || '', tempo_preparo || 30]
     })
-    res.status(201).json({ mensagem: 'Item adicionado ao cardápio', id: result.lastInsertRowid })
+    const criado = await db.execute({ sql: 'SELECT * FROM cardapio WHERE id = ?', args: [id] })
+    res.status(201).json(criado.rows[0])
   } catch (error) {
+    console.error(error)
     res.status(500).json({ erro: 'Erro ao criar item' })
   }
 })
@@ -65,7 +69,8 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (!sets.length) return res.status(400).json({ erro: 'Nenhum campo para atualizar' }) as any
     args.push(req.params.id)
     await db.execute({ sql: `UPDATE cardapio SET ${sets.join(', ')} WHERE id = ?`, args })
-    res.json({ mensagem: 'Item atualizado com sucesso' })
+    const atualizado = await db.execute({ sql: 'SELECT * FROM cardapio WHERE id = ?', args: [req.params.id] })
+    res.json(atualizado.rows[0] || { mensagem: 'Item atualizado com sucesso' })
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao atualizar item' })
   }

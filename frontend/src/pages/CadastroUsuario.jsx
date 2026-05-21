@@ -2,9 +2,10 @@ import { useState } from 'react'
 import { mascaraTelefone } from '../utils/mascaras'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, Link } from 'react-router-dom'
-import { Mail, Phone, ArrowLeft, Check, Send, User } from 'lucide-react'
+import { Mail, Phone, ArrowLeft, Check, Send, User, MessageCircle } from 'lucide-react'
 import { motion as Motion } from 'framer-motion'
 import logoSrc from '../imgs/Logo-site.png'
+import api from '../services/api'
 
 const beneficiosCadastroUsuario = [
   'Peça em centenas de restaurantes',
@@ -24,7 +25,12 @@ export default function CadastroUsuario() {
   const [enviado, setEnviado] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [aceitouTermos, setAceitouTermos] = useState(false)
-  const { cadastrarCliente } = useAuth()
+  const [erro, setErro] = useState('')
+  const [verificacaoTelefone, setVerificacaoTelefone] = useState(null)
+  const [codigoTelefone, setCodigoTelefone] = useState('')
+  const [verificacaoEmail, setVerificacaoEmail] = useState(null)
+  const [codigoEmail, setCodigoEmail] = useState('')
+  const { cadastrarCliente, aplicarSessao } = useAuth()
   const navigate = useNavigate()
 
   const handleEnviar = async (e) => {
@@ -35,20 +41,55 @@ export default function CadastroUsuario() {
     if (modo === 'telefone' && !dados.telefone.trim()) return
 
     setCarregando(true)
+    setErro('')
     try {
       if (modo === 'email') {
-        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/auth/registrar`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ nome: dados.nome, email: dados.email, telefone: dados.telefone }),
-        })
-        setEnviado(true)
+        const resposta = await cadastrarCliente({ nome: dados.nome, email: dados.email, telefone: dados.telefone })
+        setVerificacaoEmail(resposta)
       } else {
-        // Cadastro por nome + telefone — entra direto
-        await cadastrarCliente({ nome: dados.nome, telefone: dados.telefone, email: `${dados.telefone.replace(/\D/g, '')}@telefone.local` })
+        const resposta = await api.auth.telefoneIniciar({ nome: dados.nome, telefone: dados.telefone })
+        setVerificacaoTelefone(resposta)
+        if (resposta?.whatsappLink) window.open(resposta.whatsappLink, '_blank', 'noopener,noreferrer')
       }
     } catch (err) {
       console.error(err)
+      setErro(err?.message || 'Não foi possível criar sua conta.')
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  const confirmarEmail = async (e) => {
+    e.preventDefault()
+    if (!verificacaoEmail?.token || !codigoEmail.trim()) return
+    setCarregando(true)
+    setErro('')
+    try {
+      const resposta = await api.auth.emailConfirmar({
+        token: verificacaoEmail.token,
+        codigo: codigoEmail,
+      })
+      aplicarSessao(resposta.token, resposta.usuario)
+    } catch (err) {
+      setErro(err?.message || 'Código inválido.')
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  const confirmarTelefone = async (e) => {
+    e.preventDefault()
+    if (!verificacaoTelefone?.token || !codigoTelefone.trim()) return
+    setCarregando(true)
+    setErro('')
+    try {
+      const resposta = await api.auth.telefoneConfirmar({
+        token: verificacaoTelefone.token,
+        codigo: codigoTelefone,
+      })
+      aplicarSessao(resposta.token, resposta.usuario)
+    } catch (err) {
+      setErro(err?.message || 'Código inválido.')
     } finally {
       setCarregando(false)
     }
@@ -105,7 +146,7 @@ export default function CadastroUsuario() {
       {/* Lado direito */}
       <div className="flex items-center justify-center p-4 sm:p-8 bg-surface-2 min-h-screen lg:min-h-0">
         <Motion.div
-          className="bg-white rounded-3xl shadow-2xl border border-border p-7 sm:p-10 w-full max-w-105"
+          className="bg-white rounded-3xl shadow-2xl border border-border p-7 sm:p-10 w-full max-w-[26rem]"
           initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
 
           {/* Topo mobile */}
@@ -137,7 +178,80 @@ export default function CadastroUsuario() {
             </button>
           </div>
 
-          {enviado ? (
+          {erro && (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+              {erro}
+            </div>
+          )}
+
+          {verificacaoEmail ? (
+            <form onSubmit={confirmarEmail} className="flex flex-col items-center text-center py-6 gap-4">
+              <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
+                <Send size={28} className="text-accent" />
+              </div>
+              <div>
+                <h3 className="font-display text-xl font-extrabold text-text-primary mb-1">Confirme seu e-mail</h3>
+                <p className="text-sm text-text-muted font-semibold leading-relaxed">
+                  Enviamos um código para<br />
+                  <strong className="text-text-primary">{dados.email}</strong>
+                </p>
+              </div>
+              {verificacaoEmail.devCode && (
+                <p className="text-xs text-text-muted font-semibold">Código dev: <strong className="text-text-primary">{verificacaoEmail.devCode}</strong></p>
+              )}
+              <input
+                value={codigoEmail}
+                onChange={e => setCodigoEmail(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Código de 6 dígitos"
+                className={inputClass.replace('pl-10', 'pl-4')}
+                required
+              />
+              <button type="submit" disabled={carregando}
+                className="w-full py-4 bg-primary text-white border-none rounded-xl font-display font-bold text-base cursor-pointer disabled:bg-border disabled:text-text-muted">
+                {carregando ? 'Confirmando...' : 'Criar conta'}
+              </button>
+              <button type="button" onClick={() => { setVerificacaoEmail(null); setCodigoEmail('') }}
+                className="text-xs text-text-muted font-bold bg-transparent border-none cursor-pointer hover:underline">
+                Trocar e-mail
+              </button>
+            </form>
+          ) : verificacaoTelefone ? (
+            <form onSubmit={confirmarTelefone} className="flex flex-col items-center text-center py-6 gap-4">
+              <div className="w-16 h-16 rounded-full bg-accent/10 flex items-center justify-center">
+                <MessageCircle size={28} className="text-accent" />
+              </div>
+              <div>
+                <h3 className="font-display text-xl font-extrabold text-text-primary mb-1">Confirme seu telefone</h3>
+                <p className="text-sm text-text-muted font-semibold leading-relaxed">
+                  Envie a mensagem pelo WhatsApp e digite o código gerado.
+                </p>
+              </div>
+              {verificacaoTelefone.whatsappLink && (
+                <a href={verificacaoTelefone.whatsappLink} target="_blank" rel="noreferrer"
+                  className="w-full py-3 bg-accent text-white rounded-xl text-sm font-bold">
+                  Abrir WhatsApp
+                </a>
+              )}
+              {verificacaoTelefone.devCode && (
+                <p className="text-xs text-text-muted font-semibold">Código dev: <strong className="text-text-primary">{verificacaoTelefone.devCode}</strong></p>
+              )}
+              <input
+                value={codigoTelefone}
+                onChange={e => setCodigoTelefone(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Código de 6 dígitos"
+                className={inputClass.replace('pl-10', 'pl-4')}
+                required
+              />
+              <button type="submit" disabled={carregando}
+                className="w-full py-4 bg-primary text-white border-none rounded-xl font-display font-bold text-base cursor-pointer disabled:bg-border disabled:text-text-muted">
+                {carregando ? 'Confirmando...' : 'Confirmar telefone'}
+              </button>
+              <button type="button" onClick={() => { setVerificacaoTelefone(null); setCodigoTelefone('') }}
+                className="text-xs text-text-muted font-bold bg-transparent border-none cursor-pointer hover:underline">
+                Trocar telefone
+              </button>
+            </form>
+          ) : enviado ? (
             <Motion.div
               className="flex flex-col items-center text-center py-6 gap-4"
               initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
@@ -148,7 +262,7 @@ export default function CadastroUsuario() {
               <div>
                 <h3 className="font-display text-xl font-extrabold text-text-primary mb-1">Verifique seu e-mail!</h3>
                 <p className="text-sm text-text-muted font-semibold leading-relaxed">
-                  Enviamos um link de acesso para<br />
+                  Enviamos um código de acesso para<br />
                   <strong className="text-text-primary">{dados.email}</strong>
                 </p>
               </div>
@@ -210,8 +324,8 @@ export default function CadastroUsuario() {
                 whileHover={{ scale: 1.02, boxShadow: '0 4px 20px rgba(255,107,53,0.35)' }}
                 whileTap={{ scale: 0.98 }}>
                 {carregando
-                  ? (modo === 'email' ? 'Enviando link...' : 'Criando conta...')
-                  : (modo === 'email' ? 'Criar conta — receber link por e-mail' : 'Criar conta com telefone')}
+                  ? (modo === 'email' ? 'Enviando código...' : 'Gerando código...')
+                  : (modo === 'email' ? 'Criar conta — receber código por e-mail' : 'Criar conta com telefone')}
               </Motion.button>
             </form>
           )}

@@ -3,6 +3,11 @@ import { createContext, useContext, useState, useEffect } from 'react';
 
 const CartContext = createContext();
 
+function getRestauranteId(item) {
+  const id = item?.restauranteId || item?.restaurante_id || item?.loja?.id || item?.restaurantId;
+  return id == null || id === '' ? '' : String(id);
+}
+
 export function CartProvider({ children }) {
   const [itens, setItens] = useState(() => {
     if (typeof window === 'undefined') return [];
@@ -17,20 +22,21 @@ export function CartProvider({ children }) {
 
   const adicionarItem = (item) => {
     setItens((anterior) => {
-      const existente = anterior.find((i) => i.id === item.id);
-      const restauranteAtual = anterior[0]?.restauranteId || anterior[0]?.restaurante_id || anterior[0]?.loja?.id;
-      const restauranteNovo = item.restauranteId || item.restaurante_id || item.loja?.id;
+      const restauranteAtual = getRestauranteId(anterior[0]);
+      const restauranteNovo = getRestauranteId(item);
       if (restauranteAtual && restauranteNovo && restauranteAtual !== restauranteNovo) {
         alert('Você só pode adicionar itens de um restaurante por vez. Limpe o carrinho para trocar de restaurante.');
         return anterior;
       }
+
+      const existente = anterior.find((i) => i.id === item.id);
       if (existente) {
         return anterior.map((i) =>
           i.id === item.id ? { ...i, quantidade: i.quantidade + (item.quantidade || 1) } : i
         );
       }
       // Garante que restauranteId seja preservado para o checkout
-      return [...anterior, { ...item, quantidade: item.quantidade || 1 }];
+      return [...anterior, { ...item, restauranteId: restauranteNovo || item.restauranteId, quantidade: item.quantidade || 1 }];
     });
   };
 

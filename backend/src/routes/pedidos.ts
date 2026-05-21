@@ -138,14 +138,22 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     if (!restaurante.rows.length) return res.status(404).json({ erro: 'Restaurante não encontrado' }) as any
 
     let subtotal = 0
+    const restaurantesDosItens = new Set<string>()
     for (const item of itens) {
       const cardapioId = item.cardapioId || item.produtoId || item.cardapio_id || item.id
-      const cardapioItem = await db.execute({ sql: 'SELECT preco FROM cardapio WHERE id = ?', args: [cardapioId] })
+      const cardapioItem = await db.execute({ sql: 'SELECT preco, restaurante_id FROM cardapio WHERE id = ?', args: [cardapioId] })
       if (cardapioItem.rows.length) {
-        subtotal += Number(cardapioItem.rows[0].preco) * (Number(item.quantidade) || 1)
+        const row = cardapioItem.rows[0] as any
+        restaurantesDosItens.add(String(row.restaurante_id))
+        subtotal += Number(row.preco) * (Number(item.quantidade) || 1)
       } else {
+        const itemRestaurante = item.restauranteId || item.restaurante_id || item.loja?.id
+        if (itemRestaurante) restaurantesDosItens.add(String(itemRestaurante))
         subtotal += Number(item.preco || item.price || 0) * (Number(item.quantidade) || 1)
       }
+    }
+    if (restaurantesDosItens.size > 1 || (restaurantesDosItens.size === 1 && !restaurantesDosItens.has(String(restauranteId)))) {
+      return res.status(400).json({ erro: 'O pedido só pode conter itens de um restaurante.' }) as any
     }
 
     const dist = calcularDistancia(
@@ -165,7 +173,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
     const trocoSolicitado = Number(trocoInformado || 0)
     const troco = Number.isFinite(trocoSolicitado) && trocoSolicitado > 0 ? trocoSolicitado : 0
-    if (forma_pagamento === 'dinheiro' && troco > 0 && troco < total) {
+    if (String(forma_pagamento).toLowerCase() === 'dinheiro' && troco > 0 && troco < total) {
       return res.status(400).json({ erro: 'O valor do troco deve ser maior ou igual ao valor total do pedido.' }) as any
     }
 

@@ -173,7 +173,7 @@ function AbaCardapio({ restauranteId }) {
   const [cardapio, setCardapio] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [salvando, setSalvando] = useState(false)
-  const [novoItem, setNovoItem] = useState({ nome: '', preco: '', categoria: '', descricao: '', tempo_preparo: '30' })
+  const [novoItem, setNovoItem] = useState({ nome: '', preco: '', categoria: '', descricao: '', tempo_preparo: '30', imagem: '' })
   const [sucesso, setSucesso] = useState(false)
 
   const carregar = useCallback(() => {
@@ -186,6 +186,16 @@ function AbaCardapio({ restauranteId }) {
   }, [restauranteId])
 
   useEffect(() => { carregar() }, [carregar])
+
+  const carregarImagemArquivo = (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      if (reader.result) setNovoItem(prev => ({ ...prev, imagem: String(reader.result) }))
+    }
+    reader.readAsDataURL(file)
+  }
 
   const adicionarItem = async () => {
     if (!novoItem.nome.trim() || !novoItem.preco || !novoItem.categoria.trim()) {
@@ -200,9 +210,10 @@ function AbaCardapio({ restauranteId }) {
         preco: parseFloat(novoItem.preco),
         categoria: novoItem.categoria,
         descricao: novoItem.descricao,
+        imagem: novoItem.imagem,
         tempo_preparo: parseInt(novoItem.tempo_preparo) || 30,
       })
-      setNovoItem({ nome: '', preco: '', categoria: '', descricao: '', tempo_preparo: '30' })
+      setNovoItem({ nome: '', preco: '', categoria: '', descricao: '', tempo_preparo: '30', imagem: '' })
       setSucesso(true)
       setTimeout(() => setSucesso(false), 2000)
       carregar()
@@ -255,6 +266,16 @@ function AbaCardapio({ restauranteId }) {
             onChange={e => setNovoItem(prev => ({ ...prev, descricao: e.target.value }))}
             className="border border-border rounded-xl px-4 py-2.5 text-sm font-semibold text-text-primary outline-none focus:border-primary transition-colors sm:col-span-2"
           />
+          <div className="sm:col-span-2 grid gap-2 sm:grid-cols-[1fr_auto]">
+            <input value={novoItem.imagem} placeholder="URL da imagem"
+              onChange={e => setNovoItem(prev => ({ ...prev, imagem: e.target.value }))}
+              className="border border-border rounded-xl px-4 py-2.5 text-sm font-semibold text-text-primary outline-none focus:border-primary transition-colors"
+            />
+            <label className="inline-flex items-center justify-center rounded-xl border border-border bg-surface-2 px-4 py-2.5 text-sm font-bold text-text-secondary cursor-pointer hover:border-primary hover:text-primary">
+              Upload
+              <input type="file" accept="image/*" className="hidden" onChange={carregarImagemArquivo} />
+            </label>
+          </div>
         </div>
         <button
           onClick={adicionarItem}
@@ -282,6 +303,7 @@ function AbaCardapio({ restauranteId }) {
               initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}
             >
               <div className="flex justify-between items-start mb-1">
+                {item.imagem && <img src={item.imagem} alt={item.nome} className="mr-3 h-12 w-12 rounded-xl object-cover" />}
                 <h4 className={`font-display font-extrabold text-sm ${item.disponivel ? 'text-text-primary' : 'text-text-muted line-through'}`}>
                   {item.nome}
                 </h4>

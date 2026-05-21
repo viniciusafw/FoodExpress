@@ -1,6 +1,6 @@
 // services/api.js — cliente centralizado para o backend FoodExpress
-// Tenta a URL do .env primeiro, mas cai automaticamente para 3001.
-const ENV_BASE_URL = import.meta.env.VITE_API_URL || ''
+const API_PRODUCAO = 'https://foodexpress-production-c874.up.railway.app'
+const ENV_BASE_URL = import.meta.env.VITE_API_URL || API_PRODUCAO
 
 function normalizarBaseUrl(url) {
   return String(url || '').trim().replace(/\/$/, '')
@@ -8,14 +8,11 @@ function normalizarBaseUrl(url) {
 
 const BASE_URLS = Array.from(new Set([
   normalizarBaseUrl(ENV_BASE_URL),
-  'http://localhost:3001',
-  'http://127.0.0.1:3001',
-  'http://localhost:3002',
-  'http://127.0.0.1:3002',
+  normalizarBaseUrl(API_PRODUCAO),
 ].filter(Boolean)))
 
 export function getApiBaseUrl() {
-  return BASE_URLS[0] || 'http://localhost:3001'
+  return BASE_URLS[0] || API_PRODUCAO
 }
 
 async function request(path, options = {}) {
@@ -61,7 +58,7 @@ async function request(path, options = {}) {
 
   throw new Error(
     `Backend offline. O frontend tentou: ${BASE_URLS.join(', ')}. ` +
-    'Verifique se o backend está rodando em http://localhost:3001.'
+    'Verifique se a API hospedada está online.'
   )
 }
 
@@ -70,7 +67,11 @@ export const api = {
   auth: {
     criarSessao: (dados) => request('/api/auth/session', { method: 'POST', body: JSON.stringify(dados) }),
     login: (dados) => request('/api/auth/login', { method: 'POST', body: JSON.stringify(dados) }),
+    loginConfirmar: (dados) => request('/api/auth/login/confirmar', { method: 'POST', body: JSON.stringify(dados) }),
     registrar: (dados) => request('/api/auth/registrar', { method: 'POST', body: JSON.stringify(dados) }),
+    emailConfirmar: (dados) => request('/api/auth/email/confirmar', { method: 'POST', body: JSON.stringify(dados) }),
+    telefoneIniciar: (dados) => request('/api/auth/telefone/iniciar', { method: 'POST', body: JSON.stringify(dados) }),
+    telefoneConfirmar: (dados) => request('/api/auth/telefone/confirmar', { method: 'POST', body: JSON.stringify(dados) }),
   },
 
   restaurantes: {
@@ -82,6 +83,7 @@ export const api = {
     criar: (dados) => request('/api/restaurantes', { method: 'POST', body: JSON.stringify(dados) }),
     atualizar: (id, dados) => request(`/api/restaurantes/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
     aprovar: (id, acao, extras = {}) => request(`/api/restaurantes/${id}/aprovar`, { method: 'POST', body: JSON.stringify({ acao, ...extras }) }),
+    pendentes: () => request('/api/restaurantes/pendentes'),
     cadastroInicial: (dados) => request('/api/restaurantes/cadastro', { method: 'POST', body: JSON.stringify(dados) }),
     meuRestaurante: () => request('/api/restaurantes/meu'),
     meuRestaurantePorEmail: (email) => request(`/api/restaurantes/cadastro?email=${encodeURIComponent(email)}`),

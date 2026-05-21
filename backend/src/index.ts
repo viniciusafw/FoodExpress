@@ -28,17 +28,13 @@ import { ensureDatabaseHealth } from './lib/schema'
 
 const app = express()
 const PORT = process.env.PORT || 3001
-const configuredOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
+const configuredOrigins = (process.env.FRONTEND_URL || 'https://food-express-pearl.vercel.app')
   .split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
   .filter(Boolean)
 const allowedOrigins = [
   ...configuredOrigins,
-  'http://127.0.0.1:3000',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173',
-  'http://localhost:3002',
-  'http://127.0.0.1:3002',
+  'https://food-express-pearl.vercel.app',
 ]
 
 // ── Webhook Stripe precisa do body raw ANTES do express.json() ────────────
@@ -58,8 +54,8 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Email', 'X-User-Name'],
 }))
 app.options('*', cors())
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+app.use(express.json({ limit: '5mb' }))
+app.use(express.urlencoded({ extended: true, limit: '5mb' }))
 app.use('/api/', apiLimiter)
 
 // ── Rotas ─────────────────────────────────────────────────────────────────

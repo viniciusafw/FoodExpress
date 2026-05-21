@@ -21,6 +21,10 @@ function serializarArray(valor: any) {
   return String(valor)
 }
 
+function ehOperador(req: AuthRequest) {
+  return String(req.userRole || '').toLowerCase() === 'operador'
+}
+
 // GET /api/restaurantes — listar com filtros públicos
 router.get('/', async (req, res: Response) => {
   try {
@@ -114,7 +118,7 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
       sql: `INSERT INTO restaurantes
             (id, user_id, nome, cnpj, email, telefone, endereco, categoria, descricao, latitude, longitude,
              taxa_comissao, avaliacao_media, status, horario_abertura, horario_fechamento, dias_aberto, formas_pagamento)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 15, 0, 'ativo', '18:00', '23:00', ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 15, 0, 'pendente', '18:00', '23:00', ?, ?)`,
       args: [
         id,
         userId,
@@ -139,6 +143,28 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
   } catch (error) {
     console.error(error)
     res.status(500).json({ erro: 'Erro ao criar restaurante' })
+  }
+})
+
+// GET /api/restaurantes/pendentes — operador/master aprova solicitações
+router.get('/pendentes', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (!ehOperador(req)) return res.status(403).json({ erro: 'Apenas operadores podem aprovar restaurantes' }) as any
+    await ensureDatabaseHealth()
+    const result = await db.execute({
+      sql: `SELECT r.*,
+                   COUNT(c.id) as total_itens_cardapio
+            FROM restaurantes r
+            LEFT JOIN cardapio c ON c.restaurante_id = r.id AND COALESCE(c.disponivel, 1) = 1
+            WHERE COALESCE(r.status, 'pendente') = 'pendente'
+            GROUP BY r.id
+            ORDER BY r.created_at ASC`,
+      args: []
+    })
+    res.json(result.rows)
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ erro: 'Erro ao listar restaurantes pendentes' })
   }
 })
 
@@ -187,7 +213,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       sql: `INSERT INTO restaurantes
             (id, user_id, nome, cnpj, email, telefone, endereco, categoria, latitude, longitude,
              taxa_comissao, avaliacao_media, status, horario_abertura, horario_fechamento, dias_aberto, formas_pagamento)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 15, 5.0, 'ativo', '18:00', '23:00', ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 15, 0, 'pendente', '18:00', '23:00', ?, ?)`,
       args: [
         id,
         req.userId,
@@ -281,6 +307,7 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 router.post('/:id/aprovar', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     await ensureDatabaseHealth()
+    if (!ehOperador(req)) return res.status(403).json({ erro: 'Apenas operadores podem aprovar restaurantes' }) as any
     const { acao, motivo_rejeicao, taxa_comissao = 15 } = req.body
     if (!['aprovar', 'rejeitar'].includes(acao)) return res.status(400).json({ erro: 'Ação deve ser "aprovar" ou "rejeitar"' }) as any
 
@@ -288,12 +315,18 @@ router.post('/:id/aprovar', requireAuth, async (req: AuthRequest, res: Response)
     if (!rest.rows.length) return res.status(404).json({ erro: 'Restaurante não encontrado' }) as any
 
     if (acao === 'rejeitar' && !motivo_rejeicao) return res.status(400).json({ erro: 'Motivo da rejeição é obrigatório' }) as any
+    if (acao === 'aprovar') {
+      const itens = await db.execute({ sql: 'SELECT COUNT(*) as total FROM cardapio WHERE restaurante_id = ? AND COALESCE(disponivel, 1) = 1', args: [String(req.params.id)] })
+      if (Number((itens.rows[0] as any)?.total || 0) < 1) {
+        return res.status(400).json({ erro: 'Adicione ao menos um item de cardápio antes de aprovar o restaurante.' }) as any
+      }
+    }
 
     const novo_status = acao === 'aprovar' ? 'ativo' : 'rejeitado'
     if (acao === 'aprovar') {
-      await db.execute({ sql: 'UPDATE restaurantes SET status = ?, taxa_comissao = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', args: [novo_status, taxa_comissao, String(req.params.id)] })
+      await db.execute({ sql: 'UPDATE restaurantes SET status = ?, taxa_comissao = ?, motivo_rejeicao = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?', args: [novo_status, taxa_comissao, String(req.params.id)] })
     } else {
-      await db.execute({ sql: 'UPDATE restaurantes SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', args: [novo_status, String(req.params.id)] })
+      await db.execute({ sql: 'UPDATE restaurantes SET status = ?, motivo_rejeicao = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', args: [novo_status, motivo_rejeicao, String(req.params.id)] })
     }
 
     res.json({ mensagem: `Restaurante ${acao === 'aprovar' ? 'aprovado' : 'rejeitado'} com sucesso`, status: novo_status, motivo_rejeicao: motivo_rejeicao || null })

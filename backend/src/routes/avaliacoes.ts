@@ -3,6 +3,7 @@ import { Router, Response } from 'express'
 import { db } from '../lib/db'
 import { requireAuth, AuthRequest } from '../middleware/auth'
 import { ensureDatabaseHealth } from '../lib/schema'
+import crypto from 'crypto'
 
 const router = Router()
 
@@ -60,10 +61,11 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     })
     if (jaAvaliado.rows.length) return res.status(409).json({ erro: 'Você já avaliou este pedido' }) as any
 
-    const result = await db.execute({
+    const id = `aval_${crypto.randomUUID().slice(0, 12)}`
+    await db.execute({
       sql: `INSERT INTO avaliacoes (id, cliente_id, pedido_id, restaurante_id, entregador_id, estrelas, comentario, tipo)
-            VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?)`,
-      args: [clienteId, pedidoId, tipo === 'restaurante' ? restauranteId : null, tipo === 'entregador' ? entregadorId : null, estrelas, comentario || '', tipo]
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [id, clienteId, pedidoId, tipo === 'restaurante' ? restauranteId : null, tipo === 'entregador' ? entregadorId : null, estrelas, comentario || '', tipo]
     })
 
     if (tipo === 'restaurante' && restauranteId) {
@@ -77,7 +79,8 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       await db.execute({ sql: 'UPDATE pedidos SET avaliacao_entregador = ? WHERE id = ?', args: [estrelas, pedidoId] })
     }
 
-    res.status(201).json({ mensagem: 'Avaliação registrada com sucesso', id: result.lastInsertRowid })
+    const criada = await db.execute({ sql: 'SELECT * FROM avaliacoes WHERE id = ?', args: [id] })
+    res.status(201).json(criada.rows[0] || { id, mensagem: 'Avaliação registrada com sucesso' })
   } catch (error) {
     console.error('Erro ao criar avaliação:', error)
     res.status(500).json({ erro: 'Erro ao criar avaliação' })

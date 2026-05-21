@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff, Store, User, Bike, ArrowRight } from 'lucide-react'
+import { Eye, EyeOff, Store, User, Bike, ArrowRight, ShieldCheck } from 'lucide-react'
 import logoSrc from '../imgs/Logo-site.png'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
+import api from '../services/api'
 
 // ─── Typewriter hook ──────────────────────────────────────────────────────────
 function useTypewriter(phrases, { typingSpeed = 60, deletingSpeed = 35, pauseMs = 2200 } = {}) {
@@ -76,8 +77,42 @@ const fieldVariant = {
 }
 
 // ─── Config por perfil ────────────────────────────────────────────────────────
-function getConfig(eParceiro, eEntregador) {
-  if (eEntregador) return {
+function getConfig(arg1, arg2) {
+  const flags = typeof arg1 === 'object'
+    ? arg1
+    : { eParceiro: arg1, eEntregador: arg2, eOperador: false }
+  const eOperador = Boolean(flags.eOperador)
+  if (eOperador) return {
+    tipo: 'operador',
+    titulo: 'Aprove parceiros,',
+    destaque: 'com controle.',
+    frases: [
+      'Solicitações aguardando revisão. 📋',
+      'A operação segue com qualidade. ✅',
+      'Aprovação segura de restaurantes. 🛡️',
+      'Tudo pronto para publicar boas lojas. ⭐',
+    ],
+    itens: [
+      { icone: '📋', texto: 'Revise solicitações pendentes' },
+      { icone: '✅', texto: 'Aprove restaurantes com cardápio' },
+      { icone: '🛡️', texto: 'Mantenha a base confiável' },
+    ],
+    gradiente: 'linear-gradient(155deg,#263238 0%,#172126 55%,#1B998B 100%)',
+    accentColor: '#1B998B',
+    corDestaque: 'text-emerald-400',
+    badgeIcone: <ShieldCheck size={13} className="text-emerald-400" />,
+    badgeTexto: 'Gerente master',
+    badgeCor: 'border-emerald-400/30 bg-emerald-400/10',
+    badgeTextoCor: 'text-emerald-400',
+    subtitulo: 'Acesse a aprovação de restaurantes',
+    ctaTexto: 'Entrar como operador',
+    ctaCls: 'bg-emerald-600 hover:bg-emerald-700',
+    mostrarCadastro: false,
+    mostrarAlternativas: false,
+    voltarLabel: '← Entrar como cliente',
+  }
+
+  if (flags.eEntregador) return {
     tipo: 'entregador',
     titulo: 'Faça suas entregas,',
     destaque: 'no seu ritmo.',
@@ -107,7 +142,7 @@ function getConfig(eParceiro, eEntregador) {
     voltarLabel: '← Entrar como cliente',
   }
 
-  if (eParceiro) return {
+  if (flags.eParceiro) return {
     tipo: 'gerente',
     titulo: 'Gerencie seu negócio,',
     destaque: 'com facilidade.',
@@ -173,23 +208,54 @@ export default function Login() {
   const [params] = useSearchParams()
   const eParceiro   = params.get('parceiro')   === 'true'
   const eEntregador = params.get('entregador') === 'true'
+  const eOperador   = params.get('operador')   === 'true'
 
   const [email, setEmail]               = useState('')
   const [senha, setSenha]               = useState('')
   const [mostrarSenha, setMostrarSenha] = useState(false)
   const [carregando, setCarregando]     = useState(false)
-  const { entrar, entrarComGoogle }  = useAuth()
+  const [erro, setErro]                 = useState('')
+  const [sucesso, setSucesso]           = useState('')
+  const [verificacaoLogin, setVerificacaoLogin] = useState(null)
+  const [codigoLogin, setCodigoLogin] = useState('')
+  const { entrar, entrarComGoogle, entrarComEmail, aplicarSessao }  = useAuth()
   const navigate    = useNavigate()
-  const config      = getConfig(eParceiro, eEntregador)
-  const perfilLogin = eEntregador ? 'entregador' : eParceiro ? 'gerente' : 'cliente'
+  const config      = getConfig({ eParceiro, eEntregador, eOperador })
+  const perfilLogin = eOperador ? 'operador' : eEntregador ? 'entregador' : eParceiro ? 'gerente' : 'cliente'
 
   const handleEnviar = async (e) => {
     e.preventDefault()
     setCarregando(true)
+    setErro('')
+    setSucesso('')
     try {
-      await entrar(email, perfilLogin)
+      if (perfilLogin === 'cliente') {
+        const resposta = await entrarComEmail(email)
+        setVerificacaoLogin(resposta)
+        setSucesso('Enviamos um código de acesso para seu e-mail.')
+      } else {
+        await entrar(email, perfilLogin)
+      }
     } catch (error) {
-      alert(error?.message || 'Não foi possível fazer login.')
+      setErro(error?.message || 'Não foi possível fazer login.')
+    } finally {
+      setCarregando(false)
+    }
+  }
+
+  const confirmarCodigoLogin = async (e) => {
+    e.preventDefault()
+    if (!verificacaoLogin?.token || !codigoLogin.trim()) return
+    setCarregando(true)
+    setErro('')
+    try {
+      const resposta = await api.auth.loginConfirmar({
+        token: verificacaoLogin.token,
+        codigo: codigoLogin,
+      })
+      aplicarSessao(resposta.token, resposta.usuario)
+    } catch (error) {
+      setErro(error?.message || 'Código inválido.')
     } finally {
       setCarregando(false)
     }
@@ -199,7 +265,7 @@ export default function Login() {
     try {
       await entrarComGoogle()
     } catch (error) {
-      alert(error?.message || 'Não foi possível iniciar o login com Google.')
+      setErro(error?.message || 'Não foi possível iniciar o login com Google.')
     }
   }
 
@@ -283,7 +349,7 @@ export default function Login() {
         <AnimatePresence mode="wait">
           <Motion.div
             key={config.tipo + '-right'}
-            className="bg-white rounded-3xl shadow-2xl border border-border p-8 sm:p-10 w-full max-w-100"
+            className="bg-white rounded-3xl shadow-2xl border border-border p-8 sm:p-10 w-full max-w-md"
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -16 }}
@@ -304,8 +370,50 @@ export default function Login() {
               Bem-vindo de volta!
             </h2>
             <p className="text-sm text-text-muted font-semibold mb-7">{config.subtitulo}</p>
+            {erro && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+                {erro}
+              </div>
+            )}
+            {sucesso && (
+              <div className="mb-4 rounded-xl border border-accent/20 bg-accent/10 px-4 py-3 text-sm font-semibold text-accent">
+                {sucesso}
+              </div>
+            )}
 
             {/* Form */}
+            {verificacaoLogin && perfilLogin === 'cliente' ? (
+              <Motion.form
+                onSubmit={confirmarCodigoLogin}
+                className="flex flex-col gap-4"
+                variants={formVariants} initial="hidden" animate="show"
+              >
+                <p className="text-sm font-semibold text-text-muted">
+                  Digite o código enviado para <strong className="text-text-primary">{email}</strong>.
+                </p>
+                {verificacaoLogin.devCode && (
+                  <p className="text-xs text-text-muted font-semibold">Código dev: <strong className="text-text-primary">{verificacaoLogin.devCode}</strong></p>
+                )}
+                <input
+                  value={codigoLogin}
+                  onChange={e => setCodigoLogin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Código de 6 dígitos"
+                  required
+                  className={inputCls}
+                />
+                <Motion.button
+                  type="submit" disabled={carregando}
+                  className={`w-full py-4 text-white border-none rounded-xl font-display font-bold text-base cursor-pointer flex items-center justify-center gap-2 transition-colors disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed mt-1 ${config.ctaCls}`}
+                  variants={fieldVariant}
+                >
+                  {carregando ? 'Confirmando...' : 'Confirmar e entrar'}
+                </Motion.button>
+                <button type="button" onClick={() => { setVerificacaoLogin(null); setCodigoLogin(''); setSucesso('') }}
+                  className="text-xs text-text-muted font-bold bg-transparent border-none cursor-pointer hover:underline">
+                  Trocar e-mail
+                </button>
+              </Motion.form>
+            ) : (
             <Motion.form
               onSubmit={handleEnviar}
               className="flex flex-col gap-4"
@@ -318,25 +426,29 @@ export default function Login() {
                   required className={inputCls} />
               </Motion.div>
 
-              <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
-                <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Senha</label>
-                <div className="relative">
-                  <input
-                    type={mostrarSenha ? 'text' : 'password'} placeholder="••••••••"
-                    value={senha} onChange={e => setSenha(e.target.value)} required
-                    className="w-full px-4 py-3.5 pr-12 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,107,53,0.08)] placeholder:text-text-muted placeholder:font-normal"
-                  />
-                  <Motion.button type="button" onClick={() => setMostrarSenha(s => !s)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted bg-transparent border-none cursor-pointer hover:text-text-primary transition-colors"
-                    whileTap={{ scale: 0.85 }}>
-                    {mostrarSenha ? <EyeOff size={16} /> : <Eye size={16} />}
-                  </Motion.button>
-                </div>
-              </Motion.div>
+              {perfilLogin !== 'cliente' && (
+                <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
+                  <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Senha</label>
+                  <div className="relative">
+                    <input
+                      type={mostrarSenha ? 'text' : 'password'} placeholder="••••••••"
+                      value={senha} onChange={e => setSenha(e.target.value)} required
+                      className="w-full px-4 py-3.5 pr-12 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,107,53,0.08)] placeholder:text-text-muted placeholder:font-normal"
+                    />
+                    <Motion.button type="button" onClick={() => setMostrarSenha(s => !s)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted bg-transparent border-none cursor-pointer hover:text-text-primary transition-colors"
+                      whileTap={{ scale: 0.85 }}>
+                      {mostrarSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </Motion.button>
+                  </div>
+                </Motion.div>
+              )}
 
-              <Motion.a href="#" className="text-xs text-primary font-bold self-end hover:underline" variants={fieldVariant}>
-                Esqueceu a senha?
-              </Motion.a>
+              {perfilLogin === 'cliente' && (
+                <Motion.button type="submit" className="text-xs text-primary font-bold self-end hover:underline bg-transparent border-none cursor-pointer" variants={fieldVariant}>
+                  Esqueceu a senha?
+                </Motion.button>
+              )}
 
               <Motion.button
                 type="submit" disabled={carregando}
@@ -348,13 +460,14 @@ export default function Login() {
                 {carregando ? (
                   <>
                     <span className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                    Entrando...
+                    {perfilLogin === 'cliente' ? 'Enviando código...' : 'Entrando...'}
                   </>
                 ) : (
                   <>{config.ctaTexto} <ArrowRight size={16} /></>
                 )}
               </Motion.button>
             </Motion.form>
+            )}
 
             {/* Google + Cadastro — só clientes */}
             {config.mostrarCadastro && (
@@ -406,6 +519,10 @@ export default function Login() {
                   <button onClick={() => navigate('/register/entregador')}
                     className="text-xs text-emerald-600 hover:text-emerald-700 font-bold transition-colors bg-transparent border-none cursor-pointer underline">
                     Cadastrar como entregador →
+                  </button>
+                  <button onClick={() => navigate('/login?operador=true')}
+                    className="text-xs text-text-muted hover:text-emerald-700 transition-colors bg-transparent border-none cursor-pointer font-semibold">
+                    Sou operador →
                   </button>
                 </>
               )}

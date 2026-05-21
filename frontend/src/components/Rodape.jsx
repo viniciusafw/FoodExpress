@@ -56,9 +56,9 @@ export default function Rodape() {
             {contatos.map(({ Icone, texto }) => {
               const IconComponent = Icone
               return (
-                <div key={texto} className="flex items-center gap-2 text-sm font-semibold">
+                <div key={texto} className="flex min-w-0 items-center gap-2 text-sm font-semibold">
                   <IconComponent size={14} className="text-primary shrink-0" />
-                  {texto}
+                  <span className="min-w-0 break-all">{texto}</span>
                 </div>
               )
             })}
@@ -132,14 +132,14 @@ export default function Rodape() {
       </div>
 
       {/* Rodapé inferior */}
-      <div className="border-t border-white/8 max-w-7xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between flex-wrap gap-4">
+      <div className="border-t border-white/8 max-w-7xl mx-auto px-5 sm:px-8 py-5 flex flex-col items-center justify-between gap-4 text-center sm:flex-row sm:text-left">
         <p className="text-xs font-semibold opacity-40">
           © {new Date().getFullYear()} FoodExpress. Todos os direitos reservados.
         </p>
-        <div className="flex gap-2">
+        <div className="flex max-w-full flex-wrap justify-center gap-2 sm:justify-end">
           {selosSeguranca.map((selo) => (
             <span key={selo}
-              className="bg-white/6 border border-white/10 px-2.5 py-1 rounded-md text-[0.7rem] font-bold text-white/50 tracking-wide">
+              className="max-w-full whitespace-normal break-words bg-white/6 border border-white/10 px-2.5 py-1 rounded-md text-[0.7rem] font-bold text-white/50 tracking-wide">
               {selo}
             </span>
           ))}

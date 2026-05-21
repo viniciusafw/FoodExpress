@@ -13,83 +13,66 @@ function getResend() {
 
 const FROM_EMAIL = process.env.FROM_EMAIL || 'FoodExpress <no-reply@resend.dev>';
 
-export async function enviarLinkAcesso(
-  email: string, 
-  link: string, 
-  nome?: string
+export async function enviarCodigoAcesso(
+  email: string,
+  codigo: string,
+  nome?: string,
+  contexto: 'cadastro' | 'login' = 'cadastro'
 ) {
+  const titulo = contexto === 'login' ? 'Código de acesso FoodExpress' : 'Confirme sua conta FoodExpress';
   const html = `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8">
-      <title>Acesse sua conta FoodExpress</title>
+      <title>${titulo}</title>
       <style>
         body { font-family: system-ui, sans-serif; background: #FFF8F5; color: #2D3436; }
         .container { max-width: 500px; margin: 40px auto; background: white; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.08); }
         .header { background: #FF6B35; color: white; padding: 30px 20px; text-align: center; }
-        .content { padding: 30px 25px; line-height: 1.6; }
-        .button {
-          display: inline-block;
-          background: #FF6B35;
-          color: white;
-          padding: 14px 32px;
-          border-radius: 12px;
-          text-decoration: none;
-          font-weight: bold;
-          margin: 20px 0;
-          font-size: 16px;
-        }
+        .content { padding: 30px 25px; line-height: 1.6; text-align: center; }
+        .code { display: inline-block; letter-spacing: 8px; font-size: 34px; font-weight: 800; background: #FFF0EB; color: #FF6B35; padding: 16px 20px; border-radius: 14px; margin: 18px 0; }
         .footer { text-align: center; padding: 20px; font-size: 12px; color: #8A7B74; }
       </style>
     </head>
     <body>
       <div class="container">
-        <div class="header">
-          <h1>🍔 FoodExpress</h1>
-        </div>
+        <div class="header"><h1>FoodExpress</h1></div>
         <div class="content">
-          <h2>Olá${nome ? ', ' + nome : ''}! 👋</h2>
-          <p>Seu link de acesso à plataforma chegou!</p>
-          <p>Clique no botão abaixo para entrar:</p>
-          
-          <a href="${link}" class="button" target="_blank">ENTRAR NA FOOD EXPRESS</a>
-          
-          <p><strong>Este link expira em 1 hora.</strong></p>
+          <h2>Olá${nome ? ', ' + nome : ''}!</h2>
+          <p>${contexto === 'login' ? 'Use o código abaixo para entrar na sua conta.' : 'Use o código abaixo para confirmar seu e-mail e criar sua conta.'}</p>
+          <div class="code">${codigo}</div>
+          <p><strong>Este código expira em 10 minutos.</strong></p>
           <p>Se você não solicitou, pode ignorar este e-mail.</p>
         </div>
-        <div class="footer">
-          © 2026 FoodExpress • Aracati, CE
-        </div>
+        <div class="footer">© 2026 FoodExpress</div>
       </div>
     </body>
     </html>
   `;
 
   try {
-    // Modo desenvolvimento (sem chave configurada)
     const resend = getResend();
     if (!resend) {
-      console.log('\n📧 === EMAIL DE TESTE (Modo Dev) ===');
+      console.log('\n📧 === CODIGO DE EMAIL (Modo Dev) ===');
       console.log(`Para: ${email}`);
-      console.log(`Link: ${link}`);
-      console.log('=====================================\n');
+      console.log(`Código: ${codigo}`);
+      console.log('====================================\n');
       return { success: true, dev: true };
     }
 
     const { data, error } = await resend.emails.send({
       from: FROM_EMAIL,
       to: [email],
-      subject: 'Seu link de acesso - FoodExpress',
+      subject: titulo,
       html,
     });
 
     if (error) throw error;
-
-    console.log(`✅ Email enviado com sucesso para ${email}`);
+    console.log(`✅ Código enviado com sucesso para ${email}`);
     return { success: true, data };
   } catch (err) {
-    console.error('❌ Erro ao enviar email:', err);
+    console.error('❌ Erro ao enviar código por email:', err);
     return { success: false, error: err };
   }
 }

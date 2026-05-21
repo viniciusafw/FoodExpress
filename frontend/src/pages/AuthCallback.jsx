@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext'
 export default function AuthCallback() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { estaLogado, usuario, carregando } = useAuth()
+  const { estaLogado, usuario, carregando, aplicarSessao } = useAuth()
   const [erro, setErro] = useState('')
 
   useEffect(() => {
@@ -17,6 +17,8 @@ export default function AuthCallback() {
     if (erroParam) {
       const msgs = {
         token_expirado: 'O link expirou. Solicite um novo.',
+        token_invalido: 'O link é inválido. Solicite um novo.',
+        token_expirado_ou_invalido: 'O link expirou ou já foi usado. Solicite um novo.',
         google_cancelado: 'Login com Google cancelado.',
         google_falhou: 'Não foi possível autenticar com o Google.',
         google_erro: 'Erro ao conectar com o Google.',
@@ -45,30 +47,20 @@ export default function AuthCallback() {
       return
     }
 
-    // Salva o JWT no localStorage
-    localStorage.setItem('token', token)
-
-    // Decodifica o payload (sem verificar assinatura — apenas para pegar userId)
+    let usuarioSessao = { perfil }
     try {
       const payload = JSON.parse(atob(token.split('.')[1]))
-      // Salva dados básicos do usuário
-      localStorage.setItem('usuario', JSON.stringify({
+      usuarioSessao = {
         id: payload.userId,
         perfil: payload.role || perfil,
         email: payload.email || '',
         nome: payload.nome || payload.email?.split('@')[0] || '',
-      }))
+      }
     } catch {
       // não bloqueia o fluxo se o decode falhar
     }
 
-    // Redireciona conforme perfil
-    const destinos = {
-      cliente: '/',
-      gerente: '/gerente',
-      entregador: '/entregador',
-    }
-    navigate(destinos[perfil] || '/', { replace: true })
+    aplicarSessao(token, usuarioSessao)
   }, [searchParams, carregando, estaLogado, usuario, navigate])
 
   if (erro) {

@@ -51,7 +51,7 @@ export default function PromotionalBanner() {
             type="button"
             onClick={() => abrirOferta(b)}
             aria-label={`Abrir oferta: ${b.titulo}`}
-            className="shrink-0 w-70 sm:w-90 md:w-120 rounded-2xl p-5 sm:p-7 flex items-center justify-between gap-3 cursor-pointer relative overflow-hidden border-none text-left"
+            className="shrink-0 w-[17.5rem] sm:w-[22.5rem] md:w-[30rem] rounded-2xl p-5 sm:p-7 flex items-center justify-between gap-3 cursor-pointer relative overflow-hidden border-none text-left"
             style={{ background: b.bg }}
             initial={{ opacity: 0, y: 24 }}
             whileInView={{ opacity: 1, y: 0 }}

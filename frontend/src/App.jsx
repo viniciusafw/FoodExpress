@@ -42,7 +42,10 @@ function RotaProtegida({ children, perfil }) {
   const { estaLogado, usuario, carregando } = useAuth()
   if (carregando) return null
   if (!estaLogado) return <Navigate to="/login" replace />
-  if (perfil && usuario?.perfil !== perfil) return <Navigate to="/" replace />
+  if (perfil) {
+    const perfis = Array.isArray(perfil) ? perfil : [perfil]
+    if (!perfis.includes(usuario?.perfil)) return <Navigate to="/" replace />
+  }
   return children
 }
 
@@ -51,6 +54,7 @@ function HomeOuPainel() {
   const { usuario, carregando } = useAuth()
   if (carregando) return null
   if (usuario?.perfil === 'gerente') return <Navigate to="/gerente" replace />
+  if (usuario?.perfil === 'operador') return <Navigate to="/gerente/aprovacoes" replace />
   if (usuario?.perfil === 'entregador') return <Navigate to="/entregador" replace />
   if (usuario?.perfil === 'restaurante') return <Navigate to="/painel-restaurante" replace />
   return <Home />
@@ -83,7 +87,6 @@ function AnimatedRoutes() {
         <Route path="/politica-privacidade" element={<PageWrapper><PoliticaPrivacidade /></PageWrapper>} />
         <Route path="/termos-parceiros" element={<PageWrapper><TermosParceiros /></PageWrapper>} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/auth/ativar" element={<AuthCallback />} />
         <Route path="/pedido/:id" element={<PageWrapper><DetalhesPedido /></PageWrapper>} />
         <Route path="/rastrear/:id" element={<PageWrapper><RastrearPedido /></PageWrapper>} />
 
@@ -103,7 +106,7 @@ function AnimatedRoutes() {
 
         {/* Dashboard e rotas do gerente */}
         <Route path="/gerente/*" element={
-          <RotaProtegida perfil="gerente">
+          <RotaProtegida perfil={['gerente', 'operador']}>
             <PageWrapper><DashboardGerente /></PageWrapper>
           </RotaProtegida>
         } />

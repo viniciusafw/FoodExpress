@@ -158,7 +158,7 @@ export default function CadastroLoja() {
         <span className="text-sm font-bold text-text-secondary ml-auto hidden sm:block">Cadastro de Parceiro</span>
       </Motion.div>
 
-      <div className="max-w-135 mx-auto px-4 sm:px-6 py-8 pb-16">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 pb-16">
 
         {/* Título */}
         <Motion.div

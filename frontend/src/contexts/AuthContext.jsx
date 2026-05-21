@@ -2,7 +2,7 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth0 } from '@auth0/auth0-react';
-import api from '../services/api';
+import api, { getApiBaseUrl } from '../services/api';
 
 const AuthContext = createContext();
 
@@ -34,6 +34,10 @@ async function enviarLinkLoginPorEmail(email) {
   const emailLimpo = String(email || '').trim()
   if (!emailLimpo) throw new Error('E-mail obrigatório para login.')
   return api.auth.login({ email: emailLimpo })
+}
+
+function destinoPorPerfil(perfil) {
+  return { cliente: '/', gerente: '/gerente', entregador: '/entregador', restaurante: '/painel-restaurante', operador: '/gerente/aprovacoes' }[perfil] ?? '/'
 }
 
 export function AuthProvider({ children }) {
@@ -84,7 +88,7 @@ export function AuthProvider({ children }) {
     const sincronizarAuth0 = async () => {
       setAuth0Sincronizado(false);
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/auth/auth0-sync`, {
+        const response = await fetch(`${getApiBaseUrl()}/api/auth/auth0-sync`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -163,8 +167,35 @@ export function AuthProvider({ children }) {
         .catch(err => console.warn('Restaurante será criado no próximo acesso:', err))
     }
 
-    const destinos = { cliente: '/', gerente: '/gerente', entregador: '/entregador', restaurante: '/painel-restaurante' }
-    navigate(destinos[perfil] ?? '/')
+    navigate(destinoPorPerfil(perfil))
+  }
+
+  const aplicarSessao = (token, dadosUsuario = {}) => {
+    if (!token) throw new Error('Token de sessão não informado.')
+    const usuarioSessao = {
+      id: dadosUsuario.id,
+      nome: dadosUsuario.nome || dadosUsuario.name || dadosUsuario.email?.split('@')[0] || 'Usuário',
+      email: dadosUsuario.email || '',
+      telefone: dadosUsuario.telefone || '',
+      perfil: dadosUsuario.perfil || 'cliente',
+    }
+
+    if (!usuarioSessao.id) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        usuarioSessao.id = payload.userId
+        usuarioSessao.perfil = payload.role || usuarioSessao.perfil
+        usuarioSessao.email = payload.email || usuarioSessao.email
+        usuarioSessao.nome = payload.nome || usuarioSessao.nome
+      } catch {
+        usuarioSessao.id = `${usuarioSessao.perfil}-${normalizarIdentificador(usuarioSessao.email || usuarioSessao.telefone)}`
+      }
+    }
+
+    localStorage.setItem('usuario', JSON.stringify(usuarioSessao))
+    localStorage.setItem('token', token)
+    setUsuario(usuarioSessao)
+    navigate(destinoPorPerfil(usuarioSessao.perfil), { replace: true })
   }
 
   const entrarComGoogle = async () => {
@@ -183,18 +214,11 @@ export function AuthProvider({ children }) {
   };
 
   const cadastrarCliente = async (dados) => {
-    const novoUsuario = {
-      id: idEstavelPorEmail(dados.email, 'cliente'),
+    return api.auth.registrar({
       nome: dados.nome || dados.name,
       email: dados.email,
       telefone: dados.telefone || dados.phone,
-      perfil: 'cliente',
-    };
-    const token = await criarTokenBackend(novoUsuario)
-    localStorage.setItem('usuario', JSON.stringify(novoUsuario));
-    localStorage.setItem('token', token);
-    setUsuario(novoUsuario);
-    navigate('/');
+    })
   };
 
   const cadastrarGerente = async (dados) => {
@@ -234,8 +258,10 @@ export function AuthProvider({ children }) {
         ownerPhone: novoUsuario.telefone,
       })
     } catch (error) {
-      // Não bloqueia o cadastro se o backend falhar — o gerente ainda pode usar o painel
-      console.warn('Não foi possível criar restaurante no backend (será criado no primeiro acesso):', error)
+      localStorage.removeItem('usuario');
+      localStorage.removeItem('token');
+      setUsuario(null);
+      throw error;
     }
 
     navigate('/gerente');
@@ -261,6 +287,7 @@ export function AuthProvider({ children }) {
   const valor = useMemo(() => ({
     usuario,
     entrar,
+    aplicarSessao,
     entrarComGoogle,
     entrarComEmail: enviarLinkLoginPorEmail,
     cadastrarCliente,

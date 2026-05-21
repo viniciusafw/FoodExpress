@@ -42,7 +42,7 @@ export default function CartDrawer({ isOpen, onClose }) {
           <Motion.div
             className="fixed z-[9999] bg-white flex flex-col
               bottom-0 left-0 right-0 w-full rounded-t-3xl max-h-[90dvh]
-              md:top-0 md:bottom-0 md:left-auto md:right-0 md:w-100 md:max-h-none md:rounded-none
+              md:top-0 md:bottom-0 md:left-auto md:right-0 md:w-[25rem] md:max-h-none md:rounded-none
               shadow-[0_-4px_40px_rgba(0,0,0,0.15)] md:shadow-[-8px_0_40px_rgba(0,0,0,0.15)]"
             initial={typeof window !== 'undefined' && window.innerWidth >= 768 ? { x: '100%', opacity: 0 } : { y: '100%', opacity: 0 }}
             animate={{ x: 0, y: 0, opacity: 1 }}

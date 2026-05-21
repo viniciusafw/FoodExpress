@@ -82,6 +82,7 @@ async function migrate() {
   await ensureColumn('restaurantes', 'formas_pagamento', 'TEXT')
   await ensureColumn('restaurantes', 'logo', 'TEXT')
   await ensureColumn('restaurantes', 'capa', 'TEXT')
+  await ensureColumn('restaurantes', 'motivo_rejeicao', 'TEXT')
 
   await ensureColumn('cardapio', 'imagem', 'TEXT')
   await ensureColumn('pedidos', 'desconto', 'REAL DEFAULT 0')
@@ -112,6 +113,18 @@ async function migrate() {
       tipo TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`,
+    `CREATE TABLE IF NOT EXISTS usuarios_pendentes (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE,
+      nome TEXT,
+      telefone TEXT,
+      token TEXT NOT NULL,
+      codigo TEXT,
+      tipo TEXT DEFAULT 'email',
+      expira_em DATETIME NOT NULL,
+      usado INTEGER DEFAULT 0,
+      criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`,
   ]
 
   for (const stmt of extras) {
@@ -132,8 +145,17 @@ async function migrate() {
   await ensureColumn('avaliacoes', 'comentario', 'TEXT')
   await ensureColumn('avaliacoes', 'tipo', "TEXT DEFAULT 'restaurante'")
   await ensureColumn('avaliacoes', 'created_at', 'DATETIME')
+  await ensureColumn('usuarios_pendentes', 'email', 'TEXT')
+  await ensureColumn('usuarios_pendentes', 'nome', 'TEXT')
+  await ensureColumn('usuarios_pendentes', 'telefone', 'TEXT')
+  await ensureColumn('usuarios_pendentes', 'token', 'TEXT')
+  await ensureColumn('usuarios_pendentes', 'codigo', 'TEXT')
+  await ensureColumn('usuarios_pendentes', 'tipo', "TEXT DEFAULT 'email'")
+  await ensureColumn('usuarios_pendentes', 'expira_em', 'DATETIME')
+  await ensureColumn('usuarios_pendentes', 'usado', 'INTEGER DEFAULT 0')
+  await ensureColumn('usuarios_pendentes', 'criado_em', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
 
-  await db.execute("UPDATE restaurantes SET status = 'ativo' WHERE status IS NULL OR status = '' OR status = 'pendente'")
+  await db.execute("UPDATE restaurantes SET status = 'ativo' WHERE status IS NULL OR status = ''")
   await db.execute("UPDATE restaurantes SET user_id = substr(id, 6) WHERE (user_id IS NULL OR user_id = '') AND id LIKE 'rest_%'")
   await db.execute("UPDATE entregadores SET cpf = 'AUTO-' || user_id WHERE cpf = '000.000.000-00' AND user_id IS NOT NULL AND user_id != ''")
 

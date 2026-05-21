@@ -270,7 +270,9 @@ export default function Checkout() {
     if (itens.length === 0) return
 
     const restaurantes = Array.from(new Set(itens
-      .map(i => i.restauranteId || i.loja?.id)
+      .map(i => i.restauranteId || i.restaurante_id || i.loja?.id || i.restaurantId)
+      .filter(id => id !== undefined && id !== null && id !== '')
+      .map(String)
       .filter(Boolean)
     ))
     if (restaurantes.length > 1) {
@@ -296,6 +298,7 @@ export default function Checkout() {
         nome: i.name || i.nome,
         quantidade: i.quantidade,
         preco: Number(i.price || i.preco || 0),
+        restauranteId: i.restauranteId || i.restaurante_id || i.loja?.id || restauranteId,
       }))
 
       if (!restauranteId) {

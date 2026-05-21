@@ -4,11 +4,11 @@ import { Router } from 'express';
 import { db } from '../lib/db';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
-import { enviarLinkAcesso } from '../lib/email';
+import { enviarCodigoAcesso } from '../lib/email';
 
 const router = Router();
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://food-express-pearl.vercel.app').replace(/\/$/, '');
 const PERFIS_VALIDOS = new Set(['cliente', 'gerente', 'entregador', 'restaurante', 'operador']);
 
 // ── Helper ───────────────────────────────────────────────────────────────────
@@ -40,9 +40,20 @@ function normalizarEmail(email: string) {
   return String(email || '').trim().toLowerCase();
 }
 
+function normalizarTelefone(telefone: string) {
+  const digitos = String(telefone || '').replace(/\D/g, '');
+  if (!digitos) return '';
+  return digitos.startsWith('55') ? digitos : `55${digitos}`;
+}
+
+function gerarCodigoVerificacao() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
 async function buscarPerfisPorEmail(email: string) {
   const emailLimpo = normalizarEmail(email);
   const perfis: string[] = [];
+  if (!emailLimpo) return perfis;
 
   const cliente = await db.execute({ sql: 'SELECT id FROM clientes WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
   if (cliente.rows.length) perfis.push('cliente');
@@ -56,14 +67,87 @@ async function buscarPerfisPorEmail(email: string) {
   const gerente = await db.execute({ sql: 'SELECT id FROM gerentes WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
   if (gerente.rows.length) perfis.push('gerente');
 
+  const operador = await db.execute({ sql: 'SELECT id FROM operadores WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
+  if (operador.rows.length) perfis.push('operador');
+
   return perfis;
 }
 
+async function buscarPerfisPorTelefone(telefone: string) {
+  const tel = normalizarTelefone(telefone);
+  const perfis: string[] = [];
+  if (!tel) return perfis;
+  const like = `%${tel.slice(-11)}%`;
+
+  const cliente = await db.execute({ sql: "SELECT id FROM clientes WHERE replace(replace(replace(replace(replace(telefone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', '') LIKE ? LIMIT 1", args: [like] });
+  if (cliente.rows.length) perfis.push('cliente');
+
+  const entregador = await db.execute({ sql: "SELECT id FROM entregadores WHERE replace(replace(replace(replace(replace(telefone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', '') LIKE ? LIMIT 1", args: [like] });
+  if (entregador.rows.length) perfis.push('entregador');
+
+  const restaurante = await db.execute({ sql: "SELECT id FROM restaurantes WHERE replace(replace(replace(replace(replace(telefone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', '') LIKE ? LIMIT 1", args: [like] });
+  if (restaurante.rows.length) perfis.push('restaurante');
+
+  const gerente = await db.execute({ sql: "SELECT id FROM gerentes WHERE replace(replace(replace(replace(replace(telefone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', '') LIKE ? LIMIT 1", args: [like] });
+  if (gerente.rows.length) perfis.push('gerente');
+
+  return perfis;
+}
+
+async function criarOuAtualizarClientePorEmail(row: any) {
+  const emailLimpo = normalizarEmail(row.email);
+  const telefone = row.telefone || '';
+  const nome = row.nome || emailLimpo.split('@')[0];
+
+  const existenteCliente = await db.execute({
+    sql: 'SELECT id, nome, email, telefone FROM clientes WHERE lower(email) = ? LIMIT 1',
+    args: [emailLimpo]
+  });
+
+  if (existenteCliente.rows.length) {
+    const cliente = existenteCliente.rows[0] as any;
+    if (!cliente.nome && nome) {
+      await db.execute({ sql: 'UPDATE clientes SET nome = ? WHERE id = ?', args: [nome, cliente.id] });
+    }
+    if (!cliente.telefone && telefone) {
+      await db.execute({ sql: 'UPDATE clientes SET telefone = ? WHERE id = ?', args: [telefone, cliente.id] });
+    }
+    const atualizado = await db.execute({ sql: 'SELECT * FROM clientes WHERE id = ?', args: [cliente.id] });
+    return atualizado.rows[0] as any;
+  }
+
+  const clienteId = `cli_${crypto.randomUUID().slice(0, 8)}`;
+  await db.execute({
+    sql: `INSERT INTO clientes (id, user_id, nome, email, telefone, total_pedidos)
+          VALUES (?, ?, ?, ?, ?, 0)`,
+    args: [clienteId, clienteId, nome, emailLimpo, telefone]
+  });
+  const criado = await db.execute({ sql: 'SELECT * FROM clientes WHERE id = ?', args: [clienteId] });
+  return criado.rows[0] as any;
+}
+
+function respostaSessaoCliente(cliente: any) {
+  const token = gerarToken(cliente.id, 'cliente', {
+    email: cliente.email || '',
+    nome: cliente.nome || '',
+  });
+  return {
+    token,
+    usuario: {
+      id: cliente.id,
+      nome: cliente.nome || '',
+      email: cliente.email || '',
+      telefone: cliente.telefone || '',
+      perfil: 'cliente',
+    }
+  };
+}
+
 // ── POST /api/auth/registrar ─────────────────────────────────────────────────
-// Etapa 1: Salva email como pendente e envia link de confirmação
+// Etapa 1: Salva email como pendente e envia código de confirmação
 router.post('/registrar', async (req, res) => {
   try {
-    const { email, telefone } = req.body;
+    const { email, telefone, nome } = req.body;
     if (!email) return res.status(400).json({ erro: 'E-mail obrigatório' });
 
     const emailLimpo = email.toLowerCase().trim();
@@ -81,21 +165,25 @@ router.post('/registrar', async (req, res) => {
     // Cria registro pendente
     const pendingId = `pend_${crypto.randomUUID().slice(0, 12)}`;
     const tokenAtivacao = crypto.randomUUID();
-    const expira = new Date(Date.now() + 3600000).toISOString(); // 1 hora
+    const codigo = gerarCodigoVerificacao();
+    const expira = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     await db.execute({
       sql: `INSERT OR REPLACE INTO usuarios_pendentes 
-            (id, email, telefone, token, expira_em, criado_em)
-            VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      args: [pendingId, emailLimpo, telefone || '', tokenAtivacao, expira]
+            (id, email, nome, telefone, token, codigo, tipo, expira_em, criado_em)
+            VALUES (?, ?, ?, ?, ?, ?, 'email', ?, CURRENT_TIMESTAMP)`,
+      args: [pendingId, emailLimpo, nome || '', telefone || '', tokenAtivacao, codigo, expira]
     }).catch(async () => {
       // Cria a tabela se não existir
       await db.execute(`
         CREATE TABLE IF NOT EXISTS usuarios_pendentes (
           id TEXT PRIMARY KEY,
-          email TEXT UNIQUE NOT NULL,
+          email TEXT UNIQUE,
+          nome TEXT,
           telefone TEXT,
           token TEXT NOT NULL,
+          codigo TEXT,
+          tipo TEXT DEFAULT 'email',
           expira_em DATETIME NOT NULL,
           usado INTEGER DEFAULT 0,
           criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -103,19 +191,19 @@ router.post('/registrar', async (req, res) => {
       `);
       await db.execute({
         sql: `INSERT OR REPLACE INTO usuarios_pendentes 
-              (id, email, telefone, token, expira_em)
-              VALUES (?, ?, ?, ?, ?)`,
-        args: [pendingId, emailLimpo, telefone || '', tokenAtivacao, expira]
+              (id, email, nome, telefone, token, codigo, tipo, expira_em)
+              VALUES (?, ?, ?, ?, ?, ?, 'email', ?)`,
+        args: [pendingId, emailLimpo, nome || '', telefone || '', tokenAtivacao, codigo, expira]
       });
     });
 
-    const linkConfirmacao = `${FRONTEND_URL}/auth/ativar?token=${tokenAtivacao}`;
-
-    await enviarLinkAcesso(emailLimpo, linkConfirmacao, emailLimpo.split('@')[0]);
+    await enviarCodigoAcesso(emailLimpo, codigo, nome || emailLimpo.split('@')[0], 'cadastro');
 
     res.json({
-      mensagem: 'Link de confirmação enviado para seu e-mail. Verifique sua caixa de entrada.',
-      ...(process.env.NODE_ENV !== 'production' && { devLink: linkConfirmacao })
+      mensagem: 'Código de confirmação enviado para seu e-mail.',
+      token: tokenAtivacao,
+      expira_em: expira,
+      ...(process.env.NODE_ENV !== 'production' && { devCode: codigo })
     });
   } catch (error) {
     console.error(error);
@@ -123,72 +211,34 @@ router.post('/registrar', async (req, res) => {
   }
 });
 
-// ── GET /api/auth/ativar?token=XXX ───────────────────────────────────────────
-// Etapa 2: Confirma o email e cria a conta de verdade
-router.get('/ativar', async (req, res) => {
+// ── POST /api/auth/email/confirmar ───────────────────────────────────────────
+router.post('/email/confirmar', async (req, res) => {
   try {
-    const { token } = req.query;
-    if (!token) return res.redirect(`${FRONTEND_URL}/login?erro=token_invalido`);
+    const { token, codigo } = req.body;
+    if (!token || !codigo) return res.status(400).json({ erro: 'Token e código são obrigatórios' });
 
-    // Busca o registro pendente
     const pending = await db.execute({
-      sql: `SELECT * FROM usuarios_pendentes 
-            WHERE token = ? AND usado = 0 AND expira_em > datetime('now')`,
-      args: [token]
+      sql: `SELECT * FROM usuarios_pendentes
+            WHERE token = ? AND codigo = ? AND tipo = 'email' AND usado = 0 AND expira_em > datetime('now')`,
+      args: [token, String(codigo).trim()]
     });
-
     if (!pending.rows.length) {
-      return res.redirect(`${FRONTEND_URL}/login?erro=token_expirado_ou_invalido`);
+      return res.status(400).json({ erro: 'Código inválido ou expirado' });
     }
 
-    const row = pending.rows[0];
-    const email = row.email as string;
-    const telefone = row.telefone as string;
-
-    const emailLimpo = normalizarEmail(email);
-    const existenteCliente = await db.execute({
-      sql: 'SELECT id, nome, telefone FROM clientes WHERE lower(email) = ? LIMIT 1',
-      args: [emailLimpo]
-    });
-
-    let clienteId = `cli_${crypto.randomUUID().slice(0, 8)}`;
-    let clienteNome = email.split('@')[0];
-    let clienteTelefone = telefone || '';
-
-    if (existenteCliente.rows.length) {
-      const cliente = existenteCliente.rows[0] as any;
-      clienteId = cliente.id;
-      clienteNome = cliente.nome || clienteNome;
-      clienteTelefone = cliente.telefone || clienteTelefone;
-
-      if (!cliente.nome && clienteNome) {
-        await db.execute({ sql: 'UPDATE clientes SET nome = ? WHERE id = ?', args: [clienteNome, clienteId] });
-      }
-      if (!cliente.telefone && clienteTelefone) {
-        await db.execute({ sql: 'UPDATE clientes SET telefone = ? WHERE id = ?', args: [clienteTelefone, clienteId] });
-      }
-    } else {
-      await db.execute({
-        sql: `INSERT INTO clientes (id, user_id, nome, email, telefone, total_pedidos)
-              VALUES (?, ?, ?, ?, ?, 0)`,
-        args: [clienteId, clienteId, clienteNome, emailLimpo, clienteTelefone]
-      });
+    const row = pending.rows[0] as any;
+    const perfisExistentes = await buscarPerfisPorEmail(row.email);
+    const outrosPerfis = perfisExistentes.filter(p => p !== 'cliente');
+    if (outrosPerfis.length) {
+      return res.status(409).json({ erro: `Este e-mail já está cadastrado como perfil ${outrosPerfis.join(', ')}.` });
     }
 
-    // Marca token como usado
-    await db.execute({
-      sql: 'UPDATE usuarios_pendentes SET usado = 1 WHERE token = ?',
-      args: [token]
-    });
-
-    // Gera JWT
-    const jwt_token = gerarToken(clienteId, 'cliente');
-
-    // Redireciona com token (funciona melhor no celular)
-    res.redirect(`${FRONTEND_URL}/auth/callback?token=${jwt_token}&perfil=cliente`);
+    const cliente = await criarOuAtualizarClientePorEmail(row);
+    await db.execute({ sql: 'UPDATE usuarios_pendentes SET usado = 1 WHERE token = ?', args: [token] });
+    res.json(respostaSessaoCliente(cliente));
   } catch (error) {
     console.error(error);
-    res.redirect(`${FRONTEND_URL}/login?erro=erro_ao_confirmar`);
+    res.status(500).json({ erro: 'Erro ao confirmar e-mail' });
   }
 });
 
@@ -215,26 +265,171 @@ router.post('/login', async (req, res) => {
       return res.status(404).json({ erro: 'E-mail não cadastrado. Faça o cadastro primeiro.' });
     }
 
-    const tokenMagico = crypto.randomUUID();
-    const expira = new Date(Date.now() + 3600000).toISOString();
+    const tokenLogin = crypto.randomUUID();
+    const codigo = gerarCodigoVerificacao();
+    const expira = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     await db.execute({
       sql: `INSERT OR REPLACE INTO usuarios_pendentes 
-            (id, email, token, expira_em, criado_em)
-            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-      args: [`login_${crypto.randomUUID().slice(0,8)}`, emailLimpo, tokenMagico, expira]
+            (id, email, token, codigo, tipo, expira_em, criado_em)
+            VALUES (?, ?, ?, ?, 'login', ?, CURRENT_TIMESTAMP)`,
+      args: [`login_${crypto.randomUUID().slice(0,8)}`, emailLimpo, tokenLogin, codigo, expira]
     });
 
-    const link = `${FRONTEND_URL}/auth/ativar?token=${tokenMagico}`;
-
-    await enviarLinkAcesso(emailLimpo, link);
+    await enviarCodigoAcesso(emailLimpo, codigo, emailLimpo.split('@')[0], 'login');
 
     res.json({
-      mensagem: 'Link de acesso enviado para seu e-mail',
-      ...(process.env.NODE_ENV !== 'production' && { devLink: link })
+      mensagem: 'Código de acesso enviado para seu e-mail',
+      token: tokenLogin,
+      expira_em: expira,
+      ...(process.env.NODE_ENV !== 'production' && { devCode: codigo })
     });
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao processar login' });
+  }
+});
+
+// ── POST /api/auth/login/confirmar ───────────────────────────────────────────
+router.post('/login/confirmar', async (req, res) => {
+  try {
+    const { token, codigo } = req.body;
+    if (!token || !codigo) return res.status(400).json({ erro: 'Token e código são obrigatórios' });
+
+    const pending = await db.execute({
+      sql: `SELECT * FROM usuarios_pendentes
+            WHERE token = ? AND codigo = ? AND tipo = 'login' AND usado = 0 AND expira_em > datetime('now')`,
+      args: [token, String(codigo).trim()]
+    });
+    if (!pending.rows.length) {
+      return res.status(400).json({ erro: 'Código inválido ou expirado' });
+    }
+
+    const emailLimpo = normalizarEmail((pending.rows[0] as any).email);
+    const clienteResult = await db.execute({
+      sql: 'SELECT * FROM clientes WHERE lower(email) = ? LIMIT 1',
+      args: [emailLimpo]
+    });
+    if (!clienteResult.rows.length) {
+      return res.status(404).json({ erro: 'E-mail não cadastrado. Faça o cadastro primeiro.' });
+    }
+
+    await db.execute({ sql: 'UPDATE usuarios_pendentes SET usado = 1 WHERE token = ?', args: [token] });
+    res.json(respostaSessaoCliente(clienteResult.rows[0] as any));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ erro: 'Erro ao confirmar login' });
+  }
+});
+
+// ── POST /api/auth/telefone/iniciar ──────────────────────────────────────────
+// Fluxo sem SMS pago: gera código e link WhatsApp para envio/conferência manual.
+router.post('/telefone/iniciar', async (req, res) => {
+  try {
+    const { nome, telefone } = req.body;
+    const telefoneLimpo = normalizarTelefone(telefone);
+    if (!telefoneLimpo) return res.status(400).json({ erro: 'Telefone obrigatório' });
+
+    const perfisExistentes = await buscarPerfisPorTelefone(telefoneLimpo);
+    const outrosPerfis = perfisExistentes.filter(p => p !== 'cliente');
+    if (outrosPerfis.length) {
+      return res.status(409).json({ erro: `Este telefone já está cadastrado como perfil ${outrosPerfis.join(', ')}.` });
+    }
+
+    const token = crypto.randomUUID();
+    const codigo = String(Math.floor(100000 + Math.random() * 900000));
+    const expira = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const pendingId = `tel_${crypto.randomUUID().slice(0, 12)}`;
+
+    await db.execute({
+      sql: `INSERT INTO usuarios_pendentes
+            (id, nome, telefone, token, codigo, tipo, expira_em, criado_em)
+            VALUES (?, ?, ?, ?, ?, 'telefone', ?, CURRENT_TIMESTAMP)`,
+      args: [pendingId, nome || '', telefoneLimpo, token, codigo, expira]
+    });
+
+    const numeroDestino = normalizarTelefone(process.env.WHATSAPP_VERIFICATION_NUMBER || telefoneLimpo);
+    const texto = `FoodExpress: meu codigo de verificacao e ${codigo}`;
+    const whatsappLink = `https://wa.me/${numeroDestino}?text=${encodeURIComponent(texto)}`;
+
+    res.json({
+      mensagem: 'Código de verificação gerado.',
+      token,
+      whatsappLink,
+      expira_em: expira,
+      ...(process.env.NODE_ENV !== 'production' && { devCode: codigo })
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ erro: 'Erro ao iniciar verificação por telefone' });
+  }
+});
+
+// ── POST /api/auth/telefone/confirmar ────────────────────────────────────────
+router.post('/telefone/confirmar', async (req, res) => {
+  try {
+    const { token, codigo } = req.body;
+    if (!token || !codigo) return res.status(400).json({ erro: 'Token e código são obrigatórios' });
+
+    const pending = await db.execute({
+      sql: `SELECT * FROM usuarios_pendentes
+            WHERE token = ? AND codigo = ? AND tipo = 'telefone' AND usado = 0 AND expira_em > datetime('now')`,
+      args: [token, String(codigo).trim()]
+    });
+    if (!pending.rows.length) {
+      return res.status(400).json({ erro: 'Código inválido ou expirado' });
+    }
+
+    const row = pending.rows[0] as any;
+    const telefone = normalizarTelefone(row.telefone);
+    const emailLocal = `${telefone}@telefone.local`;
+    const nome = row.nome || `Cliente ${telefone.slice(-4)}`;
+
+    const perfisExistentes = await buscarPerfisPorTelefone(telefone);
+    const outrosPerfis = perfisExistentes.filter(p => p !== 'cliente');
+    if (outrosPerfis.length) {
+      return res.status(409).json({ erro: `Este telefone já está cadastrado como perfil ${outrosPerfis.join(', ')}.` });
+    }
+
+    const existente = await db.execute({
+      sql: `SELECT * FROM clientes
+            WHERE replace(replace(replace(replace(replace(telefone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', '') LIKE ?
+               OR lower(email) = ?
+            ORDER BY created_at DESC LIMIT 1`,
+      args: [`%${telefone.slice(-11)}%`, emailLocal]
+    });
+
+    let cliente: any = existente.rows[0];
+    if (!cliente) {
+      const clienteId = `cli_tel_${crypto.randomUUID().slice(0, 8)}`;
+      await db.execute({
+        sql: `INSERT INTO clientes (id, user_id, nome, email, telefone, total_pedidos)
+              VALUES (?, ?, ?, ?, ?, 0)`,
+        args: [clienteId, clienteId, nome, emailLocal, `+${telefone}`]
+      });
+      const criado = await db.execute({ sql: 'SELECT * FROM clientes WHERE id = ?', args: [clienteId] });
+      cliente = criado.rows[0];
+    }
+
+    await db.execute({ sql: 'UPDATE usuarios_pendentes SET usado = 1 WHERE token = ?', args: [token] });
+
+    const jwt_token = gerarToken(cliente.id, 'cliente', {
+      email: cliente.email,
+      nome: cliente.nome,
+    });
+
+    res.json({
+      token: jwt_token,
+      usuario: {
+        id: cliente.id,
+        nome: cliente.nome,
+        email: cliente.email,
+        telefone: cliente.telefone || `+${telefone}`,
+        perfil: 'cliente',
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ erro: 'Erro ao confirmar telefone' });
   }
 });
 
@@ -252,9 +447,23 @@ router.post('/session', async (req, res) => {
     }
 
     const perfisExistentes = await buscarPerfisPorEmail(emailLimpo);
-    const perfisDiferentes = perfisExistentes.filter(p => p !== perfilNormalizado);
+    const perfisCompatíveis = perfilNormalizado === 'gerente'
+      ? new Set(['gerente', 'restaurante'])
+      : perfilNormalizado === 'restaurante'
+        ? new Set(['restaurante', 'gerente'])
+        : new Set([perfilNormalizado]);
+    const perfisDiferentes = perfisExistentes.filter(p => !perfisCompatíveis.has(p));
     if (perfisDiferentes.length) {
       return res.status(409).json({ erro: `Este e-mail já está cadastrado como perfil ${perfisDiferentes.join(', ')}.` });
+    }
+    if (perfilNormalizado === 'operador') {
+      const operador = await db.execute({
+        sql: "SELECT id, nome, email FROM operadores WHERE lower(email) = ? AND COALESCE(status, 'ativo') = 'ativo' LIMIT 1",
+        args: [emailLimpo]
+      });
+      if (!operador.rows.length) {
+        return res.status(404).json({ erro: 'Operador não encontrado ou inativo.' });
+      }
     }
 
     const id = userId || idEstavelPorEmail(emailLimpo, perfilNormalizado);

@@ -60,7 +60,7 @@ export default function Home() {
             Restaurantes e mercados perto de você • Entrega em até 30min
           </Motion.p>
           <Motion.form variants={itemVariants} onSubmit={handleBusca}
-            className="flex items-center bg-white rounded-full pl-5 pr-1.5 py-1.5 shadow-2xl gap-3 max-w-135 mx-auto">
+            className="flex items-center bg-white rounded-full pl-5 pr-1.5 py-1.5 shadow-2xl gap-3 max-w-5xl mx-auto">
             <Search size={18} className="text-text-muted shrink-0" />
             <input type="text" placeholder="Busque por restaurante ou prato..."
               value={query} onChange={e => setQuery(e.target.value)}

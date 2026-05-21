@@ -90,14 +90,7 @@ export default function CadastroEntregador() {
       setPasso(3)
     } catch (err) {
       console.error(err)
-      // Mesmo com erro no backend, cria sessão local
-      try {
-        const emailAuto = dados.email.trim() || `${dados.telefone.replace(/\D/g, '')}@entregador.local`
-        await entrar(emailAuto, 'entregador', { nome: dados.nome, telefone: dados.telefone, veiculo_tipo: dados.veiculo, veiculo_placa: dados.veiculo === 'bicicleta' ? '' : dados.placa })
-        navigate('/entregador')
-      } catch {
-        setErro('Não foi possível criar sua conta. Tente novamente.')
-      }
+      setErro(err?.message || 'Não foi possível criar sua conta. Tente novamente.')
     } finally {
       setCarregando(false)
     }
