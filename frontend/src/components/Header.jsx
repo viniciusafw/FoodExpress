@@ -20,6 +20,11 @@ export default function Header() {
   const [oculto, setOculto] = useState(false)
   const [ultimoScroll, setUltimoScroll] = useState(0)
   const [popupLocalizacao, setPopupLocalizacao] = useState(false)
+  const [modoCep, setModoCep] = useState(false)
+  const [cep, setCep] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('cep') || ''
+    return ''
+  })
   const [regiao, setRegiao] = useState(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('regiao') || 'Tauape'
@@ -57,13 +62,74 @@ export default function Header() {
     return 'Sua região'
   }
 
-  const solicitarLocalizacao = () => {
-    if (!navigator.geolocation) {
-      setStatusLocalizacao('Seu navegador não suporta geolocalização.')
-      setPopupLocalizacao(false)
+  const formatarCep = (valor) => {
+    const digitos = String(valor || '').replace(/\D/g, '').slice(0, 8)
+    if (digitos.length <= 5) return digitos
+    return `${digitos.slice(0, 5)}-${digitos.slice(5)}`
+  }
+
+  const abrirCepManual = (mensagem = '') => {
+    setModoCep(true)
+    setPopupLocalizacao(true)
+    setStatusLocalizacao(mensagem)
+  }
+
+  const montarNomeEndereco = (dadosCep, cepFormatado) => {
+    const logradouro = String(dadosCep?.logradouro || '').trim()
+    const bairro = String(dadosCep?.bairro || '').trim()
+    const cidade = String(dadosCep?.localidade || '').trim()
+    const uf = String(dadosCep?.uf || '').trim()
+
+    if (logradouro && bairro) return `${logradouro}, ${bairro}`
+    if (logradouro) return logradouro
+    if (bairro && cidade) return `${bairro}, ${cidade}`
+    if (cidade && uf) return `${cidade}, ${uf}`
+    return `CEP ${cepFormatado}`
+  }
+
+  const salvarCepManual = async (e) => {
+    e?.preventDefault()
+    const cepFormatado = formatarCep(cep)
+    const digitos = cepFormatado.replace(/\D/g, '')
+
+    if (digitos.length !== 8) {
+      setStatusLocalizacao('Digite um CEP válido com 8 números.')
       return
     }
 
+    try {
+      setStatusLocalizacao('Buscando endereço pelo CEP...')
+      const resposta = await fetch(`https://viacep.com.br/ws/${digitos}/json/`)
+      const dadosCep = await resposta.json()
+
+      if (!resposta.ok || dadosCep?.erro) {
+        setStatusLocalizacao('CEP não encontrado. Confira os números ou consulte nos Correios.')
+        return
+      }
+
+      const novaRegiao = montarNomeEndereco(dadosCep, cepFormatado)
+      setCep(cepFormatado)
+      setRegiao(novaRegiao)
+      localStorage.setItem('cep', cepFormatado)
+      localStorage.setItem('regiao', novaRegiao)
+      localStorage.setItem('enderecoCep', JSON.stringify(dadosCep))
+      localStorage.removeItem('localizacao')
+      window.dispatchEvent(new Event('localizacao-atualizada'))
+      setStatusLocalizacao('Endereço definido.')
+      setPopupLocalizacao(false)
+      setModoCep(false)
+    } catch {
+      setStatusLocalizacao('Não foi possível consultar o CEP agora. Tente novamente ou consulte nos Correios.')
+    }
+  }
+
+  const solicitarLocalizacao = () => {
+    if (!navigator.geolocation) {
+      abrirCepManual('Não foi possível acessar a localização neste navegador. Informe seu CEP.')
+      return
+    }
+
+    setModoCep(false)
     setStatusLocalizacao('Buscando localização...')
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -72,17 +138,18 @@ export default function Header() {
         setRegiao(novaRegiao)
         localStorage.setItem('regiao', novaRegiao)
         localStorage.setItem('localizacao', JSON.stringify({ latitude, longitude }))
+        localStorage.removeItem('cep')
+        localStorage.removeItem('enderecoCep')
         window.dispatchEvent(new Event('localizacao-atualizada'))
         setStatusLocalizacao('Localização atual definida.')
         setPopupLocalizacao(false)
       },
       (error) => {
         if (error.code === error.PERMISSION_DENIED) {
-          setStatusLocalizacao('Permissão de localização negada.')
+          abrirCepManual('Permissão de localização negada. Informe seu CEP para continuar.')
         } else {
-          setStatusLocalizacao('Não foi possível obter a localização.')
+          abrirCepManual('Não foi possível obter sua localização. Informe seu CEP para continuar.')
         }
-        setPopupLocalizacao(false)
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
     )
@@ -164,7 +231,7 @@ export default function Header() {
             <MapPin size={18} className="text-primary" />
             <div className="flex flex-col items-start">
               <span className="text-[0.68rem] text-text-muted font-semibold leading-none">Próximo de</span>
-              <span className="text-sm font-extrabold text-text-primary leading-tight">{regiao}</span>
+              <span className="max-w-36 truncate text-sm font-extrabold text-text-primary leading-tight">{regiao}</span>
             </div>
             <ChevronDown size={14} className="text-text-muted" />
           </button>
@@ -238,27 +305,74 @@ export default function Header() {
                   <div className="flex items-center gap-3">
                     <MapPin size={22} className="text-primary" />
                     <div>
-                      <h2 className="font-display text-lg font-bold text-text-primary">Compartilhar localização</h2>
-                      <p className="text-sm text-text-muted">Para mostrar restaurantes e mercados perto de você, permita o uso da sua localização.</p>
+                      <h2 className="font-display text-lg font-bold text-text-primary">
+                        {modoCep ? 'Informe seu CEP' : 'Compartilhar localização'}
+                      </h2>
+                      <p className="text-sm text-text-muted">
+                        {modoCep
+                          ? 'Use seu CEP para ajustar a região de entrega.'
+                          : 'Para mostrar restaurantes e mercados perto de você, permita o uso da sua localização.'}
+                      </p>
                     </div>
                   </div>
                   {statusLocalizacao && (
                     <p className="text-sm text-text-muted">{statusLocalizacao}</p>
                   )}
-                  <div className="flex flex-col gap-3 pt-2">
-                    <button
-                      onClick={solicitarLocalizacao}
-                      className="w-full py-3 bg-primary text-white rounded-2xl font-bold transition-all hover:bg-primary/90"
-                    >
-                      Permitir localização
-                    </button>
-                    <button
-                      onClick={() => setPopupLocalizacao(false)}
-                      className="w-full py-3 bg-surface-2 text-text-primary rounded-2xl font-semibold transition-all hover:bg-surface-3"
-                    >
-                      Não agora
-                    </button>
-                  </div>
+                  {modoCep ? (
+                    <form onSubmit={salvarCepManual} className="flex flex-col gap-3 pt-2">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="postal-code"
+                        value={cep}
+                        onChange={(e) => setCep(formatarCep(e.target.value))}
+                        placeholder="00000-000"
+                        className="w-full h-12 rounded-2xl border border-border bg-white px-4 text-base font-bold text-text-primary outline-none transition-all focus:border-primary"
+                      />
+                      <a
+                        href="https://buscacepinter.correios.com.br/app/endereco/index.php"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-bold text-primary hover:underline"
+                      >
+                        Não sei meu CEP
+                      </a>
+                      <button
+                        type="submit"
+                        className="w-full py-3 bg-primary text-white rounded-2xl font-bold transition-all hover:bg-primary/90"
+                      >
+                        Usar este CEP
+                      </button>
+                      <button
+                        type="button"
+                        onClick={solicitarLocalizacao}
+                        className="w-full py-3 bg-surface-2 text-text-primary rounded-2xl font-semibold transition-all hover:bg-surface-3"
+                      >
+                        Tentar localização novamente
+                      </button>
+                    </form>
+                  ) : (
+                    <div className="flex flex-col gap-3 pt-2">
+                      <button
+                        onClick={solicitarLocalizacao}
+                        className="w-full py-3 bg-primary text-white rounded-2xl font-bold transition-all hover:bg-primary/90"
+                      >
+                        Permitir localização
+                      </button>
+                      <button
+                        onClick={() => abrirCepManual('Informe seu CEP para ajustar sua região.')}
+                        className="w-full py-3 bg-surface-2 text-text-primary rounded-2xl font-semibold transition-all hover:bg-surface-3"
+                      >
+                        Informar CEP
+                      </button>
+                      <button
+                        onClick={() => setPopupLocalizacao(false)}
+                        className="w-full py-3 bg-white text-text-muted rounded-2xl font-semibold transition-all hover:bg-surface-2"
+                      >
+                        Não agora
+                      </button>
+                    </div>
+                  )}
                 </div>
               </Motion.div>
             </Motion.div>

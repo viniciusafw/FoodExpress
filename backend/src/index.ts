@@ -7,6 +7,7 @@ dotenv.config()
 
 import { rateLimit } from './middleware/rateLimit'
 const apiLimiter = rateLimit(100, 60_000)
+const authLimiter = rateLimit(12, 60_000)
 
 // Routes
 import restaurantesRouter  from './routes/restaurantes'
@@ -27,6 +28,7 @@ import authRouter          from './routes/auth'
 import { ensureDatabaseHealth } from './lib/schema'
 
 const app = express()
+app.set('trust proxy', 1)
 const PORT = process.env.PORT || 3001
 const configuredOrigins = (process.env.FRONTEND_URL || 'https://food-express-pearl.vercel.app')
   .split(',')
@@ -40,8 +42,7 @@ const allowedOrigins = [
 // ── Webhook Stripe precisa do body raw ANTES do express.json() ────────────
 app.use('/api/webhooks', express.raw({ type: 'application/json' }), webhooksRouter)
 
-// ── Middlewares globais ───────────────────────────────────────────────────
-app.use(cors({
+const corsOptions = {
   origin(origin, callback) {
     // Permite requests sem Origin (health checks/curl/apps locais)
     if (!origin) return callback(null, true)
@@ -52,8 +53,18 @@ app.use(cors({
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-User-Email', 'X-User-Name'],
-}))
-app.options('*', cors())
+}
+
+// ── Middlewares globais ───────────────────────────────────────────────────
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))
+app.use((_req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff')
+  res.setHeader('X-Frame-Options', 'DENY')
+  res.setHeader('Referrer-Policy', 'no-referrer')
+  res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=()')
+  next()
+})
 app.use(express.json({ limit: '5mb' }))
 app.use(express.urlencoded({ extended: true, limit: '5mb' }))
 app.use('/api/', apiLimiter)
@@ -72,7 +83,7 @@ app.use('/api/relatorios',    relatoriosRouter)
 app.use('/api/rotas',         rotasRouter)
 app.use('/api/documentos',   documentosRouter)
 app.use('/api/cnpj',          cnpjRouter)
-app.use('/api/auth',          authRouter)
+app.use('/api/auth',          authLimiter, authRouter)
 
 // ── Health check ──────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {

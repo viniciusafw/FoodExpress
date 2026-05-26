@@ -6,6 +6,7 @@ import Header from '../components/Header'
 import api from '../services/api'
 import MobileNavBar from '../components/MobileNavBar'
 import { imagemRestaurante, imagemProduto, emojiRestaurante, emojiProduto } from '../utils/imagens'
+import { paramsComLocalizacao } from '../utils/localizacao'
 
 const filtros = ['Entrega Grátis', 'Mais Avaliados', 'Mais Próximos']
 
@@ -89,9 +90,16 @@ export default function SearchPage() {
   const [todasLojas, setTodasLojas] = useState([])
   const [todosProdutos, setTodosProdutos] = useState([])
   const [categoriasPorLoja, setCategoriasPorLoja] = useState({})
+  const [versaoLocalizacao, setVersaoLocalizacao] = useState(0)
 
   useEffect(() => {
-    api.restaurantes.listar().then(dados => {
+    const atualizar = () => setVersaoLocalizacao(v => v + 1)
+    window.addEventListener('localizacao-atualizada', atualizar)
+    return () => window.removeEventListener('localizacao-atualizada', atualizar)
+  }, [])
+
+  useEffect(() => {
+    api.restaurantes.listar(paramsComLocalizacao()).then(dados => {
       const lojas = dados.map(r => ({
         ...r,
         emoji: emojiRestaurante(r),
@@ -126,7 +134,7 @@ export default function SearchPage() {
         setCategoriasPorLoja(Object.fromEntries(Object.entries(mapa).map(([id, set]) => [id, Array.from(set)])))
       })
     }).catch(console.error)
-  }, [])
+  }, [versaoLocalizacao])
 
   const lojasResultado = useMemo(() => {
     const termo = termoAtivo.trim().toLowerCase()
@@ -146,7 +154,11 @@ export default function SearchPage() {
       return true
     }).sort((a, b) => {
       if (filtrosAtivos.includes('Mais Avaliados')) return b.avaliacao - a.avaliacao
-      if (filtrosAtivos.includes('Mais Próximos')) return parseFloat(a.distancia || 0) - parseFloat(b.distancia || 0)
+      if (filtrosAtivos.includes('Mais Próximos')) {
+        const da = a.distancia_km == null ? Number.POSITIVE_INFINITY : Number(a.distancia_km)
+        const db = b.distancia_km == null ? Number.POSITIVE_INFINITY : Number(b.distancia_km)
+        return da - db
+      }
       return 0
     })
   }, [termoAtivo, filtrosAtivos, todasLojas, categoriasPorLoja])

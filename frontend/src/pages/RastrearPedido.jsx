@@ -11,22 +11,45 @@ import {
 
 
 // ── Mapa real ────────────────────────────────────────────────────────────────
+function coordenadasValidas(lat, lng) {
+  const latitude = Number(lat)
+  const longitude = Number(lng)
+  return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
+}
+
+function textoEnderecoValido(valor) {
+  const texto = String(valor || '').trim()
+  if (!texto) return ''
+  if (/não informado/i.test(texto)) return ''
+  return texto
+}
+
+function normalizarTelefone(telefone) {
+  let digitos = String(telefone || '').replace(/\D/g, '')
+  if (!digitos) return ''
+  if (!digitos.startsWith('55') && digitos.length >= 10) digitos = `55${digitos}`
+  return digitos.length >= 12 ? `+${digitos}` : ''
+}
+
 function MiniMapa({ dados }) {
   const destino = dados?.destino?.localizacao
   const entregador = dados?.entregador?.localizacao_atual
-  const destinoCoords = destino?.lat && destino?.lng ? `${destino.lat},${destino.lng}` : ''
-  const entregadorCoords = entregador?.lat && entregador?.lng ? `${entregador.lat},${entregador.lng}` : ''
-  const destinoTexto = destinoCoords || dados?.destino?.endereco || ''
+  const destinoCoords = coordenadasValidas(destino?.lat, destino?.lng) ? `${Number(destino.lat)},${Number(destino.lng)}` : ''
+  const entregadorCoords = coordenadasValidas(entregador?.lat, entregador?.lng) ? `${Number(entregador.lat)},${Number(entregador.lng)}` : ''
+  const destinoTexto = destinoCoords || textoEnderecoValido(dados?.destino?.endereco)
   const embedUrl = destinoTexto
-    ? `https://maps.google.com/maps?q=${encodeURIComponent(destinoTexto)}&z=15&output=embed`
+    ? entregadorCoords
+      ? `https://maps.google.com/maps?saddr=${encodeURIComponent(entregadorCoords)}&daddr=${encodeURIComponent(destinoTexto)}&output=embed`
+      : `https://maps.google.com/maps?q=${encodeURIComponent(destinoTexto)}&z=16&output=embed`
     : entregadorCoords
       ? `https://maps.google.com/maps?q=${encodeURIComponent(entregadorCoords)}&z=15&output=embed`
       : ''
 
   const abrirMaps = () => {
+    if (!destinoTexto && !entregadorCoords) return
     const url = destinoTexto
       ? `https://www.google.com/maps/dir/?api=1${entregadorCoords ? `&origin=${entregadorCoords}` : ''}&destination=${encodeURIComponent(destinoTexto)}&travelmode=driving`
-      : 'https://www.google.com/maps'
+      : `https://www.google.com/maps/@${entregadorCoords},16z`
     window.open(url, '_blank', 'noopener,noreferrer')
   }
 
@@ -56,7 +79,8 @@ function MiniMapa({ dados }) {
       <button
         type="button"
         onClick={abrirMaps}
-        className="absolute right-3 bottom-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-white shadow-lg border-none hover:bg-primary/90 transition-colors"
+        disabled={!destinoTexto && !entregadorCoords}
+        className="absolute right-3 bottom-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-white shadow-lg border-none hover:bg-primary/90 transition-colors disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed"
       >
         <MapPin size={13} /> Abrir rota
       </button>
@@ -129,8 +153,10 @@ export default function RastrearPedido() {
   const deveMostrarConviteAvaliacao = String(d?.status || '').toLowerCase() === 'entregue'
     && !d?.avaliacao_restaurante
     && !conviteAvaliacaoFechado
+  const distanciaAtual = d?.rota?.distancia_atual_km
+  const distanciaTotal = d?.rota?.distancia_total_km
   const ligarEntregador = () => {
-    const telefone = d?.entregador?.telefone || d?.entregador?.telefone_entregador
+    const telefone = normalizarTelefone(d?.entregador?.telefone || d?.entregador?.telefone_entregador)
     if (telefone) {
       window.location.href = `tel:${telefone}`
     } else {
@@ -250,9 +276,9 @@ export default function RastrearPedido() {
               <BarraProgresso pct={d?.rota?.progresso_percentual} />
               <div className="grid grid-cols-3 gap-4 mt-5">
                 {[
-                  { Icon: Clock,      label: 'Tempo restante', valor: `${tempoAtualizado} min` },
-                  { Icon: Navigation, label: 'Distância',      valor: `${d?.rota?.distancia_atual_km} km` },
-                  { Icon: Truck,      label: 'Total da rota',  valor: `${d?.rota?.distancia_total_km} km` },
+                  { Icon: Clock,      label: 'Tempo restante', valor: tempoAtualizado ? `${tempoAtualizado} min` : '--' },
+                  { Icon: Navigation, label: 'Distância',      valor: distanciaAtual != null ? `${distanciaAtual} km` : '--' },
+                  { Icon: Truck,      label: 'Total da rota',  valor: distanciaTotal != null ? `${distanciaTotal} km` : '--' },
                 ].map(({ Icon, label, valor }) => (
                   <div key={label} className="text-center">
                     <div className="w-9 h-9 bg-primary-light rounded-xl flex items-center justify-center mx-auto mb-1.5">

@@ -8,12 +8,56 @@ import { buscarRestauranteDoUsuario, ensureDatabaseHealth } from '../lib/schema'
 const router = Router()
 
 function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return Number.POSITIVE_INFINITY
+  if ((lat1 === 0 && lon1 === 0) || (lat2 === 0 && lon2 === 0)) return Number.POSITIVE_INFINITY
   const R = 6371
   const dLat = (lat2 - lat1) * Math.PI / 180
   const dLon = (lon2 - lon1) * Math.PI / 180
   const a = Math.sin(dLat / 2) ** 2 +
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function numeroOuNull(valor: any) {
+  const numero = Number(valor)
+  if (!Number.isFinite(numero) || numero === 0) return null
+  return numero
+}
+
+function ehOperador(req: AuthRequest) {
+  return String(req.userRole || '').toLowerCase() === 'operador'
+}
+
+async function restauranteDoUsuario(req: AuthRequest) {
+  if (!['gerente', 'restaurante'].includes(String(req.userRole || '').toLowerCase())) return null
+  return buscarRestauranteDoUsuario(req.userId, req.userEmail, req.userName)
+}
+
+async function entregadorDoUsuario(req: AuthRequest) {
+  if (String(req.userRole || '').toLowerCase() !== 'entregador') return null
+  const result = await db.execute({
+    sql: `SELECT id FROM entregadores
+          WHERE id = ? OR user_id = ? OR (email != '' AND lower(email) = ?)
+          ORDER BY created_at DESC LIMIT 1`,
+    args: [req.userId, req.userId, String(req.userEmail || '').toLowerCase()]
+  })
+  return result.rows[0] as any
+}
+
+async function podeAcessarPedido(req: AuthRequest, pedido: any) {
+  if (ehOperador(req)) return true
+  const role = String(req.userRole || '').toLowerCase()
+  const userId = String(req.userId || '')
+  if (role === 'cliente') return String(pedido.cliente_id || '') === userId
+  if (role === 'entregador') {
+    const ent = await entregadorDoUsuario(req)
+    return Boolean(ent?.id && String(pedido.entregador_id || '') === String(ent.id))
+  }
+  if (['gerente', 'restaurante'].includes(role)) {
+    const rest = await restauranteDoUsuario(req)
+    return Boolean(rest?.id && String(rest.id) === String(pedido.restaurante_id || ''))
+  }
+  return false
 }
 
 function deveProcessarComStripe(formaPagamento: string): boolean {
@@ -52,10 +96,21 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
                LEFT JOIN clientes c ON c.id = p.cliente_id
                WHERE 1=1`
     const args: any[] = []
+    if (role === 'cliente') {
+      sql += ' AND p.cliente_id = ?'; args.push(req.userId)
+    } else if (clienteId && ehOperador(req)) {
+      sql += ' AND p.cliente_id = ?'; args.push(clienteId)
+    }
     if (status) { sql += ' AND p.status = ?'; args.push(status) }
-    if (clienteId) { sql += ' AND p.cliente_id = ?'; args.push(clienteId) }
     if (restauranteId) { sql += ' AND p.restaurante_id = ?'; args.push(restauranteId) }
-    if (entregadorId) { sql += ' AND p.entregador_id = ?'; args.push(entregadorId) }
+    if (role === 'entregador') {
+      const ent = await entregadorDoUsuario(req)
+      if (!ent?.id) return res.json([]) as any
+      sql += ' AND p.entregador_id = ?'; args.push(ent.id)
+    } else if (entregadorId) {
+      if (!ehOperador(req) && !['gerente', 'restaurante'].includes(role)) return res.status(403).json({ erro: 'Você não pode filtrar por entregador' }) as any
+      sql += ' AND p.entregador_id = ?'; args.push(entregadorId)
+    }
     sql += ' ORDER BY p.created_at DESC LIMIT 100'
     const result = await db.execute({ sql, args })
     res.json(result.rows)
@@ -70,6 +125,9 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.get('/disponiveis', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     await ensureDatabaseHealth()
+    if (String(req.userRole || '').toLowerCase() !== 'entregador' && !ehOperador(req)) {
+      return res.status(403).json({ erro: 'Apenas entregadores podem ver pedidos disponíveis' }) as any
+    }
     const result = await db.execute({
       sql: `SELECT p.*, r.nome as restaurante_nome, r.endereco as restaurante_endereco,
                    r.latitude as restaurante_latitude, r.longitude as restaurante_longitude,
@@ -92,7 +150,7 @@ router.get('/disponiveis', requireAuth, async (req: AuthRequest, res: Response) 
 })
 
 // GET /api/pedidos/:id
-router.get('/:id', async (req, res: Response) => {
+router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.execute({
       sql: `SELECT p.*,
@@ -110,6 +168,7 @@ router.get('/:id', async (req, res: Response) => {
       args: [req.params.id]
     })
     if (!result.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' }) as any
+    if (!(await podeAcessarPedido(req, result.rows[0]))) return res.status(403).json({ erro: 'Você não pode acessar este pedido' }) as any
     res.json(result.rows[0])
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao buscar pedido' })
@@ -132,7 +191,10 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       desconto: descontoInformado,
       troco: trocoInformado = 0,
     } = req.body
-    if (!clienteId || !restauranteId || !itens?.length) return res.status(400).json({ erro: 'Dados obrigatórios faltando' }) as any
+    const role = String(req.userRole || '').toLowerCase()
+    const clienteFinal = role === 'cliente' ? req.userId : clienteId
+    if (role !== 'cliente' && !ehOperador(req)) return res.status(403).json({ erro: 'Apenas clientes podem criar pedidos' }) as any
+    if (!clienteFinal || !restauranteId || !itens?.length) return res.status(400).json({ erro: 'Dados obrigatórios faltando' }) as any
 
     const restaurante = await db.execute({ sql: 'SELECT * FROM restaurantes WHERE id = ?', args: [restauranteId] })
     if (!restaurante.rows.length) return res.status(404).json({ erro: 'Restaurante não encontrado' }) as any
@@ -201,7 +263,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
             (id, cliente_id, restaurante_id, status, itens, endereco_entrega, latitude_entrega, longitude_entrega,
              subtotal, taxa_entrega, desconto, troco, total, forma_pagamento, pagamento_id, pagamento_status)
             VALUES (?, ?, ?, 'pendente', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pendente')`,
-      args: [pedidoId, clienteId, restauranteId, JSON.stringify(itens), endereco_entrega || '', latitude || 0, longitude || 0,
+      args: [pedidoId, clienteFinal, restauranteId, JSON.stringify(itens), endereco_entrega || '', latitude || 0, longitude || 0,
              subtotal, taxa_entrega, desconto, troco, total, forma_pagamento, pagamento_id]
     })
 
@@ -216,7 +278,21 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { status, tempo_preparo_estimado } = req.body
-    const pedidoAntes = await db.execute({ sql: 'SELECT status, entregador_id FROM pedidos WHERE id = ?', args: [req.params.id] })
+    const pedidoAntes = await db.execute({ sql: 'SELECT status, entregador_id, cliente_id, restaurante_id FROM pedidos WHERE id = ?', args: [req.params.id] })
+    if (!pedidoAntes.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' }) as any
+    if (!(await podeAcessarPedido(req, pedidoAntes.rows[0]))) return res.status(403).json({ erro: 'Você não pode alterar este pedido' }) as any
+    const role = String(req.userRole || '').toLowerCase()
+    const statusPermitidosCliente = ['cancelado']
+    const statusPermitidosEntregador = ['entregando', 'entregue']
+    const statusPermitidosGerente = ['confirmado', 'preparando', 'pronto', 'cancelado']
+    if (status && !ehOperador(req)) {
+      const permitidos = role === 'cliente'
+        ? statusPermitidosCliente
+        : role === 'entregador'
+          ? statusPermitidosEntregador
+          : statusPermitidosGerente
+      if (!permitidos.includes(String(status))) return res.status(403).json({ erro: 'Status não permitido para este perfil' }) as any
+    }
     const statusAnterior = (pedidoAntes.rows[0] as any)?.status
     const sets: string[] = ['updated_at = current_timestamp']
     const args: any[] = []
@@ -252,8 +328,9 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 // DELETE /api/pedidos/:id — cancelar
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const pedido = await db.execute({ sql: 'SELECT created_at, total FROM pedidos WHERE id = ?', args: [req.params.id] })
+    const pedido = await db.execute({ sql: 'SELECT created_at, total, cliente_id, restaurante_id, entregador_id FROM pedidos WHERE id = ?', args: [req.params.id] })
     if (!pedido.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' }) as any
+    if (!(await podeAcessarPedido(req, pedido.rows[0]))) return res.status(403).json({ erro: 'Você não pode cancelar este pedido' }) as any
     const tempoDecorrido = (Date.now() - new Date(String(pedido.rows[0].created_at).replace(' ', 'T') + 'Z').getTime()) / 60000
     await db.execute({ sql: "UPDATE pedidos SET status = 'cancelado' WHERE id = ?", args: [req.params.id] })
     const multa = tempoDecorrido > 5 ? Number(pedido.rows[0].total) * 0.5 : 0
@@ -264,7 +341,7 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 })
 
 // GET /api/pedidos/:id/rastrear
-router.get('/:id/rastrear', async (req, res: Response) => {
+router.get('/:id/rastrear', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.execute({
       sql: `SELECT p.*,
@@ -280,6 +357,7 @@ router.get('/:id/rastrear', async (req, res: Response) => {
     })
     if (!result.rows.length) return res.status(404).json({ erro: 'Pedido não encontrado' }) as any
     const p = result.rows[0] as any
+    if (!(await podeAcessarPedido(req, p))) return res.status(403).json({ erro: 'Você não pode rastrear este pedido' }) as any
     if (!p.entregador_id) {
       return res.json({
         pedido_id: p.id,
@@ -292,18 +370,19 @@ router.get('/:id/rastrear', async (req, res: Response) => {
     }
 
     const dist = calcularDistancia(Number(p.entregador_lat), Number(p.entregador_lng), Number(p.latitude_entrega), Number(p.longitude_entrega))
+    const distanciaValida = Number.isFinite(dist)
     res.json({
       pedido_id: p.id,
       status: p.status,
       avaliacao_restaurante: p.avaliacao_restaurante,
       avaliacao_entregador: p.avaliacao_entregador,
-      restaurante: { id: p.restaurante_id, nome: p.restaurante_nome, localizacao: { lat: p.rest_lat, lng: p.rest_lng } },
-      entregador: { id: p.entregador_id, nome: p.entregador_nome, telefone: p.entregador_telefone, localizacao_atual: { lat: p.entregador_lat, lng: p.entregador_lng } },
-      destino: { endereco: p.endereco_entrega, localizacao: { lat: p.latitude_entrega, lng: p.longitude_entrega } },
+      restaurante: { id: p.restaurante_id, nome: p.restaurante_nome, localizacao: { lat: numeroOuNull(p.rest_lat), lng: numeroOuNull(p.rest_lng) } },
+      entregador: { id: p.entregador_id, nome: p.entregador_nome, telefone: p.entregador_telefone, localizacao_atual: { lat: numeroOuNull(p.entregador_lat), lng: numeroOuNull(p.entregador_lng) } },
+      destino: { endereco: p.endereco_entrega, localizacao: { lat: numeroOuNull(p.latitude_entrega), lng: numeroOuNull(p.longitude_entrega) } },
       rota: {
-        distancia_atual_km: Math.round(dist * 100) / 100,
-        tempo_estimado_minutos: Math.ceil((dist / 25) * 60),
-        progresso_percentual: p.distancia_km ? Math.round(((Number(p.distancia_km) - dist) / Number(p.distancia_km)) * 100) : 0
+        distancia_atual_km: distanciaValida ? Math.round(dist * 100) / 100 : null,
+        tempo_estimado_minutos: distanciaValida ? Math.ceil((dist / 25) * 60) : null,
+        progresso_percentual: distanciaValida && p.distancia_km ? Math.round(((Number(p.distancia_km) - dist) / Number(p.distancia_km)) * 100) : 0
       },
       timeline: { confirmado_em: p.confirmado_em, pronto_em: p.pronto_em, entregue_em: p.entregue_em }
     })
@@ -316,6 +395,13 @@ router.get('/:id/rastrear', async (req, res: Response) => {
 router.post('/:id/atribuir-entregador', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { entregadorId } = req.body
+    if (String(req.userRole || '').toLowerCase() !== 'entregador' && !ehOperador(req)) {
+      return res.status(403).json({ erro: 'Apenas entregadores podem aceitar pedidos' }) as any
+    }
+    const ent = await entregadorDoUsuario(req)
+    if (!ehOperador(req) && String(entregadorId) !== String(ent?.id || '')) {
+      return res.status(403).json({ erro: 'Você só pode aceitar pedidos para seu próprio entregador' }) as any
+    }
     const entregador = await db.execute({ sql: "SELECT * FROM entregadores WHERE id = ? AND status = 'disponivel'", args: [entregadorId] })
     if (!entregador.rows.length) return res.status(400).json({ erro: 'Entregador não disponível' }) as any
 

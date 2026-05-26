@@ -5,6 +5,23 @@ import { requireAuth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
+function ehOperador(req: AuthRequest) {
+  return String(req.userRole || '').toLowerCase() === 'operador'
+}
+
+async function podeGerenciarEntregador(req: AuthRequest, entregadorId: string) {
+  if (ehOperador(req)) return true
+  const result = await db.execute({
+    sql: 'SELECT id, user_id, email FROM entregadores WHERE id = ? LIMIT 1',
+    args: [entregadorId]
+  })
+  if (!result.rows.length) return false
+  const row = result.rows[0] as any
+  const userId = String(req.userId || '')
+  const email = String(req.userEmail || '').toLowerCase()
+  return String(row.id || '') === userId || String(row.user_id || '') === userId || (email && String(row.email || '').toLowerCase() === email)
+}
+
 function normalizarEmail(email?: string) {
   return String(email || '').trim().toLowerCase()
 }
@@ -36,8 +53,9 @@ async function vincularEntregador(entregadorId: string, userId?: string, email?:
 }
 
 // GET /api/entregadores
-router.get('/', async (req, res: Response) => {
+router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    if (!ehOperador(req)) return res.status(403).json({ erro: 'Apenas operadores podem listar entregadores' }) as any
     const { status, limite = '50' } = req.query
     let sql = 'SELECT * FROM entregadores'
     const args: any[] = []
@@ -132,10 +150,13 @@ router.get('/cadastro', requireAuth, async (req: AuthRequest, res: Response) => 
 })
 
 // GET /api/entregadores/:id
-router.get('/:id', async (req, res: Response) => {
+router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.execute({ sql: 'SELECT * FROM entregadores WHERE id = ?', args: [req.params.id] })
     if (!result.rows.length) return res.status(404).json({ erro: 'Entregador não encontrado' }) as any
+    if (!(await podeGerenciarEntregador(req, String(req.params.id)))) {
+      return res.status(403).json({ erro: 'Você não pode acessar este entregador' }) as any
+    }
     res.json(result.rows[0])
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao buscar entregador' })
@@ -170,6 +191,9 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 // PUT /api/entregadores/:id
 router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    if (!(await podeGerenciarEntregador(req, String(req.params.id)))) {
+      return res.status(403).json({ erro: 'Você não pode alterar este entregador' }) as any
+    }
     const { nome, email, telefone, veiculo_tipo, veiculo_placa, placa, status, latitude, longitude, avaliacao_media } = req.body
     const sets: string[] = ['ultima_atualizacao = CURRENT_TIMESTAMP']
     const args: any[] = []
@@ -185,7 +209,10 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (status) { sets.push('status = ?'); args.push(status) }
     if (latitude !== undefined) { sets.push('latitude = ?'); args.push(Number(latitude)) }
     if (longitude !== undefined) { sets.push('longitude = ?'); args.push(Number(longitude)) }
-    if (avaliacao_media !== undefined) { sets.push('avaliacao_media = ?'); args.push(avaliacao_media) }
+    if (avaliacao_media !== undefined) {
+      if (!ehOperador(req)) return res.status(403).json({ erro: 'Avaliação só pode ser alterada pelo sistema' }) as any
+      sets.push('avaliacao_media = ?'); args.push(avaliacao_media)
+    }
     args.push(req.params.id)
     await db.execute({ sql: `UPDATE entregadores SET ${sets.join(', ')} WHERE id = ?`, args })
     const atualizado = await db.execute({ sql: 'SELECT * FROM entregadores WHERE id = ?', args: [req.params.id] })
@@ -198,6 +225,9 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 // DELETE /api/entregadores/:id — soft delete
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    if (!(await podeGerenciarEntregador(req, String(req.params.id)))) {
+      return res.status(403).json({ erro: 'Você não pode desativar este entregador' }) as any
+    }
     await db.execute({ sql: "UPDATE entregadores SET status = 'inativo' WHERE id = ?", args: [req.params.id] })
     res.json({ mensagem: 'Entregador desativado com sucesso' })
   } catch (error) {
@@ -213,6 +243,9 @@ router.post('/:id/disponibilidade', requireAuth, async (req: AuthRequest, res: R
 
     const entregador = await db.execute({ sql: 'SELECT id FROM entregadores WHERE id = ?', args: [req.params.id] })
     if (!entregador.rows.length) return res.status(404).json({ erro: 'Entregador não encontrado' }) as any
+    if (!(await podeGerenciarEntregador(req, String(req.params.id)))) {
+      return res.status(403).json({ erro: 'Você não pode alterar este entregador' }) as any
+    }
 
     const novo_status = disponivel ? 'disponivel' : 'ausente'
     await db.execute({ sql: 'UPDATE entregadores SET status = ?, ultima_atualizacao = CURRENT_TIMESTAMP WHERE id = ?', args: [novo_status, req.params.id] })

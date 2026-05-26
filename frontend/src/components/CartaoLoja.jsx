@@ -1,4 +1,4 @@
-import { Star, Clock, Truck, Heart } from 'lucide-react'
+import { Star, Clock, Truck, Heart, MapPin } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { motion as Motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -27,6 +27,7 @@ export default function StoreCard({ loja, index = 0 }) {
     promo: loja?.promo || null,
     fechado: loja?.fechado || loja?.status === 'fechado' || loja?.status === 'inativo',
     gratis: loja?.taxaEntrega === 'Grátis' || loja?.gratis,
+    distancia: loja?.distancia || null,
   }
 
   const [fav, setFav] = useState(false)
@@ -116,7 +117,7 @@ export default function StoreCard({ loja, index = 0 }) {
         </div>
         <p className="text-xs text-text-muted font-semibold mb-3">{loja_.categoria}</p>
         <div className="h-px bg-border mb-3" />
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-1.5 text-xs font-bold text-text-secondary">
             <Clock size={12} className="text-accent" />{loja_.tempoEntrega}
           </div>
@@ -124,6 +125,12 @@ export default function StoreCard({ loja, index = 0 }) {
             <Truck size={12} className="text-accent" />
             {loja_.gratis ? <span className="text-accent font-extrabold">Grátis</span> : loja_.taxaEntrega}
           </div>
+          {loja_.distancia && (
+            <div className="flex items-center gap-1.5 text-xs font-bold text-text-secondary">
+              <MapPin size={12} className="text-accent" />
+              {loja_.distancia}
+            </div>
+          )}
         </div>
       </div>
     </Motion.div>

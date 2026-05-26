@@ -39,8 +39,8 @@ function verificarTokenLocal(token: string) {
 function preencherUsuario(req: AuthRequest, decoded: any) {
   req.userId = decoded.userId || decoded.sub || decoded.id
   req.userRole = decoded.role || decoded.perfil
-  req.userEmail = decoded.email || req.headers['x-user-email'] as string || ''
-  req.userName = decoded.nome || decoded.name || req.headers['x-user-name'] as string || ''
+  req.userEmail = decoded.email || ''
+  req.userName = decoded.nome || decoded.name || ''
 }
 
 export function requireAuth(req: AuthRequest, res: Response, next: NextFunction): void {
@@ -72,4 +72,16 @@ export function optionalAuth(req: AuthRequest, res: Response, next: NextFunction
     }
   }
   next()
+}
+
+export function requireRole(...roles: string[]) {
+  const permitidos = roles.map((role) => role.toLowerCase())
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    const role = String(req.userRole || '').toLowerCase()
+    if (!permitidos.includes(role)) {
+      res.status(403).json({ erro: 'Acesso não autorizado para este perfil' })
+      return
+    }
+    next()
+  }
 }

@@ -26,11 +26,12 @@ function normalizarDataFim(valor: string) {
 
 async function resolverEscopo(req: AuthRequest) {
   const role = String(req.userRole || '').toLowerCase()
+  if (role === 'operador') return { precisaFiltrar: false, restauranteId: null, restaurante: null, autorizado: true }
   const precisaFiltrar = ['gerente', 'restaurante'].includes(role)
-  if (!precisaFiltrar) return { precisaFiltrar: false, restauranteId: null, restaurante: null }
+  if (!precisaFiltrar) return { precisaFiltrar: false, restauranteId: null, restaurante: null, autorizado: false }
 
   const restaurante = await buscarRestauranteDoUsuario(req.userId, req.userEmail, req.userName)
-  return { precisaFiltrar: true, restauranteId: restaurante?.id || null, restaurante }
+  return { precisaFiltrar: true, restauranteId: restaurante?.id || null, restaurante, autorizado: true }
 }
 
 function filtroPedido(restauranteId: string | null, alias = 'p') {
@@ -85,7 +86,11 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
     const tipo = normalizarTipoRelatorio(req.query.tipo)
     const dataInicio = normalizarDataInicio(String(req.query.inicio || ''))
     const dataFim = normalizarDataFim(String(req.query.fim || ''))
-    const { precisaFiltrar, restauranteId, restaurante } = await resolverEscopo(req)
+    const { precisaFiltrar, restauranteId, autorizado } = await resolverEscopo(req)
+
+    if (!autorizado) {
+      return res.status(403).json({ erro: 'Apenas gerentes e operadores podem acessar relatórios' }) as any
+    }
 
     if (precisaFiltrar && !restauranteId) {
       return res.status(404).json({ erro: 'Nenhum restaurante vinculado ao usuário logado' }) as any

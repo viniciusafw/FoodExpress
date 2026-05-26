@@ -1,4 +1,4 @@
-import { Instagram, Facebook, Youtube, Twitter, Mail, Phone, MapPin, Store, LogIn, Bike } from 'lucide-react'
+import { Instagram, Facebook, Youtube, Twitter, Mail, Phone, MapPin, Store, LogIn, Bike, ShieldCheck, UserPlus } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import logoSrc from '../imgs/Logo-site.png'
 import { motion as Motion } from 'framer-motion'
@@ -107,6 +107,11 @@ export default function Rodape() {
               <LogIn size={15} />
               Entrar como parceiro
             </Link>
+            <Link to="/login?operador=true"
+              className="flex items-center gap-2.5 bg-white/8 hover:bg-white/15 text-white/80 hover:text-white border border-white/10 px-4 py-3 rounded-xl text-sm font-bold transition-all w-fit">
+              <ShieldCheck size={15} />
+              Entrar como operador
+            </Link>
           </div>
         </Motion.div>
 
@@ -122,6 +127,11 @@ export default function Rodape() {
             Faça suas entregas com flexibilidade e ganhe no seu ritmo.
           </p>
           <div className="flex flex-col gap-3">
+            <Link to="/register/entregador"
+              className="flex items-center gap-2.5 bg-white/8 hover:bg-white/15 text-white/80 hover:text-white border border-white/10 px-4 py-3 rounded-xl text-sm font-bold transition-all w-fit">
+              <UserPlus size={15} />
+              Cadastrar entregador
+            </Link>
             <Link to="/login?entregador=true"
               className="flex items-center gap-2.5 bg-accent/80 hover:bg-accent text-white px-4 py-3 rounded-xl text-sm font-extrabold transition-all hover:-translate-y-0.5 w-fit">
               <Bike size={15} />

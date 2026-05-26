@@ -24,10 +24,10 @@ function iniciais(nome) {
 }
 
 function normalizarTelefone(telefone) {
-  const digitos = String(telefone || '').replace(/\D/g, '')
+  let digitos = String(telefone || '').replace(/\D/g, '')
   if (!digitos) return ''
-  if (digitos.startsWith('55')) return `+${digitos}`
-  return `+55${digitos}`
+  if (!digitos.startsWith('55') && digitos.length >= 10) digitos = `55${digitos}`
+  return digitos.length >= 12 ? `+${digitos}` : ''
 }
 
 function formatarItensPedido(itens) {
@@ -80,23 +80,54 @@ function normalizarEntregaAtiva(p) {
   }
 }
 
+function coordenadasValidas(latitude, longitude) {
+  const lat = Number(latitude)
+  const lng = Number(longitude)
+  return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)
+}
+
+function textoEnderecoValido(valor) {
+  const texto = String(valor || '').trim()
+  if (!texto) return ''
+  if (/não informado/i.test(texto)) return ''
+  return texto
+}
+
+function montarDestinoMapa(destino, tipo) {
+  if (!destino) return ''
+  if (coordenadasValidas(destino.latitude, destino.longitude)) {
+    return `${Number(destino.latitude)},${Number(destino.longitude)}`
+  }
+
+  const endereco = textoEnderecoValido(destino.endereco || destino.rua)
+  if (!endereco) return ''
+
+  if (tipo === 'loja') {
+    const nome = textoEnderecoValido(destino.nome)
+    return [nome, endereco, 'Brasil'].filter(Boolean).join(', ')
+  }
+
+  return [endereco, destino.bairro, destino.cidade, 'Brasil'].filter(Boolean).join(', ')
+}
+
 // ── Mini mapa SVG ─────────────────────────────────────────────────────────────
 function MiniMapa({ etapa, localizacao, entrega }) {
   const destinoAtual = etapa === 'coletando' ? entrega?.loja : entrega?.destino
-  const destinoCoords = destinoAtual?.latitude && destinoAtual?.longitude
-    ? `${destinoAtual.latitude},${destinoAtual.longitude}`
-    : ''
-  const destinoTexto = destinoCoords || destinoAtual?.rua || destinoAtual?.endereco || entrega?.destino?.rua || ''
-  const origem = localizacao?.latitude && localizacao?.longitude
+  const tipoDestino = etapa === 'coletando' ? 'loja' : 'cliente'
+  const destinoTexto = montarDestinoMapa(destinoAtual, tipoDestino)
+  const origem = coordenadasValidas(localizacao?.latitude, localizacao?.longitude)
     ? `${localizacao.latitude},${localizacao.longitude}`
     : ''
   const embedUrl = destinoTexto
-    ? `https://maps.google.com/maps?q=${encodeURIComponent(destinoTexto)}&z=15&output=embed`
+    ? origem
+      ? `https://maps.google.com/maps?saddr=${encodeURIComponent(origem)}&daddr=${encodeURIComponent(destinoTexto)}&output=embed`
+      : `https://maps.google.com/maps?q=${encodeURIComponent(destinoTexto)}&z=16&output=embed`
     : origem
       ? `https://maps.google.com/maps?q=${encodeURIComponent(origem)}&z=15&output=embed`
       : ''
 
   const abrirMaps = () => {
+    if (!destinoTexto && !origem) return
     const url = destinoTexto
       ? `https://www.google.com/maps/dir/?api=1${origem ? `&origin=${origem}` : ''}&destination=${encodeURIComponent(destinoTexto)}&travelmode=driving`
       : origem
@@ -118,8 +149,14 @@ function MiniMapa({ etapa, localizacao, entrega }) {
       ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
           <MapPin size={28} className="text-primary mb-2" />
-          <p className="text-sm font-bold text-text-primary">Destino não informado</p>
-          <p className="text-xs font-semibold text-text-muted mt-1">Assim que houver endereço, a rota aparece aqui.</p>
+          <p className="text-sm font-bold text-text-primary">
+            {tipoDestino === 'loja' ? 'Localização da loja não cadastrada' : 'Destino não informado'}
+          </p>
+          <p className="text-xs font-semibold text-text-muted mt-1">
+            {tipoDestino === 'loja'
+              ? 'Peça para o gerente salvar endereço e localização da loja nas configurações.'
+              : 'Assim que houver endereço, a rota aparece aqui.'}
+          </p>
         </div>
       )}
       <div className="absolute inset-x-0 top-0 p-3 bg-gradient-to-b from-black/35 to-transparent pointer-events-none">
@@ -131,7 +168,8 @@ function MiniMapa({ etapa, localizacao, entrega }) {
       <button
         type="button"
         onClick={abrirMaps}
-        className="absolute right-3 bottom-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-white shadow-lg border-none hover:bg-primary/90 transition-colors"
+        disabled={!destinoTexto && !origem}
+        className="absolute right-3 bottom-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-white shadow-lg border-none hover:bg-primary/90 transition-colors disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed"
       >
         <MapPin size={13} /> Abrir rota
       </button>
@@ -160,6 +198,10 @@ function MiniMapa({ etapa, localizacao, entrega }) {
 function EntregaAtiva({ entrega, onAvançar, localizacao }) {
   const naLoja = entrega.etapa === 'coletando'
   const telefoneCliente = normalizarTelefone(entrega.cliente.telefone)
+  const ligarCliente = () => {
+    if (!telefoneCliente) return
+    window.location.href = `tel:${telefoneCliente}`
+  }
 
   return (
     <Motion.div
@@ -243,9 +285,10 @@ function EntregaAtiva({ entrega, onAvançar, localizacao }) {
               <p className="text-xs text-text-muted font-medium">{entrega.itens}</p>
             </div>
           </div>
-          <a
-            href={telefoneCliente ? `tel:${telefoneCliente}` : undefined}
-            onClick={(event) => { if (!telefoneCliente) event.preventDefault() }}
+          <button
+            type="button"
+            onClick={ligarCliente}
+            disabled={!telefoneCliente}
             title={telefoneCliente ? `Ligar para ${entrega.cliente.nome}` : 'Telefone não informado'}
             className={`w-9 h-9 rounded-full border flex items-center justify-center transition-all ${
               telefoneCliente
@@ -254,7 +297,7 @@ function EntregaAtiva({ entrega, onAvançar, localizacao }) {
             }`}
           >
             <Phone size={15} />
-          </a>
+          </button>
         </div>
 
         {/* Botão principal */}

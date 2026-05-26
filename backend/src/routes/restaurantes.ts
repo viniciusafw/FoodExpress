@@ -21,15 +21,49 @@ function serializarArray(valor: any) {
   return String(valor)
 }
 
+function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return Number.POSITIVE_INFINITY
+  if ((lat2 === 0 && lon2 === 0) || (lat1 === 0 && lon1 === 0)) return Number.POSITIVE_INFINITY
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function formatarDistancia(distanciaKm: number) {
+  if (!Number.isFinite(distanciaKm)) return null
+  if (distanciaKm < 1) return `${Math.round(distanciaKm * 1000)} m`
+  return `${distanciaKm.toFixed(1).replace('.', ',')} km`
+}
+
 function ehOperador(req: AuthRequest) {
   return String(req.userRole || '').toLowerCase() === 'operador'
+}
+
+async function podeGerenciarRestaurante(req: AuthRequest, restauranteId: string) {
+  if (ehOperador(req)) return true
+  const rest = await db.execute({
+    sql: `SELECT id, user_id, email FROM restaurantes WHERE id = ? LIMIT 1`,
+    args: [restauranteId]
+  })
+  if (!rest.rows.length) return false
+  const row = rest.rows[0] as any
+  const userId = String(req.userId || '')
+  const email = String(req.userEmail || '').toLowerCase()
+  return String(row.user_id || '') === userId || (email && String(row.email || '').toLowerCase() === email)
 }
 
 // GET /api/restaurantes — listar com filtros públicos
 router.get('/', async (req, res: Response) => {
   try {
     await ensureDatabaseHealth()
-    const { categoria, ordenar, limite = '50' } = req.query
+    const { categoria, ordenar, limite = '50', latitude, longitude } = req.query
+    const clienteLat = Number(latitude)
+    const clienteLng = Number(longitude)
+    const temLocalizacao = Number.isFinite(clienteLat) && Number.isFinite(clienteLng) && !(clienteLat === 0 && clienteLng === 0)
+    const limiteFinal = parseInt(limite as string) || 50
     let sql = "SELECT * FROM restaurantes WHERE COALESCE(status, 'ativo') IN ('ativo', 'fechado')"
     const args: any[] = []
 
@@ -51,12 +85,41 @@ router.get('/', async (req, res: Response) => {
       args.push(termo, termo, termo, singular, termo, termo)
     }
 
-    const col = ordenar === 'avaliacao' ? 'avaliacao_media' : 'created_at'
-    sql += ` ORDER BY ${col} DESC LIMIT ?`
-    args.push(parseInt(limite as string) || 50)
+    if (!temLocalizacao) {
+      const col = ordenar === 'avaliacao' ? 'avaliacao_media' : 'created_at'
+      sql += ` ORDER BY ${col} DESC LIMIT ?`
+      args.push(limiteFinal)
+    } else {
+      sql += ' ORDER BY created_at DESC LIMIT ?'
+      args.push(Math.max(limiteFinal, 200))
+    }
 
     const result = await db.execute({ sql, args })
-    res.json(result.rows)
+    let rows = result.rows as any[]
+
+    if (temLocalizacao) {
+      rows = rows.map((rest) => {
+        const distanciaKm = calcularDistancia(clienteLat, clienteLng, Number(rest.latitude), Number(rest.longitude))
+        return {
+          ...rest,
+          distancia_km: Number.isFinite(distanciaKm) ? Math.round(distanciaKm * 100) / 100 : null,
+          distancia: formatarDistancia(distanciaKm),
+        }
+      })
+
+      if (ordenar === 'avaliacao') {
+        rows.sort((a, b) => Number(b.avaliacao_media || 0) - Number(a.avaliacao_media || 0))
+      } else {
+        rows.sort((a, b) => {
+          const da = a.distancia_km == null ? Number.POSITIVE_INFINITY : Number(a.distancia_km)
+          const db = b.distancia_km == null ? Number.POSITIVE_INFINITY : Number(b.distancia_km)
+          return da - db
+        })
+      }
+      rows = rows.slice(0, limiteFinal)
+    }
+
+    res.json(rows)
   } catch (error) {
     console.error(error)
     res.status(500).json({ erro: 'Erro ao listar restaurantes' })
@@ -169,11 +232,14 @@ router.get('/pendentes', requireAuth, async (req: AuthRequest, res: Response) =>
 })
 
 // GET /api/restaurantes/cadastro — compatibilidade: busca por email ou pelo token se enviado
-router.get('/cadastro', async (req: AuthRequest, res: Response) => {
+router.get('/cadastro', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     await ensureDatabaseHealth()
     const email = String(req.query.email || '')
     if (!email) return res.status(400).json({ erro: 'Email obrigatório' }) as any
+    if (!ehOperador(req) && String(req.userEmail || '').toLowerCase() !== email.toLowerCase()) {
+      return res.status(403).json({ erro: 'Você não pode acessar este cadastro' }) as any
+    }
     const result = await db.execute({ sql: 'SELECT * FROM restaurantes WHERE email = ? ORDER BY created_at DESC LIMIT 1', args: [email] })
     if (!result.rows.length) return res.status(404).json({ erro: 'Restaurante não encontrado' }) as any
     res.json(result.rows[0])
@@ -243,6 +309,10 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     await ensureDatabaseHealth()
+    const id = String(req.params.id)
+    if (!(await podeGerenciarRestaurante(req, id))) {
+      return res.status(403).json({ erro: 'Você não pode alterar este restaurante' }) as any
+    }
     const {
       nome,
       email,
@@ -271,7 +341,14 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (categoria !== undefined) { sets.push('categoria = ?'); args.push(categoria) }
     if (logo !== undefined) { sets.push('logo = ?'); args.push(logo) }
     if (capa !== undefined) { sets.push('capa = ?'); args.push(capa) }
-    if (status !== undefined) { sets.push('status = ?'); args.push(status) }
+    if ((status !== undefined || taxa_comissao !== undefined) && !ehOperador(req)) {
+      return res.status(403).json({ erro: 'Status e comissão só podem ser alterados por operador' }) as any
+    }
+    if (status !== undefined) {
+      const statusPermitidos = ['pendente', 'ativo', 'fechado', 'rejeitado', 'inativo']
+      if (!statusPermitidos.includes(String(status))) return res.status(400).json({ erro: 'Status inválido' }) as any
+      sets.push('status = ?'); args.push(status)
+    }
     if (taxa_comissao !== undefined) { sets.push('taxa_comissao = ?'); args.push(Number(taxa_comissao)) }
     if (latitude !== undefined && latitude !== '') { sets.push('latitude = ?'); args.push(Number(latitude)) }
     if (longitude !== undefined && longitude !== '') { sets.push('longitude = ?'); args.push(Number(longitude)) }
@@ -280,7 +357,6 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (dias_aberto !== undefined) { sets.push('dias_aberto = ?'); args.push(serializarArray(dias_aberto)) }
     if (formas_pagamento !== undefined) { sets.push('formas_pagamento = ?'); args.push(serializarArray(formas_pagamento)) }
 
-    const id = String(req.params.id)
     args.push(id)
     await db.execute({ sql: `UPDATE restaurantes SET ${sets.join(', ')} WHERE id = ?`, args })
 
@@ -296,6 +372,9 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 // DELETE /api/restaurantes/:id — desativar
 router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    if (!(await podeGerenciarRestaurante(req, String(req.params.id)))) {
+      return res.status(403).json({ erro: 'Você não pode desativar este restaurante' }) as any
+    }
     await db.execute({ sql: "UPDATE restaurantes SET status = 'inativo' WHERE id = ?", args: [String(req.params.id)] })
     res.json({ mensagem: 'Restaurante desativado com sucesso' })
   } catch (error) {

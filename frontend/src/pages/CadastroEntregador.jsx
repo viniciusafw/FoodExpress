@@ -86,6 +86,7 @@ export default function CadastroEntregador() {
         telefone: dados.telefone,
         veiculo_tipo: dados.veiculo,
         veiculo_placa: dados.veiculo === 'bicicleta' ? '' : dados.placa,
+        cadastro: true,
       })
       setPasso(3)
     } catch (err) {

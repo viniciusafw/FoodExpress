@@ -5,6 +5,16 @@ import { requireAuth, AuthRequest } from '../middleware/auth'
 
 const router = Router()
 
+function ehOperador(req: AuthRequest) {
+  return String(req.userRole || '').toLowerCase() === 'operador'
+}
+
+function podeAcessarCliente(req: AuthRequest, cliente: any) {
+  if (ehOperador(req)) return true
+  const userId = String(req.userId || '')
+  return [cliente?.id, cliente?.user_id].filter(Boolean).map(String).includes(userId)
+}
+
 // GET /api/clientes — buscar cliente do usuário logado
 router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
@@ -21,6 +31,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.execute({ sql: 'SELECT * FROM clientes WHERE id = ?', args: [req.params.id] })
     if (!result.rows.length) return res.status(404).json({ erro: 'Cliente não encontrado' }) as any
+    if (!podeAcessarCliente(req, result.rows[0])) return res.status(403).json({ erro: 'Você não pode acessar este cliente' }) as any
     res.json(result.rows[0])
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao buscar cliente' })
@@ -48,6 +59,10 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
 // PUT /api/clientes/:id
 router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    const atual = await db.execute({ sql: 'SELECT * FROM clientes WHERE id = ?', args: [req.params.id] })
+    if (!atual.rows.length) return res.status(404).json({ erro: 'Cliente não encontrado' }) as any
+    if (!podeAcessarCliente(req, atual.rows[0])) return res.status(403).json({ erro: 'Você não pode alterar este cliente' }) as any
+
     const { nome, email, telefone, endereco_principal, latitude, longitude } = req.body
     const sets: string[] = []
     const args: any[] = []

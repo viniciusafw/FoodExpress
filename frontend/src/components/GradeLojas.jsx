@@ -1,15 +1,24 @@
 import { useState, useEffect } from 'react'
 import StoreCard from './CartaoLoja'
 import api from '../services/api'
+import { paramsComLocalizacao } from '../utils/localizacao'
 
 export default function StoreGrid({ tipo }) {
   const [lista, setLista] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
+  const [versaoLocalizacao, setVersaoLocalizacao] = useState(0)
+
+  useEffect(() => {
+    const atualizar = () => setVersaoLocalizacao(v => v + 1)
+    window.addEventListener('localizacao-atualizada', atualizar)
+    return () => window.removeEventListener('localizacao-atualizada', atualizar)
+  }, [])
 
   useEffect(() => {
     setErro('')
-    api.restaurantes.listar(tipo ? { categoria: tipo } : {})
+    setCarregando(true)
+    api.restaurantes.listar(paramsComLocalizacao(tipo ? { categoria: tipo } : {}))
       .then(dados => {
         const normalizados = dados.map(r => ({
           ...r,
@@ -29,7 +38,7 @@ export default function StoreGrid({ tipo }) {
         }
       })
       .finally(() => setCarregando(false))
-  }, [tipo])
+  }, [tipo, versaoLocalizacao])
 
   if (carregando) {
     return (

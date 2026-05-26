@@ -87,8 +87,16 @@ function AnimatedRoutes() {
         <Route path="/politica-privacidade" element={<PageWrapper><PoliticaPrivacidade /></PageWrapper>} />
         <Route path="/termos-parceiros" element={<PageWrapper><TermosParceiros /></PageWrapper>} />
         <Route path="/auth/callback" element={<AuthCallback />} />
-        <Route path="/pedido/:id" element={<PageWrapper><DetalhesPedido /></PageWrapper>} />
-        <Route path="/rastrear/:id" element={<PageWrapper><RastrearPedido /></PageWrapper>} />
+        <Route path="/pedido/:id" element={
+          <RotaProtegida perfil={['cliente', 'gerente', 'operador', 'entregador']}>
+            <PageWrapper><DetalhesPedido /></PageWrapper>
+          </RotaProtegida>
+        } />
+        <Route path="/rastrear/:id" element={
+          <RotaProtegida perfil={['cliente', 'entregador', 'operador']}>
+            <PageWrapper><RastrearPedido /></PageWrapper>
+          </RotaProtegida>
+        } />
 
         {/* Painel do restaurante (dono) */}
         <Route path="/painel-restaurante" element={

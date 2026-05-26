@@ -198,7 +198,7 @@ function getConfig(arg1, arg2) {
     ctaTexto: 'Entrar na minha conta',
     ctaCls: 'bg-primary hover:bg-primary-dark',
     mostrarCadastro: true,
-    mostrarAlternativas: true,
+    mostrarAlternativas: false,
     voltarLabel: null,
   }
 }
@@ -391,7 +391,7 @@ export default function Login() {
                 <p className="text-sm font-semibold text-text-muted">
                   Digite o código enviado para <strong className="text-text-primary">{email}</strong>.
                 </p>
-                {verificacaoLogin.devCode && (
+                {import.meta.env.DEV && verificacaoLogin.devCode && (
                   <p className="text-xs text-text-muted font-semibold">Código dev: <strong className="text-text-primary">{verificacaoLogin.devCode}</strong></p>
                 )}
                 <input
@@ -501,38 +501,17 @@ export default function Login() {
               </Motion.div>
             )}
 
-            {/* Alternar tipo de acesso */}
-            <Motion.div
-              className="mt-5 pt-4 border-t border-border flex flex-col gap-1.5 items-center"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
-            >
-              {config.mostrarAlternativas && (
-                <>
-                  <button onClick={() => navigate('/login?parceiro=true')}
-                    className="text-xs text-text-muted hover:text-secondary transition-colors bg-transparent border-none cursor-pointer font-semibold">
-                    Sou parceiro (restaurante/mercado) →
-                  </button>
-                  <button onClick={() => navigate('/login?entregador=true')}
-                    className="text-xs text-text-muted hover:text-emerald-600 transition-colors bg-transparent border-none cursor-pointer font-semibold">
-                    Sou entregador →
-                  </button>
-                  <button onClick={() => navigate('/register/entregador')}
-                    className="text-xs text-emerald-600 hover:text-emerald-700 font-bold transition-colors bg-transparent border-none cursor-pointer underline">
-                    Cadastrar como entregador →
-                  </button>
-                  <button onClick={() => navigate('/login?operador=true')}
-                    className="text-xs text-text-muted hover:text-emerald-700 transition-colors bg-transparent border-none cursor-pointer font-semibold">
-                    Sou operador →
-                  </button>
-                </>
-              )}
-              {config.voltarLabel && (
+            {config.voltarLabel && (
+              <Motion.div
+                className="mt-5 pt-4 border-t border-border flex justify-center"
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }}
+              >
                 <button onClick={() => navigate('/login')}
                   className="text-xs text-text-muted hover:text-text-primary transition-colors bg-transparent border-none cursor-pointer font-semibold">
                   {config.voltarLabel}
                 </button>
-              )}
-            </Motion.div>
+              </Motion.div>
+            )}
           </Motion.div>
         </AnimatePresence>
       </div>

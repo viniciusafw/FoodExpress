@@ -26,6 +26,7 @@ async function criarTokenBackend(usuario) {
     perfil: usuario.perfil,
     email: usuario.email,
     nome: usuario.nome,
+    cadastro: Boolean(usuario.cadastro),
   })
   return data.token
 }
@@ -122,22 +123,9 @@ export function AuthProvider({ children }) {
             : usuarioCliente
         ));
       } catch {
-        const usuarioCliente = {
-          id: auth0Sub,
-          nome: auth0Name || (auth0Email ? auth0Email.split('@')[0] : 'Cliente'),
-          email: auth0Email,
-          telefone: '',
-          perfil: 'cliente',
-          provider: 'auth0',
-        };
-        localStorage.setItem('usuario', JSON.stringify(usuarioCliente));
-        setUsuario((atual) => (
-          atual?.id === usuarioCliente.id &&
-          atual?.email === usuarioCliente.email &&
-          atual?.perfil === usuarioCliente.perfil
-            ? atual
-            : usuarioCliente
-        ));
+        localStorage.removeItem('usuario');
+        localStorage.removeItem('token');
+        setUsuario(null);
       } finally {
         ultimaContaAuth0Sincronizada.current = chaveContaAuth0;
         setAuth0Sincronizado(true);
@@ -156,6 +144,7 @@ export function AuthProvider({ children }) {
       veiculo_tipo: extras.veiculo_tipo || extras.veiculo || '',
       veiculo_placa: extras.veiculo_placa || extras.placa || '',
       perfil,
+      cadastro: Boolean(extras.cadastro),
     }
     const token = await criarTokenBackend(novoUsuario)
     localStorage.setItem('usuario', JSON.stringify(novoUsuario))
@@ -228,6 +217,7 @@ export function AuthProvider({ children }) {
       email: dados.emailDono || dados.ownerEmail,
       telefone: dados.telefoneDono || dados.ownerPhone,
       perfil: 'gerente',
+      cadastro: true,
       loja: {
         nome: dados.nomeLoja || dados.storeName,
         nomeFicticio: dados.nomeFicticio || dados.storeFantasyName || dados.fantasia || dados.nomeFantasia,

@@ -196,7 +196,7 @@ export default function CadastroUsuario() {
                   <strong className="text-text-primary">{dados.email}</strong>
                 </p>
               </div>
-              {verificacaoEmail.devCode && (
+              {import.meta.env.DEV && verificacaoEmail.devCode && (
                 <p className="text-xs text-text-muted font-semibold">Código dev: <strong className="text-text-primary">{verificacaoEmail.devCode}</strong></p>
               )}
               <input
@@ -232,7 +232,7 @@ export default function CadastroUsuario() {
                   Abrir WhatsApp
                 </a>
               )}
-              {verificacaoTelefone.devCode && (
+              {import.meta.env.DEV && verificacaoTelefone.devCode && (
                 <p className="text-xs text-text-muted font-semibold">Código dev: <strong className="text-text-primary">{verificacaoTelefone.devCode}</strong></p>
               )}
               <input

@@ -437,7 +437,7 @@ router.post('/telefone/confirmar', async (req, res) => {
 // Emite JWT no backend para fluxos locais/perfis internos sem expor JWT_SECRET no bundle.
 router.post('/session', async (req, res) => {
   try {
-    const { email, nome, perfil, userId } = req.body;
+    const { email, nome, perfil, userId, cadastro = false } = req.body;
     const emailLimpo = normalizarEmail(String(email || ''));
     const perfilNormalizado = String(perfil || 'cliente').toLowerCase().trim();
 
@@ -466,6 +466,30 @@ router.post('/session', async (req, res) => {
       }
     }
 
+    if (['gerente', 'restaurante'].includes(perfilNormalizado) && !cadastro) {
+      const existente = await db.execute({
+        sql: `SELECT id FROM restaurantes
+              WHERE lower(email) = ? OR user_id = ?
+              LIMIT 1`,
+        args: [emailLimpo, userId || idEstavelPorEmail(emailLimpo, perfilNormalizado)]
+      });
+      if (!existente.rows.length) {
+        return res.status(404).json({ erro: 'Restaurante não encontrado. Faça o cadastro do estabelecimento primeiro.' });
+      }
+    }
+
+    if (perfilNormalizado === 'entregador' && !cadastro) {
+      const existente = await db.execute({
+        sql: `SELECT id FROM entregadores
+              WHERE lower(email) = ? OR user_id = ?
+              LIMIT 1`,
+        args: [emailLimpo, userId || idEstavelPorEmail(emailLimpo, perfilNormalizado)]
+      });
+      if (!existente.rows.length) {
+        return res.status(404).json({ erro: 'Entregador não encontrado. Faça o cadastro primeiro.' });
+      }
+    }
+
     const id = userId || idEstavelPorEmail(emailLimpo, perfilNormalizado);
     const token = gerarToken(id, perfilNormalizado, {
       email: emailLimpo,
@@ -486,6 +510,12 @@ router.post('/auth0-sync', async (req, res) => {
     if (!email) return res.status(400).json({ erro: 'E-mail obrigatório' });
 
     const emailLimpo = email.toLowerCase().trim();
+    const perfisExistentes = await buscarPerfisPorEmail(emailLimpo);
+    const perfisDiferentes = perfisExistentes.filter(p => p !== 'cliente');
+    if (perfisDiferentes.length) {
+      return res.status(409).json({ erro: `Este e-mail já está cadastrado como perfil ${perfisDiferentes.join(', ')}.` });
+    }
+
     const existente = await db.execute({
       sql: 'SELECT * FROM clientes WHERE email = ?',
       args: [emailLimpo]
