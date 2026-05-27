@@ -5,6 +5,7 @@ import { db } from '../lib/db';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { enviarCodigoAcesso } from '../lib/email';
+import { ensureDatabaseHealth } from '../lib/schema';
 
 const router = Router();
 
@@ -44,6 +45,26 @@ function gerarCodigoVerificacao() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
 
+function hashCodigoVerificacao(token: string, codigo: string) {
+  return crypto
+    .createHash('sha256')
+    .update(`${token}:${String(codigo || '').trim()}`)
+    .digest('hex');
+}
+
+function codigoConfere(pendente: any, codigo: string) {
+  const recebidoHash = hashCodigoVerificacao(String(pendente.token || ''), codigo);
+  const salvoHash = String(pendente.codigo_hash || '');
+  if (salvoHash) {
+    try {
+      return crypto.timingSafeEqual(Buffer.from(recebidoHash), Buffer.from(salvoHash));
+    } catch {
+      return false;
+    }
+  }
+  return String(pendente.codigo || '') === String(codigo || '').trim();
+}
+
 async function buscarPerfisPorEmail(email: string) {
   const emailLimpo = normalizarEmail(email);
   const perfis: string[] = [];
@@ -65,6 +86,40 @@ async function buscarPerfisPorEmail(email: string) {
   if (operador.rows.length) perfis.push('operador');
 
   return perfis;
+}
+
+async function buscarUsuarioParaLogin(email: string, perfil: string) {
+  const emailLimpo = normalizarEmail(email);
+  if (perfil === 'cliente') {
+    const result = await db.execute({ sql: 'SELECT id, nome, email, telefone FROM clientes WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
+    const row = result.rows[0] as any;
+    return row ? { ...row, perfil: 'cliente' } : null;
+  }
+
+  if (perfil === 'gerente' || perfil === 'restaurante') {
+    const gerente = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone, restaurante_id FROM gerentes WHERE lower(email) = ? AND COALESCE(status, "ativo") = "ativo" LIMIT 1', args: [emailLimpo] });
+    if (gerente.rows.length) {
+      const row = gerente.rows[0] as any;
+      return { id: row.user_id || row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', restaurante_id: row.restaurante_id || '', perfil: 'gerente' };
+    }
+    const rest = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone FROM restaurantes WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
+    const row = rest.rows[0] as any;
+    return row ? { id: row.user_id || row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', restaurante_id: row.id, perfil: 'gerente' } : null;
+  }
+
+  if (perfil === 'entregador') {
+    const result = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone FROM entregadores WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
+    const row = result.rows[0] as any;
+    return row ? { id: row.user_id || row.id, entregador_id: row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', perfil: 'entregador' } : null;
+  }
+
+  if (perfil === 'operador') {
+    const result = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone FROM operadores WHERE lower(email) = ? AND COALESCE(status, "ativo") = "ativo" LIMIT 1', args: [emailLimpo] });
+    const row = result.rows[0] as any;
+    return row ? { id: row.user_id || row.id, operador_id: row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', perfil: 'operador' } : null;
+  }
+
+  return null;
 }
 
 async function criarOuAtualizarClientePorEmail(row: any) {
@@ -116,10 +171,32 @@ function respostaSessaoCliente(cliente: any) {
   };
 }
 
+function respostaSessaoPerfil(usuario: any) {
+  const perfil = usuario.perfil || 'cliente';
+  const token = gerarToken(usuario.id, perfil, {
+    email: usuario.email || '',
+    nome: usuario.nome || '',
+  });
+  return {
+    token,
+    usuario: {
+      id: usuario.id,
+      nome: usuario.nome || '',
+      email: usuario.email || '',
+      telefone: usuario.telefone || '',
+      perfil,
+      restaurante_id: usuario.restaurante_id || undefined,
+      entregador_id: usuario.entregador_id || undefined,
+      operador_id: usuario.operador_id || undefined,
+    }
+  };
+}
+
 // ── POST /api/auth/registrar ─────────────────────────────────────────────────
 // Etapa 1: Salva email como pendente e envia código de confirmação
 router.post('/registrar', async (req, res) => {
   try {
+    await ensureDatabaseHealth();
     const { email, telefone, nome } = req.body;
     if (!email) return res.status(400).json({ erro: 'E-mail obrigatório' });
 
@@ -139,13 +216,14 @@ router.post('/registrar', async (req, res) => {
     const pendingId = `pend_${crypto.randomUUID().slice(0, 12)}`;
     const tokenAtivacao = crypto.randomUUID();
     const codigo = gerarCodigoVerificacao();
+    const codigoHash = hashCodigoVerificacao(tokenAtivacao, codigo);
     const expira = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     await db.execute({
       sql: `INSERT OR REPLACE INTO usuarios_pendentes 
-            (id, email, nome, telefone, token, codigo, tipo, expira_em, criado_em)
-            VALUES (?, ?, ?, ?, ?, ?, 'email', ?, CURRENT_TIMESTAMP)`,
-      args: [pendingId, emailLimpo, nome || '', telefone || '', tokenAtivacao, codigo, expira]
+            (id, email, nome, telefone, token, codigo, codigo_hash, tipo, expira_em, criado_em)
+            VALUES (?, ?, ?, ?, ?, NULL, ?, 'email', ?, CURRENT_TIMESTAMP)`,
+      args: [pendingId, emailLimpo, nome || '', telefone || '', tokenAtivacao, codigoHash, expira]
     }).catch(async () => {
       // Cria a tabela se não existir
       await db.execute(`
@@ -156,17 +234,19 @@ router.post('/registrar', async (req, res) => {
           telefone TEXT,
           token TEXT NOT NULL,
           codigo TEXT,
+          codigo_hash TEXT,
           tipo TEXT DEFAULT 'email',
           expira_em DATETIME NOT NULL,
           usado INTEGER DEFAULT 0,
           criado_em DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
+      await db.execute(`ALTER TABLE usuarios_pendentes ADD COLUMN codigo_hash TEXT`).catch(() => {});
       await db.execute({
         sql: `INSERT OR REPLACE INTO usuarios_pendentes 
-              (id, email, nome, telefone, token, codigo, tipo, expira_em)
-              VALUES (?, ?, ?, ?, ?, ?, 'email', ?)`,
-        args: [pendingId, emailLimpo, nome || '', telefone || '', tokenAtivacao, codigo, expira]
+              (id, email, nome, telefone, token, codigo, codigo_hash, tipo, expira_em)
+              VALUES (?, ?, ?, ?, ?, NULL, ?, 'email', ?)`,
+        args: [pendingId, emailLimpo, nome || '', telefone || '', tokenAtivacao, codigoHash, expira]
       });
     });
 
@@ -187,15 +267,16 @@ router.post('/registrar', async (req, res) => {
 // ── POST /api/auth/email/confirmar ───────────────────────────────────────────
 router.post('/email/confirmar', async (req, res) => {
   try {
+    await ensureDatabaseHealth();
     const { token, codigo } = req.body;
     if (!token || !codigo) return res.status(400).json({ erro: 'Token e código são obrigatórios' });
 
     const pending = await db.execute({
       sql: `SELECT * FROM usuarios_pendentes
-            WHERE token = ? AND codigo = ? AND tipo = 'email' AND usado = 0 AND expira_em > datetime('now')`,
-      args: [token, String(codigo).trim()]
+            WHERE token = ? AND tipo = 'email' AND usado = 0 AND expira_em > datetime('now')`,
+      args: [token]
     });
-    if (!pending.rows.length) {
+    if (!pending.rows.length || !codigoConfere(pending.rows[0], codigo)) {
       return res.status(400).json({ erro: 'Código inválido ou expirado' });
     }
 
@@ -218,38 +299,48 @@ router.post('/email/confirmar', async (req, res) => {
 // ── POST /api/auth/login ─────────────────────────────────────────────────────
 router.post('/login', async (req, res) => {
   try {
-    const { email } = req.body;
+    await ensureDatabaseHealth();
+    const { email, perfil = 'cliente' } = req.body;
     if (!email) return res.status(400).json({ erro: 'E-mail obrigatório' });
 
     const emailLimpo = normalizarEmail(email);
-
-    const perfisExistentes = await buscarPerfisPorEmail(emailLimpo);
-    if (perfisExistentes.some(p => p !== 'cliente')) {
-      return res.status(400).json({ erro: 'Este e-mail pertence a outro tipo de conta. Use o perfil correto ou cadastre um e-mail diferente.' });
+    const perfilNormalizado = String(perfil || 'cliente').toLowerCase().trim();
+    if (!PERFIS_VALIDOS.has(perfilNormalizado)) {
+      return res.status(400).json({ erro: 'Perfil inválido' });
     }
 
-    // Verifica se existe conta confirmada
-    const existente = await db.execute({
-      sql: 'SELECT id FROM clientes WHERE lower(email) = ?',
-      args: [emailLimpo]
-    });
+    if (perfilNormalizado === 'cliente') {
+      const perfisExistentes = await buscarPerfisPorEmail(emailLimpo);
+      if (perfisExistentes.some(p => p !== 'cliente')) {
+        return res.status(400).json({ erro: 'Este e-mail pertence a outro tipo de conta. Use o perfil correto ou cadastre um e-mail diferente.' });
+      }
+    }
 
-    if (!existente.rows.length) {
-      return res.status(404).json({ erro: 'E-mail não cadastrado. Faça o cadastro primeiro.' });
+    const usuarioLogin = await buscarUsuarioParaLogin(emailLimpo, perfilNormalizado);
+    if (!usuarioLogin) {
+      const mensagens: Record<string, string> = {
+        cliente: 'E-mail não cadastrado. Faça o cadastro primeiro.',
+        gerente: 'Restaurante não encontrado para este e-mail.',
+        restaurante: 'Restaurante não encontrado para este e-mail.',
+        entregador: 'Entregador não encontrado para este e-mail.',
+        operador: 'Operador não encontrado ou inativo.',
+      };
+      return res.status(404).json({ erro: mensagens[perfilNormalizado] || 'Conta não encontrada.' });
     }
 
     const tokenLogin = crypto.randomUUID();
     const codigo = gerarCodigoVerificacao();
+    const codigoHash = hashCodigoVerificacao(tokenLogin, codigo);
     const expira = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
     await db.execute({
       sql: `INSERT OR REPLACE INTO usuarios_pendentes 
-            (id, email, token, codigo, tipo, expira_em, criado_em)
-            VALUES (?, ?, ?, ?, 'login', ?, CURRENT_TIMESTAMP)`,
-      args: [`login_${crypto.randomUUID().slice(0,8)}`, emailLimpo, tokenLogin, codigo, expira]
+            (id, email, nome, telefone, token, codigo, codigo_hash, tipo, expira_em, criado_em)
+            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, CURRENT_TIMESTAMP)`,
+      args: [`login_${crypto.randomUUID().slice(0,8)}`, emailLimpo, usuarioLogin.nome || '', usuarioLogin.telefone || '', tokenLogin, codigoHash, `login:${perfilNormalizado}`, expira]
     });
 
-    await enviarCodigoAcesso(emailLimpo, codigo, emailLimpo.split('@')[0], 'login');
+    await enviarCodigoAcesso(emailLimpo, codigo, usuarioLogin.nome || emailLimpo.split('@')[0], 'login');
 
     res.json({
       mensagem: 'Código de acesso enviado para seu e-mail',
@@ -265,29 +356,30 @@ router.post('/login', async (req, res) => {
 // ── POST /api/auth/login/confirmar ───────────────────────────────────────────
 router.post('/login/confirmar', async (req, res) => {
   try {
+    await ensureDatabaseHealth();
     const { token, codigo } = req.body;
     if (!token || !codigo) return res.status(400).json({ erro: 'Token e código são obrigatórios' });
 
     const pending = await db.execute({
       sql: `SELECT * FROM usuarios_pendentes
-            WHERE token = ? AND codigo = ? AND tipo = 'login' AND usado = 0 AND expira_em > datetime('now')`,
-      args: [token, String(codigo).trim()]
+            WHERE token = ? AND tipo LIKE 'login%' AND usado = 0 AND expira_em > datetime('now')`,
+      args: [token]
     });
-    if (!pending.rows.length) {
+    if (!pending.rows.length || !codigoConfere(pending.rows[0], codigo)) {
       return res.status(400).json({ erro: 'Código inválido ou expirado' });
     }
 
-    const emailLimpo = normalizarEmail((pending.rows[0] as any).email);
-    const clienteResult = await db.execute({
-      sql: 'SELECT * FROM clientes WHERE lower(email) = ? LIMIT 1',
-      args: [emailLimpo]
-    });
-    if (!clienteResult.rows.length) {
-      return res.status(404).json({ erro: 'E-mail não cadastrado. Faça o cadastro primeiro.' });
+    const pendente = pending.rows[0] as any;
+    const emailLimpo = normalizarEmail(pendente.email);
+    const tipo = String(pendente.tipo || 'login:cliente');
+    const perfil = tipo.includes(':') ? tipo.split(':')[1] : 'cliente';
+    const usuarioLogin = await buscarUsuarioParaLogin(emailLimpo, perfil);
+    if (!usuarioLogin) {
+      return res.status(404).json({ erro: 'Conta não encontrada ou inativa.' });
     }
 
     await db.execute({ sql: 'UPDATE usuarios_pendentes SET usado = 1 WHERE token = ?', args: [token] });
-    res.json(respostaSessaoCliente(clienteResult.rows[0] as any));
+    res.json(respostaSessaoPerfil(usuarioLogin));
   } catch (error) {
     console.error(error);
     res.status(500).json({ erro: 'Erro ao confirmar login' });

@@ -231,6 +231,7 @@ CREATE TABLE IF NOT EXISTS usuarios_pendentes (
     telefone TEXT,
     token TEXT NOT NULL,
     codigo TEXT,
+    codigo_hash TEXT,
     tipo TEXT DEFAULT 'email',
     expira_em DATETIME NOT NULL,
     usado INTEGER DEFAULT 0,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff, Store, User, Bike, ArrowRight, ShieldCheck } from 'lucide-react'
+import { Store, User, Bike, ArrowRight, ShieldCheck } from 'lucide-react'
 import logoSrc from '../imgs/Logo-site.png'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import api from '../services/api'
@@ -211,14 +211,12 @@ export default function Login() {
   const eOperador   = params.get('operador')   === 'true'
 
   const [email, setEmail]               = useState('')
-  const [senha, setSenha]               = useState('')
-  const [mostrarSenha, setMostrarSenha] = useState(false)
   const [carregando, setCarregando]     = useState(false)
   const [erro, setErro]                 = useState('')
   const [sucesso, setSucesso]           = useState('')
   const [verificacaoLogin, setVerificacaoLogin] = useState(null)
   const [codigoLogin, setCodigoLogin] = useState('')
-  const { entrar, entrarComGoogle, entrarComEmail, aplicarSessao }  = useAuth()
+  const { entrarComGoogle, entrarComEmail, aplicarSessao }  = useAuth()
   const navigate    = useNavigate()
   const config      = getConfig({ eParceiro, eEntregador, eOperador })
   const perfilLogin = eOperador ? 'operador' : eEntregador ? 'entregador' : eParceiro ? 'gerente' : 'cliente'
@@ -229,13 +227,9 @@ export default function Login() {
     setErro('')
     setSucesso('')
     try {
-      if (perfilLogin === 'cliente') {
-        const resposta = await entrarComEmail(email)
-        setVerificacaoLogin(resposta)
-        setSucesso('Enviamos um código de acesso para seu e-mail.')
-      } else {
-        await entrar(email, perfilLogin)
-      }
+      const resposta = await entrarComEmail(email, perfilLogin)
+      setVerificacaoLogin(resposta)
+      setSucesso('Enviamos um código de acesso para seu e-mail.')
     } catch (error) {
       setErro(error?.message || 'Não foi possível fazer login.')
     } finally {
@@ -425,24 +419,6 @@ export default function Login() {
                   value={email} onChange={e => setEmail(e.target.value)}
                   required className={inputCls} />
               </Motion.div>
-
-              {perfilLogin !== 'cliente' && (
-                <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
-                  <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Senha</label>
-                  <div className="relative">
-                    <input
-                      type={mostrarSenha ? 'text' : 'password'} placeholder="••••••••"
-                      value={senha} onChange={e => setSenha(e.target.value)} required
-                      className="w-full px-4 py-3.5 pr-12 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,107,53,0.08)] placeholder:text-text-muted placeholder:font-normal"
-                    />
-                    <Motion.button type="button" onClick={() => setMostrarSenha(s => !s)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted bg-transparent border-none cursor-pointer hover:text-text-primary transition-colors"
-                      whileTap={{ scale: 0.85 }}>
-                      {mostrarSenha ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </Motion.button>
-                  </div>
-                </Motion.div>
-              )}
 
               <Motion.button
                 type="submit" disabled={carregando}

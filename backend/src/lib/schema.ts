@@ -120,6 +120,7 @@ export async function ensureDatabaseHealth() {
         telefone TEXT,
         token TEXT NOT NULL,
         codigo TEXT,
+        codigo_hash TEXT,
         tipo TEXT DEFAULT 'email',
         expira_em DATETIME NOT NULL,
         usado INTEGER DEFAULT 0,
@@ -131,6 +132,7 @@ export async function ensureDatabaseHealth() {
       await ensureColumn('usuarios_pendentes', 'telefone', 'TEXT')
       await ensureColumn('usuarios_pendentes', 'token', 'TEXT')
       await ensureColumn('usuarios_pendentes', 'codigo', 'TEXT')
+      await ensureColumn('usuarios_pendentes', 'codigo_hash', 'TEXT')
       await ensureColumn('usuarios_pendentes', 'tipo', "TEXT DEFAULT 'email'")
       await ensureColumn('usuarios_pendentes', 'expira_em', 'DATETIME')
       await ensureColumn('usuarios_pendentes', 'usado', 'INTEGER DEFAULT 0')

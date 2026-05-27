@@ -31,10 +31,10 @@ async function criarTokenBackend(usuario) {
   return data.token
 }
 
-async function enviarLinkLoginPorEmail(email) {
+async function enviarCodigoLoginPorEmail(email, perfil = 'cliente') {
   const emailLimpo = String(email || '').trim()
   if (!emailLimpo) throw new Error('E-mail obrigatório para login.')
-  return api.auth.login({ email: emailLimpo })
+  return api.auth.login({ email: emailLimpo, perfil })
 }
 
 function destinoPorPerfil(perfil) {
@@ -279,7 +279,7 @@ export function AuthProvider({ children }) {
     entrar,
     aplicarSessao,
     entrarComGoogle,
-    entrarComEmail: enviarLinkLoginPorEmail,
+    entrarComEmail: enviarCodigoLoginPorEmail,
     cadastrarCliente,
     cadastrarGerente,
     sair,
