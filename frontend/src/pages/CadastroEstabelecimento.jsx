@@ -1,7 +1,7 @@
 import { useState, createElement, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, Link } from 'react-router-dom'
-import { Store, MapPin, Phone, User, Mail, ArrowLeft, ChevronRight, CheckCircle, Building2 } from 'lucide-react'
+import { Store, MapPin, Phone, User, Mail, Lock, Eye, EyeOff, ArrowLeft, ChevronRight, CheckCircle, Building2 } from 'lucide-react'
 import { motion as Motion } from 'framer-motion'
 import { mascaraTelefone, mascaraCNPJ, mascaraCPF } from '../utils/mascaras'
 
@@ -56,8 +56,9 @@ const cardVariants = {
 export default function CadastroLoja() {
   const [dados, setDados] = useState({
     nomeLoja: '', nomeFicticio: '', tipoLoja: '', cnpjLoja: '', enderecoLoja: '', telefoneLoja: '',
-    nomeDono: '', emailDono: '', telefoneDono: '', cpfDono: '',
+    nomeDono: '', emailDono: '', telefoneDono: '', cpfDono: '', senha: '',
   })
+  const [mostrarSenha, setMostrarSenha] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [aceitouTermos, setAceitouTermos] = useState(false)
   const [cnpjStatus, setCnpjStatus] = useState(null) // null | 'buscando' | 'ok' | 'erro'
@@ -114,6 +115,7 @@ export default function CadastroLoja() {
         ownerEmail: dados.emailDono,
         ownerPhone: dados.telefoneDono,
         ownerCpf: dados.cpfDono,
+        password: dados.senha,
       })
     } catch (error) {
       console.error('Erro ao cadastrar gerente:', error)
@@ -330,6 +332,22 @@ export default function CadastroLoja() {
               <Campo label="E-mail" name="emailDono" type="email" placeholder="seu@email.com" Icon={Mail} value={dados.emailDono} onChange={handleChange} />
               <Campo label="Telefone" name="telefoneDono" type="tel" placeholder="(11) 99999-9999" Icon={Phone} value={dados.telefoneDono} onChange={handleChange} />
               <Campo label="CPF" name="cpfDono" placeholder="000.000.000-00" Icon={User} value={dados.cpfDono} onChange={handleChange} />
+
+              <div>
+                <label className="block text-xs font-extrabold text-text-secondary uppercase tracking-wide mb-1.5">Senha de acesso *</label>
+                <div className="relative">
+                  <Lock size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                  <input name="senha" type={mostrarSenha ? 'text' : 'password'}
+                    placeholder="Mínimo 6 caracteres"
+                    value={dados.senha} onChange={handleChange} minLength={6} required
+                    className="w-full pl-10 pr-12 py-3.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all focus:border-secondary focus:bg-white focus:shadow-[0_0_0_3px_rgba(46,41,78,0.06)] placeholder:text-text-muted placeholder:font-normal"
+                  />
+                  <button type="button" onClick={() => setMostrarSenha(s => !s)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted bg-transparent border-none cursor-pointer hover:text-text-primary">
+                    {mostrarSenha ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <label className="flex items-start gap-2.5 cursor-pointer mt-5">

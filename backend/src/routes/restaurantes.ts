@@ -4,6 +4,7 @@ import { db } from '../lib/db'
 import { validarCNPJ } from '../lib/validacoes'
 import { requireAuth, AuthRequest } from '../middleware/auth'
 import { ensureDatabaseHealth, buscarRestauranteDoUsuario, vincularRestauranteAoUsuario } from '../lib/schema'
+import { hashSenha } from '../lib/password'
 
 const router = Router()
 
@@ -163,11 +164,19 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
       ownerName,
       ownerEmail,
       ownerPhone,
+      senha,
+      password,
     } = req.body
+    const senhaInformada = String(senha || password || '')
+    const senhaHash = senhaInformada ? hashSenha(senhaInformada) : null
 
     const existente = await buscarRestauranteDoUsuario(userId, email || req.userEmail, ownerName || req.userName)
     if (existente) {
       await vincularRestauranteAoUsuario(String(existente.id), userId, email || req.userEmail, ownerName || req.userName)
+      if (senhaHash) {
+        await db.execute({ sql: 'UPDATE restaurantes SET senha_hash = ? WHERE id = ?', args: [senhaHash, String(existente.id)] })
+        await db.execute({ sql: 'UPDATE gerentes SET senha_hash = ? WHERE restaurante_id = ? OR user_id = ?', args: [senhaHash, String(existente.id), userId] })
+      }
       const atualizado = await db.execute({ sql: 'SELECT * FROM restaurantes WHERE id = ?', args: [String(existente.id)] })
       return res.json(atualizado.rows[0] || existente) as any
     }
@@ -180,8 +189,8 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
     await db.execute({
       sql: `INSERT INTO restaurantes
             (id, user_id, nome, cnpj, email, telefone, endereco, categoria, descricao, latitude, longitude,
-             taxa_comissao, avaliacao_media, status, horario_abertura, horario_fechamento, dias_aberto, formas_pagamento)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 15, 0, 'pendente', '18:00', '23:00', ?, ?)`,
+             taxa_comissao, avaliacao_media, status, horario_abertura, horario_fechamento, dias_aberto, formas_pagamento, senha_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 15, 0, 'pendente', '18:00', '23:00', ?, ?, ?)`,
       args: [
         id,
         userId,
@@ -196,10 +205,14 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
         longitude !== undefined ? Number(longitude) : 0,
         JSON.stringify(['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']),
         JSON.stringify(['Dinheiro', 'Crédito', 'Débito', 'Pix']),
+        senhaHash,
       ]
     })
 
     await vincularRestauranteAoUsuario(id, userId, ownerEmail || req.userEmail || emailLoja, ownerName || req.userName || nomeLoja)
+    if (senhaHash) {
+      await db.execute({ sql: 'UPDATE gerentes SET senha_hash = ? WHERE restaurante_id = ? OR user_id = ?', args: [senhaHash, id, userId] })
+    }
 
     const criado = await db.execute({ sql: 'SELECT * FROM restaurantes WHERE id = ?', args: [id] })
     res.status(201).json(criado.rows[0])

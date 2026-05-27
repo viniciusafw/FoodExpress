@@ -27,6 +27,7 @@ async function criarTokenBackend(usuario) {
     email: usuario.email,
     nome: usuario.nome,
     cadastro: Boolean(usuario.cadastro),
+    senha: usuario.senha || usuario.password || '',
   })
   return data.token
 }
@@ -145,15 +146,28 @@ export function AuthProvider({ children }) {
       veiculo_placa: extras.veiculo_placa || extras.placa || '',
       perfil,
       cadastro: Boolean(extras.cadastro),
+      senha: extras.senha || extras.password || '',
     }
     const token = await criarTokenBackend(novoUsuario)
-    localStorage.setItem('usuario', JSON.stringify(novoUsuario))
+    const { senha: _senha, password: _password, ...usuarioPersistivel } = novoUsuario
+    localStorage.setItem('usuario', JSON.stringify(usuarioPersistivel))
     localStorage.setItem('token', token)
-    setUsuario(novoUsuario)
+    setUsuario(usuarioPersistivel)
 
     if (perfil === 'gerente') {
-      api.restaurantes.meuRestauranteOuCriar(novoUsuario.email, 'Minha Loja')
+      api.restaurantes.meuRestauranteOuCriar(usuarioPersistivel.email, 'Minha Loja')
         .catch(err => console.warn('Restaurante será criado no próximo acesso:', err))
+    }
+
+    if (perfil === 'entregador' && novoUsuario.cadastro) {
+      await api.entregadores.cadastrarInicial({
+        nome: usuarioPersistivel.nome,
+        email: usuarioPersistivel.email,
+        telefone: usuarioPersistivel.telefone,
+        veiculo_tipo: usuarioPersistivel.veiculo_tipo || 'moto',
+        veiculo_placa: usuarioPersistivel.veiculo_placa || '',
+        senha: novoUsuario.senha,
+      }).catch(err => console.warn('Entregador será criado no próximo acesso:', err))
     }
 
     navigate(destinoPorPerfil(perfil))
@@ -218,6 +232,7 @@ export function AuthProvider({ children }) {
       telefone: dados.telefoneDono || dados.ownerPhone,
       perfil: 'gerente',
       cadastro: true,
+      senha: dados.senha || dados.password || '',
       loja: {
         nome: dados.nomeLoja || dados.storeName,
         nomeFicticio: dados.nomeFicticio || dados.storeFantasyName || dados.fantasia || dados.nomeFantasia,
@@ -229,23 +244,25 @@ export function AuthProvider({ children }) {
       },
     };
     const token = await criarTokenBackend(novoUsuario)
-    localStorage.setItem('usuario', JSON.stringify(novoUsuario));
+    const { senha: _senha, password: _password, ...usuarioPersistivel } = novoUsuario
+    localStorage.setItem('usuario', JSON.stringify(usuarioPersistivel));
     localStorage.setItem('token', token);
-    setUsuario(novoUsuario);
+    setUsuario(usuarioPersistivel);
 
     try {
       await api.restaurantes.cadastroInicial({
-        email: novoUsuario.email,
-        nome: novoUsuario.loja.nome || novoUsuario.nome,
-        nomeFicticio: novoUsuario.loja.nomeFicticio,
-        cnpj: novoUsuario.loja.cnpj,
-        telefone: novoUsuario.loja.telefone,
-        endereco: novoUsuario.loja.endereco,
-        categoria: novoUsuario.loja.categoria || 'Geral',
-        descricao: novoUsuario.loja.descricao || '',
-        ownerName: novoUsuario.nome,
-        ownerEmail: novoUsuario.email,
-        ownerPhone: novoUsuario.telefone,
+        email: usuarioPersistivel.email,
+        nome: usuarioPersistivel.loja.nome || usuarioPersistivel.nome,
+        nomeFicticio: usuarioPersistivel.loja.nomeFicticio,
+        cnpj: usuarioPersistivel.loja.cnpj,
+        telefone: usuarioPersistivel.loja.telefone,
+        endereco: usuarioPersistivel.loja.endereco,
+        categoria: usuarioPersistivel.loja.categoria || 'Geral',
+        descricao: usuarioPersistivel.loja.descricao || '',
+        ownerName: usuarioPersistivel.nome,
+        ownerEmail: usuarioPersistivel.email,
+        ownerPhone: usuarioPersistivel.telefone,
+        senha: novoUsuario.senha,
       })
     } catch (error) {
       localStorage.removeItem('usuario');

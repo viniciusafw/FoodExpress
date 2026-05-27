@@ -23,6 +23,7 @@ CREATE TABLE restaurantes (
     dias_aberto TEXT,
     formas_pagamento TEXT,
     motivo_rejeicao TEXT,
+    senha_hash TEXT,
     avaliacao_media REAL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -39,6 +40,7 @@ CREATE TABLE gerentes (
     restaurante_id TEXT,
     permissoes TEXT,
     status TEXT DEFAULT 'ativo',
+    senha_hash TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (restaurante_id) REFERENCES restaurantes(id)
 );
@@ -52,6 +54,7 @@ CREATE TABLE operadores (
     telefone TEXT,
     turno TEXT,
     status TEXT DEFAULT 'ativo',
+    senha_hash TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -72,6 +75,7 @@ CREATE TABLE entregadores (
     ultima_atualizacao DATETIME,
     avaliacao_media REAL DEFAULT 0,
     total_entregas INTEGER DEFAULT 0,
+    senha_hash TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 

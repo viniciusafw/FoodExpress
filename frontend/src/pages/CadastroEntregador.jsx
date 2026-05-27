@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, Link } from 'react-router-dom'
-import { User, Phone, Mail, Bike, ArrowLeft, Check, ChevronRight, FileText, AlertCircle } from 'lucide-react'
+import { User, Phone, Mail, Lock, Eye, EyeOff, Bike, ArrowLeft, Check, ChevronRight, FileText, AlertCircle } from 'lucide-react'
 import { motion as Motion } from 'framer-motion'
 import logoSrc from '../imgs/Logo-site.png'
 import { mascaraTelefone } from '../utils/mascaras'
@@ -40,8 +40,9 @@ export default function CadastroEntregador() {
   const [passo, setPasso] = useState(1) // 1 = dados, 2 = veiculo, 3 = sucesso
   const [dados, setDados] = useState({
     nome: '', email: '', telefone: '',
-    veiculo: 'moto', placa: '', cnh: '',
+    senha: '', veiculo: 'moto', placa: '', cnh: '',
   })
+  const [mostrarSenha, setMostrarSenha] = useState(false)
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
   const [aceitouTermos, setAceitouTermos] = useState(false)
@@ -62,8 +63,12 @@ export default function CadastroEntregador() {
 
   const handlePasso1 = (e) => {
     e.preventDefault()
-    if (!dados.nome.trim() || !dados.telefone.trim()) {
-      setErro('Preencha nome e telefone para continuar.')
+    if (!dados.nome.trim() || !dados.telefone.trim() || !dados.senha.trim()) {
+      setErro('Preencha nome, telefone e senha para continuar.')
+      return
+    }
+    if (dados.senha.length < 6) {
+      setErro('A senha deve ter pelo menos 6 caracteres.')
       return
     }
     setErro('')
@@ -86,6 +91,7 @@ export default function CadastroEntregador() {
         telefone: dados.telefone,
         veiculo_tipo: dados.veiculo,
         veiculo_placa: dados.veiculo === 'bicicleta' ? '' : dados.placa,
+        senha: dados.senha,
         cadastro: true,
       })
       setPasso(3)
@@ -206,6 +212,19 @@ export default function CadastroEntregador() {
                   <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
                   <input name="email" type="email" placeholder="seu@email.com"
                     value={dados.email} onChange={handleChange} className={inputClass} />
+                </div>
+              </Motion.div>
+
+              <Motion.div className="flex flex-col gap-1.5" variants={itemVariants} initial="hidden" animate="show" transition={{ delay: 0.2 }}>
+                <label className={labelClass}>Senha de acesso *</label>
+                <div className="relative">
+                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                  <input name="senha" type={mostrarSenha ? 'text' : 'password'} placeholder="Mínimo 6 caracteres"
+                    value={dados.senha} onChange={handleChange} minLength={6} required className="w-full pl-10 pr-12 py-3.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all focus:border-accent focus:bg-white focus:shadow-[0_0_0_3px_rgba(27,153,139,0.08)] placeholder:text-text-muted placeholder:font-normal" />
+                  <button type="button" onClick={() => setMostrarSenha(s => !s)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted bg-transparent border-none cursor-pointer hover:text-text-primary">
+                    {mostrarSenha ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
                 </div>
               </Motion.div>
 

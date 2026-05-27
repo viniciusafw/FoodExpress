@@ -2,6 +2,7 @@
 import { Router, Response } from 'express'
 import { db } from '../lib/db'
 import { requireAuth, AuthRequest } from '../middleware/auth'
+import { hashSenha } from '../lib/password'
 
 const router = Router()
 
@@ -73,10 +74,12 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const userId = req.userId!
-    const { nome, email, telefone, veiculo_tipo, veiculo_placa, veiculo, placa } = req.body
+    const { nome, email, telefone, veiculo_tipo, veiculo_placa, veiculo, placa, senha, password } = req.body
     const emailFinal = normalizarEmail(email || req.userEmail) || emailLocal(userId)
     const id = `ent_${userId}`
     const cpfFinal = cpfAutomatico(userId)
+    const senhaInformada = String(senha || password || '')
+    const senhaHash = senhaInformada ? hashSenha(senhaInformada) : null
 
     const existente = await db.execute({
       sql: `SELECT * FROM entregadores
@@ -90,6 +93,9 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
     if (existente.rows.length) {
       const ent = existente.rows[0] as any
       await vincularEntregador(ent.id, userId, emailFinal)
+      if (senhaHash) {
+        await db.execute({ sql: 'UPDATE entregadores SET senha_hash = ? WHERE id = ?', args: [senhaHash, ent.id] })
+      }
       const atualizado = await db.execute({ sql: 'SELECT * FROM entregadores WHERE id = ?', args: [ent.id] })
       return res.json(atualizado.rows[0] || ent) as any
     }
@@ -102,9 +108,9 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
 
     try {
       await db.execute({
-        sql: `INSERT INTO entregadores (id, user_id, nome, email, telefone, cpf, veiculo_tipo, veiculo_placa, status, latitude, longitude, avaliacao_media, total_entregas)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ausente', 0, 0, 0, 0)`,
-        args: [id, userId, nome || req.userName || 'Entregador', emailFinal, telefone || '', cpfFinal, tipoVeiculo, placaFinal]
+        sql: `INSERT INTO entregadores (id, user_id, nome, email, telefone, cpf, veiculo_tipo, veiculo_placa, status, latitude, longitude, avaliacao_media, total_entregas, senha_hash)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ausente', 0, 0, 0, 0, ?)`,
+        args: [id, userId, nome || req.userName || 'Entregador', emailFinal, telefone || '', cpfFinal, tipoVeiculo, placaFinal, senhaHash]
       })
     } catch (erroInsert: any) {
       // Banco antigo pode ter cadastro parcial ou placeholder duplicado.
@@ -166,7 +172,7 @@ router.get('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
 // POST /api/entregadores
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { nome, cpf, email, telefone, veiculo_tipo, placa_veiculo, veiculo_placa } = req.body
+    const { nome, cpf, email, telefone, veiculo_tipo, placa_veiculo, veiculo_placa, senha, password } = req.body
     if (!nome || !cpf || !veiculo_tipo) return res.status(400).json({ erro: 'Campos obrigatórios faltando' }) as any
 
     const placaFinal = veiculo_tipo === 'bicicleta' ? '' : String(veiculo_placa || placa_veiculo || '').toUpperCase()
@@ -177,10 +183,13 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     const existente = await db.execute({ sql: 'SELECT id FROM entregadores WHERE cpf = ?', args: [cpf] })
     if (existente.rows.length) return res.status(409).json({ erro: 'CPF já cadastrado' }) as any
 
+    const senhaInformada = String(senha || password || '')
+    const senhaHash = senhaInformada ? hashSenha(senhaInformada) : null
+
     const result = await db.execute({
-      sql: `INSERT INTO entregadores (id, user_id, nome, email, cpf, telefone, veiculo_tipo, veiculo_placa, status, latitude, longitude, avaliacao_media, total_entregas)
-            VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, 'ausente', 0, 0, 5.0, 0)`,
-      args: [req.userId, nome, normalizarEmail(email || req.userEmail), cpf, telefone || '', veiculo_tipo, placaFinal]
+      sql: `INSERT INTO entregadores (id, user_id, nome, email, cpf, telefone, veiculo_tipo, veiculo_placa, status, latitude, longitude, avaliacao_media, total_entregas, senha_hash)
+            VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, 'ausente', 0, 0, 5.0, 0, ?)`,
+      args: [req.userId, nome, normalizarEmail(email || req.userEmail), cpf, telefone || '', veiculo_tipo, placaFinal, senhaHash]
     })
     res.status(201).json({ mensagem: 'Entregador criado com sucesso', id: result.lastInsertRowid })
   } catch (error) {

@@ -1,5 +1,6 @@
 import { config } from 'dotenv'
 import { db } from '../src/lib/db'
+import { hashSenha } from '../src/lib/password'
 import { readFileSync } from 'fs'
 import { join } from 'path'
 
@@ -108,6 +109,9 @@ async function migrate() {
   await ensureColumn('pedidos', 'repasse_entregador_em', 'DATETIME')
   await ensureColumn('entregadores', 'saldo_disponivel', 'REAL DEFAULT 0')
   await ensureColumn('entregadores', 'saldo_total', 'REAL DEFAULT 0')
+  await ensureColumn('entregadores', 'senha_hash', 'TEXT')
+  await ensureColumn('restaurantes', 'senha_hash', 'TEXT')
+  await ensureColumn('gerentes', 'senha_hash', 'TEXT')
 
   await db.execute(`CREATE TABLE IF NOT EXISTS operadores (
     id TEXT PRIMARY KEY,
@@ -119,16 +123,21 @@ async function migrate() {
     status TEXT DEFAULT 'ativo',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   )`)
+  await ensureColumn('operadores', 'senha_hash', 'TEXT')
 
   const operadorEmail = normalizarEmail(process.env.OPERATOR_EMAIL || process.env.OPERADOR_EMAIL)
   if (operadorEmail) {
     const operadorBaseId = idEstavel(operadorEmail)
+    const operadorSenhaHash = process.env.OPERATOR_PASSWORD || process.env.OPERADOR_SENHA
+      ? hashSenha(String(process.env.OPERATOR_PASSWORD || process.env.OPERADOR_SENHA))
+      : null
     await db.execute({
-      sql: `INSERT INTO operadores (id, user_id, nome, email, telefone, turno, status)
-            VALUES (?, ?, ?, ?, ?, ?, 'ativo')
+      sql: `INSERT INTO operadores (id, user_id, nome, email, telefone, turno, status, senha_hash)
+            VALUES (?, ?, ?, ?, ?, ?, 'ativo', ?)
             ON CONFLICT(email) DO UPDATE SET
               nome = excluded.nome,
               telefone = COALESCE(NULLIF(excluded.telefone, ''), operadores.telefone),
+              senha_hash = COALESCE(excluded.senha_hash, operadores.senha_hash),
               status = 'ativo'`,
       args: [
         `op_${operadorBaseId}`,
@@ -137,6 +146,7 @@ async function migrate() {
         operadorEmail,
         process.env.OPERATOR_PHONE || process.env.OPERADOR_TELEFONE || '',
         process.env.OPERATOR_SHIFT || process.env.OPERADOR_TURNO || 'geral',
+        operadorSenhaHash,
       ]
     })
     console.log(`  ✅ Operador ativo garantido: ${operadorEmail}`)

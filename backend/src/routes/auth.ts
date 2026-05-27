@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { enviarCodigoAcesso } from '../lib/email';
 import { ensureDatabaseHealth } from '../lib/schema';
+import { verificarSenha } from '../lib/password';
 
 const router = Router();
 
@@ -97,26 +98,26 @@ async function buscarUsuarioParaLogin(email: string, perfil: string) {
   }
 
   if (perfil === 'gerente' || perfil === 'restaurante') {
-    const gerente = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone, restaurante_id FROM gerentes WHERE lower(email) = ? AND COALESCE(status, "ativo") = "ativo" LIMIT 1', args: [emailLimpo] });
+    const gerente = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone, restaurante_id, senha_hash FROM gerentes WHERE lower(email) = ? AND COALESCE(status, "ativo") = "ativo" LIMIT 1', args: [emailLimpo] });
     if (gerente.rows.length) {
       const row = gerente.rows[0] as any;
-      return { id: row.user_id || row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', restaurante_id: row.restaurante_id || '', perfil: 'gerente' };
+      return { id: row.user_id || row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', restaurante_id: row.restaurante_id || '', senha_hash: row.senha_hash || '', perfil: 'gerente' };
     }
-    const rest = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone FROM restaurantes WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
+    const rest = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone, senha_hash FROM restaurantes WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
     const row = rest.rows[0] as any;
-    return row ? { id: row.user_id || row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', restaurante_id: row.id, perfil: 'gerente' } : null;
+    return row ? { id: row.user_id || row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', restaurante_id: row.id, senha_hash: row.senha_hash || '', perfil: 'gerente' } : null;
   }
 
   if (perfil === 'entregador') {
-    const result = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone FROM entregadores WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
+    const result = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone, senha_hash FROM entregadores WHERE lower(email) = ? LIMIT 1', args: [emailLimpo] });
     const row = result.rows[0] as any;
-    return row ? { id: row.user_id || row.id, entregador_id: row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', perfil: 'entregador' } : null;
+    return row ? { id: row.user_id || row.id, entregador_id: row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', senha_hash: row.senha_hash || '', perfil: 'entregador' } : null;
   }
 
   if (perfil === 'operador') {
-    const result = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone FROM operadores WHERE lower(email) = ? AND COALESCE(status, "ativo") = "ativo" LIMIT 1', args: [emailLimpo] });
+    const result = await db.execute({ sql: 'SELECT id, user_id, nome, email, telefone, senha_hash FROM operadores WHERE lower(email) = ? AND COALESCE(status, "ativo") = "ativo" LIMIT 1', args: [emailLimpo] });
     const row = result.rows[0] as any;
-    return row ? { id: row.user_id || row.id, operador_id: row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', perfil: 'operador' } : null;
+    return row ? { id: row.user_id || row.id, operador_id: row.id, nome: row.nome, email: row.email, telefone: row.telefone || '', senha_hash: row.senha_hash || '', perfil: 'operador' } : null;
   }
 
   return null;
@@ -390,9 +391,11 @@ router.post('/login/confirmar', async (req, res) => {
 // Emite JWT no backend para fluxos locais/perfis internos sem expor JWT_SECRET no bundle.
 router.post('/session', async (req, res) => {
   try {
-    const { email, nome, perfil, userId, cadastro = false } = req.body;
+    await ensureDatabaseHealth();
+    const { email, nome, perfil, userId, cadastro = false, senha, password } = req.body;
     const emailLimpo = normalizarEmail(String(email || ''));
     const perfilNormalizado = String(perfil || 'cliente').toLowerCase().trim();
+    const senhaInformada = String(senha || password || '');
 
     if (!emailLimpo) return res.status(400).json({ erro: 'E-mail obrigatório' });
     if (!PERFIS_VALIDOS.has(perfilNormalizado)) {
@@ -417,6 +420,19 @@ router.post('/session', async (req, res) => {
       if (!operador.rows.length) {
         return res.status(404).json({ erro: 'Operador não encontrado ou inativo.' });
       }
+    }
+
+    if (perfilNormalizado !== 'cliente' && !cadastro) {
+      if (!senhaInformada) return res.status(400).json({ erro: 'Senha obrigatória' });
+      const usuarioLogin = await buscarUsuarioParaLogin(emailLimpo, perfilNormalizado);
+      if (!usuarioLogin) return res.status(404).json({ erro: 'Conta não encontrada ou inativa.' });
+      if (!usuarioLogin.senha_hash) {
+        return res.status(401).json({ erro: 'Senha não configurada para esta conta. Cadastre a loja novamente ou peça ao operador para definir uma senha.' });
+      }
+      if (!verificarSenha(senhaInformada, usuarioLogin.senha_hash)) {
+        return res.status(401).json({ erro: 'E-mail ou senha inválidos.' });
+      }
+      return res.json(respostaSessaoPerfil(usuarioLogin));
     }
 
     if (['gerente', 'restaurante'].includes(perfilNormalizado) && !cadastro) {
