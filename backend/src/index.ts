@@ -31,6 +31,8 @@ import { ensureDatabaseHealth } from './lib/schema'
 const app = express()
 app.set('trust proxy', 1)
 const PORT = process.env.PORT || 3001
+let databaseStatus = 'starting'
+let databaseError = ''
 const configuredOrigins = (process.env.FRONTEND_URL || 'https://food-express-pearl.vercel.app')
   .split(',')
   .map((origin) => origin.trim().replace(/\/$/, ''))
@@ -93,7 +95,12 @@ app.use('/api/auth',          authLimiter, authRouter)
 
 // ── Health check ──────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() })
+  res.json({
+    status: 'ok',
+    database: databaseStatus,
+    ...(databaseError ? { databaseError } : {}),
+    timestamp: new Date().toISOString()
+  })
 })
 
 // ── 404 handler ───────────────────────────────────────────────────────────
@@ -101,16 +108,19 @@ app.use((_req, res) => {
   res.status(404).json({ erro: 'Rota não encontrada' })
 })
 
-ensureDatabaseHealth()
-  .then(() => {
-    console.log('✅ Schema validado automaticamente')
-    app.listen(PORT, () => {
-      console.log(`🚀 FoodExpress Backend rodando na porta ${PORT}`)
+app.listen(PORT, () => {
+  console.log(`🚀 FoodExpress Backend rodando na porta ${PORT}`)
+  ensureDatabaseHealth()
+    .then(() => {
+      databaseStatus = 'ready'
+      databaseError = ''
+      console.log('✅ Schema validado automaticamente')
     })
-  })
-  .catch((error) => {
-    console.error('❌ Auto-migration falhou:', error.message)
-    process.exit(1)
-  })
+    .catch((error) => {
+      databaseStatus = 'error'
+      databaseError = error?.message || 'Falha ao validar banco'
+      console.error('❌ Auto-migration falhou:', databaseError)
+    })
+})
 
 export default app
