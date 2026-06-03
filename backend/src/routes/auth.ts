@@ -256,7 +256,7 @@ router.post('/email/confirmar', async (req, res) => {
 
     const pending = await db.execute({
       sql: `SELECT * FROM usuarios_pendentes
-            WHERE token = ? AND tipo = 'email' AND usado = 0 AND expira_em > NOW()`,
+        WHERE token = ? AND tipo = 'email' AND usado = 0 AND expira_em > UTC_TIMESTAMP()`,
       args: [token]
     });
     if (!pending.rows.length || !codigoConfere(pending.rows[0], codigo)) {
@@ -313,26 +313,36 @@ router.post('/login', async (req, res) => {
     const tokenLogin = crypto.randomUUID();
     const codigo = gerarCodigoVerificacao();
     const codigoHash = hashCodigoVerificacao(tokenLogin, codigo);
-    const expira = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+    const expira = new Date(Date.now() + 10 * 60 * 1000)
+      .toISOString()
+      .replace('T', ' ')
+      .replace('Z', '');
+
+    await db.execute({
+      sql: `DELETE FROM usuarios_pendentes WHERE email = ? AND tipo LIKE 'login%'`,
+      args: [emailLimpo]
+    });
 
     await db.execute({
       sql: `INSERT INTO usuarios_pendentes
             (id, email, nome, telefone, token, codigo, codigo_hash, tipo, expira_em, criado_em)
-            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON DUPLICATE KEY UPDATE
-              nome = VALUES(nome),
-              telefone = VALUES(telefone),
-              token = VALUES(token),
-              codigo = NULL,
-              codigo_hash = VALUES(codigo_hash),
-              tipo = VALUES(tipo),
-              expira_em = VALUES(expira_em),
-              usado = 0,
-              criado_em = CURRENT_TIMESTAMP`,
+            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, CURRENT_TIMESTAMP)`,
       args: [`login_${crypto.randomUUID().slice(0,8)}`, emailLimpo, usuarioLogin.nome || '', usuarioLogin.telefone || '', tokenLogin, codigoHash, `login:${perfilNormalizado}`, expira]
     });
 
-    await enviarCodigoAcesso(emailLimpo, codigo, usuarioLogin.nome || emailLimpo.split('@')[0], 'login');
+    try {
+      await enviarCodigoAcesso(emailLimpo, codigo, usuarioLogin.nome || emailLimpo.split('@')[0], 'login');
+    } catch (emailErr) {
+      console.error('Falha ao enviar email de login:', emailErr);
+      await db.execute({
+        sql: `DELETE FROM usuarios_pendentes WHERE token = ?`,
+        args: [tokenLogin]
+      }).catch(() => {});
+      return res.status(503).json({
+        erro: 'Não foi possível enviar o código de acesso. Verifique se o e-mail está correto ou tente novamente.',
+        detalhe: process.env.NODE_ENV !== 'production' ? String(emailErr) : undefined,
+      });
+    }
 
     res.json({
       mensagem: 'Código de acesso enviado para seu e-mail',
@@ -341,6 +351,7 @@ router.post('/login', async (req, res) => {
       ...(process.env.NODE_ENV !== 'production' && { devCode: codigo })
     });
   } catch (error) {
+    console.error('Erro no POST /login:', error);
     res.status(500).json({ erro: 'Erro ao processar login' });
   }
 });
@@ -353,7 +364,7 @@ router.post('/login/confirmar', async (req, res) => {
 
     const pending = await db.execute({
       sql: `SELECT * FROM usuarios_pendentes
-            WHERE token = ? AND tipo LIKE 'login%' AND usado = 0 AND expira_em > NOW()`,
+        WHERE token = ? AND tipo LIKE 'login%' AND usado = 0 AND expira_em > UTC_TIMESTAMP()`,
       args: [token]
     });
     if (!pending.rows.length || !codigoConfere(pending.rows[0], codigo)) {

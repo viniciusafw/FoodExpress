@@ -1,11 +1,15 @@
 // @ts-nocheck
+import fs from 'fs'
+import path from 'path'
 import express from 'express'
 import cors from 'cors'
 import dotenv from 'dotenv'
 
-dotenv.config()
+const envRootPath = path.resolve(__dirname, '../../.env')
+const envBackendPath = path.resolve(__dirname, '../.env')
+dotenv.config({ path: fs.existsSync(envBackendPath) ? envBackendPath : envRootPath })
 
-import { rateLimit } from './middleware/rateLimit'
+import { rateLimit } from './middleware/rateLimit' 
 const apiLimiter = rateLimit(100, 60_000)
 const authLimiter = rateLimit(12, 60_000)
 

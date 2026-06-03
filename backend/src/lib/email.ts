@@ -1,9 +1,13 @@
 // @ts-nocheck
 // backend/src/lib/email.ts
+import fs from 'fs';
+import path from 'path';
 import { Resend } from 'resend';
 import dotenv from 'dotenv';
 
-dotenv.config();
+const envRootPath = path.resolve(__dirname, '../../.env')
+const envBackendPath = path.resolve(__dirname, '../.env')
+dotenv.config({ path: fs.existsSync(envBackendPath) ? envBackendPath : envRootPath });
 
 function getResend() {
   const key = process.env.RESEND_API_KEY;

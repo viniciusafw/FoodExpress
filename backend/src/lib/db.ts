@@ -1,8 +1,12 @@
 // @ts-nocheck
+import fs from 'fs'
+import path from 'path'
 import mysql from 'mysql2/promise'
 import dotenv from 'dotenv'
 
-dotenv.config()
+const envRootPath = path.resolve(__dirname, '../../.env')
+const envBackendPath = path.resolve(__dirname, '../.env')
+dotenv.config({ path: fs.existsSync(envBackendPath) ? envBackendPath : envRootPath })
 
 function configFromUrl(rawUrl?: string) {
   if (!rawUrl) return null

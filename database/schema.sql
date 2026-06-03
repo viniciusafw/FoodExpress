@@ -330,7 +330,7 @@ CREATE TABLE IF NOT EXISTS usuarios_pendentes (
     email       VARCHAR(255),
     nome        VARCHAR(255),
     telefone    VARCHAR(20),
-    token       TEXT         NOT NULL,
+    token       VARCHAR(191) NOT NULL,
     codigo      VARCHAR(20),
     codigo_hash TEXT,
     tipo        VARCHAR(50)  DEFAULT 'email',
@@ -338,7 +338,7 @@ CREATE TABLE IF NOT EXISTS usuarios_pendentes (
     usado       TINYINT(1)   DEFAULT 0,
     criado_em   DATETIME     DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE KEY uq_usuarios_pendentes_email (email)
+    UNIQUE KEY uq_usuarios_pendentes_token (token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================

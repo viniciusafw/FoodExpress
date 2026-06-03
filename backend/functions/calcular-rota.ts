@@ -1,5 +1,4 @@
 // backend/functions/calcular-rota.ts
-import { edge } from '@vercel/edge'
 
 export const config = {
   runtime: 'edge',
@@ -9,11 +8,12 @@ export const config = {
 export default async function handler(request: Request) {
   const { origem, destino } = await request.json()
 
-  // Calcular rota usando Mapbox ou Google Maps
+  const MAPBOX_TOKEN = (globalThis as any).process?.env?.MAPBOX_TOKEN
+
   const response = await fetch(
     `https://api.mapbox.com/directions/v5/mapbox/driving/` +
     `${origem.lng},${origem.lat};${destino.lng},${destino.lat}` +
-    `?access_token=${process.env.MAPBOX_TOKEN}&geometries=geojson`
+    `?access_token=${MAPBOX_TOKEN}&geometries=geojson`
   )
 
   const data = await response.json()
@@ -22,18 +22,16 @@ export default async function handler(request: Request) {
     const route = data.routes[0]
     return new Response(
       JSON.stringify({
-        distance: route.distance / 1000, // km
-        duration: route.duration / 60, // minutos
+        distance: route.distance / 1000,
+        duration: route.duration / 60,
         geometry: route.geometry
       }),
-      {
-        headers: { 'Content-Type': 'application/json' }
-      }
+      { headers: { 'Content-Type': 'application/json' } }
     )
   }
 
   return new Response(
-    JSON.stringify({ error: 'Rota não encontrada' }),
+    JSON.stringify({ error: 'Verifique sua conexão com a internet' }),
     { status: 404 }
   )
 }
