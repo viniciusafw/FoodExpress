@@ -11,7 +11,7 @@ dotenv.config({ path: fs.existsSync(envBackendPath) ? envBackendPath : envRootPa
 
 import { rateLimit } from './middleware/rateLimit' 
 const apiLimiter = rateLimit(100, 60_000)
-const authLimiter = rateLimit(12, 60_000)
+const authLimiter = rateLimit(100, 60_000)
 
 // Routes
 import restaurantesRouter  from './routes/restaurantes'

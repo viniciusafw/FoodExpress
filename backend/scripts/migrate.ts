@@ -249,13 +249,13 @@ async function migrate() {
   await db.execute("UPDATE restaurantes SET user_id = substr(id, 6) WHERE (user_id IS NULL OR user_id = '') AND id LIKE 'rest_%'")
   await db.execute("UPDATE entregadores SET cpf = 'AUTO-' || user_id WHERE cpf = '000.000.000-00' AND user_id IS NOT NULL AND user_id != ''")
 
-  await db.execute(`INSERT OR IGNORE INTO gerentes
+  await db.execute(`INSERT IGNORE INTO gerentes
     (id, user_id, nome, email, telefone, cargo, restaurante_id, permissoes, status)
     SELECT
-      'ger_' || r.user_id,
+      CONCAT('ger_', r.user_id),
       r.user_id,
       COALESCE(NULLIF(r.nome, ''), 'Gerente'),
-      COALESCE(NULLIF(r.email, ''), r.user_id || '@local.dev'),
+      COALESCE(NULLIF(r.email, ''), CONCAT(r.user_id, '@local.dev')),
       COALESCE(r.telefone, ''),
       'gerente',
       r.id,

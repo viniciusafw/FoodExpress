@@ -42,7 +42,7 @@ async function inserirBase() {
 
   for (const r of restaurantes) {
     await db.execute({
-      sql: `INSERT OR REPLACE INTO restaurantes
+      sql: `REPLACE INTO restaurantes
             (id, user_id, nome, cnpj, email, telefone, endereco, latitude, longitude, categoria, descricao, logo, capa, status,
              taxa_comissao, tempo_medio_preparo, horario_abertura, horario_fechamento, dias_aberto, formas_pagamento, avaliacao_media, senha_hash)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 15, ?, '18:00', '23:00', ?, ?, ?, ?)`,
@@ -68,7 +68,7 @@ async function inserirClientes() {
   ]
   for (const c of clientes) {
     await db.execute({
-      sql: `INSERT OR REPLACE INTO clientes (id, user_id, nome, email, telefone, endereco_principal, latitude, longitude, senha_hash, total_pedidos)
+      sql: `REPLACE INTO clientes (id, user_id, nome, email, telefone, endereco_principal, latitude, longitude, senha_hash, total_pedidos)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       args: [...c, SENHA_DEMO_HASH]
     })
@@ -77,7 +77,7 @@ async function inserirClientes() {
 
 async function inserirOperadorDemo() {
   await db.execute({
-    sql: `INSERT OR REPLACE INTO operadores (id, user_id, nome, email, telefone, turno, status, senha_hash)
+    sql: `REPLACE INTO operadores (id, user_id, nome, email, telefone, turno, status, senha_hash)
           VALUES (?, ?, ?, ?, ?, ?, 'ativo', ?)`,
     args: ['op_demo_master', 'operador-demo', 'Operador Demo', 'operador@demo.com', '(85) 96666-0001', 'geral', SENHA_DEMO_HASH]
   })
@@ -94,7 +94,7 @@ async function inserirEntregadores() {
   ]
   for (const e of entregadores) {
     await db.execute({
-      sql: `INSERT OR REPLACE INTO entregadores
+      sql: `REPLACE INTO entregadores
             (id, user_id, nome, email, telefone, cpf, veiculo_tipo, veiculo_placa, status, latitude, longitude, ultima_atualizacao, avaliacao_media, total_entregas, senha_hash)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?)`,
       args: [...e, SENHA_DEMO_HASH]
@@ -143,7 +143,7 @@ async function inserirCardapioParaTodos() {
     for (let i = 0; i < itens.length; i++) {
       const [nome, descricao, preco, categoria, imagem] = itens[i]
       await db.execute({
-        sql: `INSERT OR REPLACE INTO cardapio
+        sql: `REPLACE INTO cardapio
               (id, restaurante_id, nome, descricao, preco, categoria, imagem, disponivel, destaque, tempo_preparo)
               VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         args: [`item_seed_${slug(rest.id)}_${i+1}`, rest.id, nome, descricao, preco, categoria, imagem, i === 0 ? 1 : 0, 12 + i * 5]
@@ -176,7 +176,7 @@ async function inserirPedidosEAvaliacoes() {
       const itensJson = JSON.stringify([{ id: item.id, cardapioId: item.id, nome: item.nome, quantidade: qtd, preco: Number(item.preco) }])
       const precisaEntregador = ['entregue', 'entregando'].includes(status)
       await db.execute({
-        sql: `INSERT OR REPLACE INTO pedidos
+        sql: `REPLACE INTO pedidos
               (id, cliente_id, restaurante_id, entregador_id, status, itens, subtotal, taxa_entrega, desconto, total,
                forma_pagamento, pagamento_status, endereco_entrega, latitude_entrega, longitude_entrega, distancia_km,
                tempo_preparo_estimado, tempo_entrega_estimado, tempo_total_estimado, created_at, updated_at, motivo_cancelamento,
@@ -194,19 +194,19 @@ async function inserirPedidosEAvaliacoes() {
 
       if (status === 'entregue') {
         await db.execute({
-          sql: `INSERT OR REPLACE INTO rotas
+          sql: `REPLACE INTO rotas
                 (id, pedido_id, entregador_id, origem_lat, origem_lng, destino_lat, destino_lng, distancia_km, duracao_estimada, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [`rota_${pedidoId}`, pedidoId, entregador.id, rest.latitude || -3.73, rest.longitude || -38.5, cliente.latitude, cliente.longitude, 1.2 + (i % 7) * 0.6, 12 + (i % 5) * 4, criado]
         })
         await db.execute({
-          sql: `INSERT OR REPLACE INTO avaliacoes
+          sql: `REPLACE INTO avaliacoes
                 (id, cliente_id, pedido_id, restaurante_id, entregador_id, estrelas, comentario, tipo, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'restaurante', ?)`,
           args: [`av_rest_${pedidoId}`, cliente.id, pedidoId, rest.id, entregador.id, 4 + (i % 2), ['Muito bom', 'Gostei do atendimento', 'Comida excelente'][i % 3], criado]
         })
         await db.execute({
-          sql: `INSERT OR REPLACE INTO avaliacoes
+          sql: `REPLACE INTO avaliacoes
                 (id, cliente_id, pedido_id, restaurante_id, entregador_id, estrelas, comentario, tipo, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, 'entregador', ?)`,
           args: [`av_ent_${pedidoId}`, cliente.id, pedidoId, rest.id, entregador.id, 4 + ((i + 1) % 2), ['Entregador educado', 'Chegou rápido', 'Boa comunicação'][i % 3], criado]

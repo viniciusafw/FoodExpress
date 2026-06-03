@@ -35,6 +35,83 @@ async function ensureColumn(table: string, column: string, definition: string) {
   }
 }
 
+function splitSqlStatements(schema: string) {
+  const statements: string[] = []
+  let current = ''
+  let state: 'normal' | 'line-comment' | 'block-comment' | 'string' = 'normal'
+  let quoteChar = ''
+
+  for (let i = 0; i < schema.length; i++) {
+    const char = schema[i]
+    const next = schema[i + 1]
+
+    if (state === 'line-comment') {
+      current += char
+      if (char === '\n') state = 'normal'
+      continue
+    }
+
+    if (state === 'block-comment') {
+      current += char
+      if (char === '*' && next === '/') {
+        current += next
+        i++
+        state = 'normal'
+      }
+      continue
+    }
+
+    if (state === 'string') {
+      current += char
+      if (char === quoteChar) {
+        if (quoteChar === '\'' && next === '\'') {
+          current += next
+          i++
+        } else {
+          state = 'normal'
+          quoteChar = ''
+        }
+      }
+      continue
+    }
+
+    if (char === '-' && next === '-') {
+      current += char + next
+      i++
+      state = 'line-comment'
+      continue
+    }
+
+    if (char === '/' && next === '*') {
+      current += char + next
+      i++
+      state = 'block-comment'
+      continue
+    }
+
+    if (char === '\'' || char === '"' || char === '`') {
+      current += char
+      state = 'string'
+      quoteChar = char
+      continue
+    }
+
+    if (char === ';') {
+      const statement = current.trim()
+      if (statement) statements.push(statement)
+      current = ''
+      continue
+    }
+
+    current += char
+  }
+
+  const tail = current.trim()
+  if (tail) statements.push(tail)
+
+  return statements
+}
+
 async function aplicarSchemaMysql() {
   const candidatePaths = [
     join(process.cwd(), '../database/schema.sql'),
@@ -52,9 +129,8 @@ async function aplicarSchemaMysql() {
   }
   if (!schema) return
 
-  const statements = schema
-    .split(';')
-    .map(s => s.replace(/--[^\n]*/g, '').trim())
+  const statements = splitSqlStatements(schema)
+    .map(s => s.trim())
     .filter(s => s.length > 4)
 
   for (const stmt of statements) {
