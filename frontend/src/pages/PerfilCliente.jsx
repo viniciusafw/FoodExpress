@@ -116,14 +116,37 @@ function montarEnderecoCompleto(dados, cepFormatado, numero, complemento) {
   return partes.join(' · ')
 }
 
-function EnderecoCepForm({ clienteId, enderecoAtual = '', onSalvo, onCancelar, modo = 'adicionar' }) {
+function obterChaveEnderecoLabel(email) {
+  return `foodexpress:enderecoLabel:${String(email || '').trim().toLowerCase()}`
+}
+
+function lerLabelEndereco(email, labelBanco = '') {
+  if (labelBanco) return labelBanco
+  if (typeof window === 'undefined') return 'Principal'
+  const chave = obterChaveEnderecoLabel(email)
+  return localStorage.getItem(chave) || localStorage.getItem('enderecoPrincipalLabel') || 'Principal'
+}
+
+function salvarLabelEndereco(email, label) {
+  if (typeof window === 'undefined' || !label) return
+  localStorage.setItem('enderecoPrincipalLabel', label)
+  if (email) localStorage.setItem(obterChaveEnderecoLabel(email), label)
+}
+
+function EnderecoCepForm({ clienteId, emailUsuario, enderecoAtual = '', labelAtual = '', onSalvo, onCancelar, modo = 'adicionar' }) {
   const [cep, setCep] = useState('')
   const [dadosCep, setDadosCep] = useState(null)
   const [numero, setNumero] = useState('')
   const [complemento, setComplemento] = useState('')
   const [enderecoLivre, setEnderecoLivre] = useState(enderecoAtual || '')
+  const [tipoEndereco, setTipoEndereco] = useState(['Casa', 'Trabalho'].includes(labelAtual) ? labelAtual : (modo === 'editar' && labelAtual ? 'Outro' : 'Casa'))
+  const [apelidoEndereco, setApelidoEndereco] = useState(['Casa', 'Trabalho'].includes(labelAtual) ? '' : (labelAtual === 'Principal' ? '' : labelAtual))
   const [status, setStatus] = useState('')
   const [salvando, setSalvando] = useState(false)
+
+  const labelFinal = tipoEndereco === 'Outro'
+    ? (apelidoEndereco.trim() || 'Outro')
+    : tipoEndereco
 
   const buscarCep = async () => {
     const cepFormatado = formatarCep(cep)
@@ -172,10 +195,11 @@ function EnderecoCepForm({ clienteId, enderecoAtual = '', onSalvo, onCancelar, m
     setSalvando(true)
     setStatus('')
     try {
-      await api.clientes.atualizar(clienteId, { endereco_principal: enderecoFinal })
+      await api.clientes.atualizar(clienteId, { endereco_principal: enderecoFinal, endereco_label: labelFinal })
+      salvarLabelEndereco(emailUsuario, labelFinal)
       onSalvo({
         id: modo === 'editar' ? 'principal' : Date.now(),
-        label: modo === 'editar' ? 'Principal' : 'Novo',
+        label: labelFinal,
         rua: enderecoFinal,
         bairro: '',
         cidade: '',
@@ -202,6 +226,35 @@ function EnderecoCepForm({ clienteId, enderecoAtual = '', onSalvo, onCancelar, m
             Busque pelo CEP e complete com número, apartamento, bloco ou condomínio.
           </p>
         </div>
+      </div>
+
+      <div className="mb-3">
+        <p className="mb-2 text-xs font-extrabold uppercase tracking-wide text-text-muted">Nome do endereço</p>
+        <div className="grid grid-cols-3 gap-2">
+          {['Casa', 'Trabalho', 'Outro'].map((tipo) => (
+            <button
+              key={tipo}
+              type="button"
+              onClick={() => setTipoEndereco(tipo)}
+              className={`h-10 rounded-xl border text-sm font-extrabold transition-all ${
+                tipoEndereco === tipo
+                  ? 'border-primary bg-primary text-white'
+                  : 'border-border bg-white text-text-secondary hover:border-primary/40'
+              }`}
+            >
+              {tipo}
+            </button>
+          ))}
+        </div>
+        {tipoEndereco === 'Outro' && (
+          <input
+            type="text"
+            value={apelidoEndereco}
+            onChange={(e) => setApelidoEndereco(e.target.value.replace(/[^\p{L}\p{N}\s'-]/gu, '').slice(0, 24))}
+            placeholder="Ex: Faculdade, casa da mãe"
+            className="mt-2 w-full h-11 rounded-xl border border-border bg-white px-4 text-sm font-semibold text-text-primary outline-none focus:border-primary"
+          />
+        )}
       </div>
 
       {enderecoAtual && !dadosCep && (
@@ -305,7 +358,7 @@ function EnderecoCepForm({ clienteId, enderecoAtual = '', onSalvo, onCancelar, m
 }
 
 // ── Componente adicionar endereço ─────────────────────────────────────────────
-function AdicionarEndereco({ clienteId, onSalvo }) {
+function AdicionarEndereco({ clienteId, emailUsuario, onSalvo }) {
   const [aberto, setAberto] = useState(false)
 
   if (!aberto) return (
@@ -317,6 +370,7 @@ function AdicionarEndereco({ clienteId, onSalvo }) {
   return (
     <EnderecoCepForm
       clienteId={clienteId}
+      emailUsuario={emailUsuario}
       modo="adicionar"
       onCancelar={() => setAberto(false)}
       onSalvo={(endereco) => {
@@ -328,7 +382,7 @@ function AdicionarEndereco({ clienteId, onSalvo }) {
 }
 
 // ── Componente editar endereço ────────────────────────────────────────────────
-function EditarEndereco({ end, clienteId, onSalvo }) {
+function EditarEndereco({ end, clienteId, emailUsuario, onSalvo }) {
   const [editando, setEditando] = useState(false)
 
   if (!editando) return (
@@ -342,11 +396,13 @@ function EditarEndereco({ end, clienteId, onSalvo }) {
       <div className="w-full max-w-md">
         <EnderecoCepForm
           clienteId={clienteId}
+          emailUsuario={emailUsuario}
           enderecoAtual={end.rua}
+          labelAtual={end.label}
           modo="editar"
           onCancelar={() => setEditando(false)}
           onSalvo={(novo) => {
-            onSalvo(novo.rua)
+            onSalvo(novo)
             setEditando(false)
           }}
         />
@@ -430,9 +486,10 @@ export default function PerfilCliente() {
         }
 
         if (cliente?.endereco_principal) {
+          const emailEndereco = cliente?.email || usuario?.email
           setEnderecos([{
             id: 'principal',
-            label: 'Principal',
+            label: lerLabelEndereco(emailEndereco, cliente?.endereco_label),
             rua: cliente.endereco_principal,
             bairro: '',
             cidade: '',
@@ -461,7 +518,7 @@ export default function PerfilCliente() {
       if (intervalo) clearInterval(intervalo)
       document.removeEventListener('visibilitychange', atualizarAoVoltar)
     }
-  }, [usuario?.id])
+  }, [usuario?.id, usuario?.email])
 
   useEffect(() => {
     const pendente = pedidos.find((pedido) => {
@@ -771,13 +828,19 @@ export default function PerfilCliente() {
                       </p>
                       {end.cidade && <p className="text-xs text-text-muted font-medium">{end.cidade}</p>}
                     </div>
-                    <EditarEndereco end={end} clienteId={clienteId} onSalvo={(novo) => setEnderecos(prev => prev.map(e => e.id === end.id ? { ...e, rua: novo } : e))} />
+                    <EditarEndereco
+                      end={end}
+                      clienteId={clienteId}
+                      emailUsuario={usuario?.email}
+                      onSalvo={(novo) => setEnderecos(prev => prev.map(e => e.id === end.id ? { ...e, ...novo, id: e.id, principal: e.principal } : e))}
+                    />
                   </div>
                 ))}
                 <div className="px-5 py-4">
                   <AdicionarEndereco
                     clienteId={clienteId}
-                    onSalvo={(end) => setEnderecos([{ ...end, id: 'principal', label: 'Principal', principal: true }])}
+                    emailUsuario={usuario?.email}
+                    onSalvo={(end) => setEnderecos([{ ...end, id: 'principal', principal: true }])}
                   />
                 </div>
               </div>

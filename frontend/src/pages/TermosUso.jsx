@@ -10,11 +10,11 @@ const secoes = [
   },
   {
     titulo: '2. Descrição do Serviço',
-    texto: `A FoodExpress é uma plataforma de intermediação entre clientes, restaurantes parceiros e entregadores. Não somos responsáveis pela qualidade dos alimentos, pelo preparo ou pela entrega dos pedidos — esses serviços são prestados exclusivamente pelos parceiros cadastrados. Atuamos como facilitadores da conexão entre as partes.`,
+    texto: `A FoodExpress é uma plataforma de intermediação entre clientes, restaurantes, mercados, estabelecimentos parceiros e entregadores. Facilitamos busca, pedidos, pagamento, acompanhamento de entrega, suporte, avaliações e comunicação entre as partes. O preparo dos produtos é responsabilidade do estabelecimento parceiro e a entrega é executada pelo entregador vinculado ao pedido ou pelo próprio parceiro, conforme o fluxo disponível.`,
   },
   {
     titulo: '3. Cadastro e Conta',
-    texto: `Para utilizar os serviços, você deve fornecer informações verdadeiras, completas e atualizadas no momento do cadastro. Você é o único responsável pela segurança de sua senha e por todas as atividades realizadas em sua conta. Em caso de uso não autorizado, notifique-nos imediatamente pelo suporte. Reservamo-nos o direito de suspender ou encerrar contas com informações falsas ou que violem estes Termos.`,
+    texto: `Para utilizar os serviços, você deve fornecer informações verdadeiras, completas e atualizadas, incluindo nome, telefone, e-mail, senha e endereço de entrega quando necessário. Você é responsável pela segurança da sua senha e pelas atividades realizadas na sua conta. Podemos impedir ou suspender cadastros com dados falsos, duplicados, abusivos ou que violem estes Termos.`,
   },
   {
     titulo: '4. Uso Aceitável',
@@ -22,7 +22,7 @@ const secoes = [
   },
   {
     titulo: '5. Pedidos e Pagamentos',
-    texto: `Ao confirmar um pedido, você celebra um contrato de compra diretamente com o restaurante parceiro. O pagamento é processado de forma segura via Stripe. Após confirmação do pedido, o cancelamento pode estar sujeito a multa de até 50% do valor, conforme política do restaurante. Pedidos cancelados após início do preparo não são reembolsados.`,
+    texto: `Ao confirmar um pedido, você solicita a compra diretamente ao estabelecimento parceiro. Os meios de pagamento disponíveis podem incluir Pix, cartão, dinheiro, carteiras digitais ou provedores de pagamento integrados, conforme configuração da plataforma e do parceiro. Cancelamentos e reembolsos dependem do status do pedido, do início do preparo, da forma de pagamento e das regras aplicáveis ao caso concreto, sempre respeitando a legislação de consumo.`,
   },
   {
     titulo: '6. Avaliações',
@@ -34,7 +34,7 @@ const secoes = [
   },
   {
     titulo: '8. Limitação de Responsabilidade',
-    texto: `A FoodExpress não se responsabiliza por danos decorrentes de: falhas nos alimentos fornecidos pelos restaurantes parceiros; atrasos na entrega por fatores externos (trânsito, clima, etc.); uso indevido da plataforma por terceiros; ou indisponibilidade temporária do serviço por manutenção ou problemas técnicos.`,
+    texto: `A FoodExpress emprega esforços razoáveis para manter a plataforma disponível e segura, mas podem ocorrer instabilidades, manutenção, erros de conexão, atrasos por trânsito, clima, endereço incorreto, indisponibilidade do parceiro ou fatores fora do nosso controle. Reclamações sobre produto, preparo, embalagem, valor, entrega ou atendimento devem ser registradas pelos canais de suporte para análise e encaminhamento ao responsável.`,
   },
   {
     titulo: '9. Alterações nos Termos',
@@ -42,7 +42,7 @@ const secoes = [
   },
   {
     titulo: '10. Foro e Legislação',
-    texto: `Estes Termos são regidos pela legislação brasileira, especialmente o Código de Defesa do Consumidor (Lei 8.078/90), o Marco Civil da Internet (Lei 12.965/14) e a Lei Geral de Proteção de Dados (Lei 13.709/18). Fica eleito o foro da comarca de Fortaleza/CE para dirimir quaisquer controvérsias.`,
+    texto: `Estes Termos são regidos pela legislação brasileira, incluindo o Código de Defesa do Consumidor, o Marco Civil da Internet e a Lei Geral de Proteção de Dados. Eventuais controvérsias serão tratadas preferencialmente pelos canais de suporte e, quando necessário, pelo foro competente conforme a legislação aplicável.`,
   },
 ]
 
@@ -66,7 +66,7 @@ export default function TermosUso() {
             <FileText size={18} className="text-primary" />
             <h1 className="font-display text-lg font-extrabold text-text-primary">Termos de Uso</h1>
           </div>
-          <span className="ml-auto text-xs text-text-muted font-semibold">Atualizado em jan/2025</span>
+          <span className="ml-auto text-xs text-text-muted font-semibold">Atualizado em jun/2026</span>
         </div>
       </div>
 

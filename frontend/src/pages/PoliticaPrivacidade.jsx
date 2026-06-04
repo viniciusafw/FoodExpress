@@ -7,17 +7,17 @@ const secoes = [
   {
     icone: Database,
     titulo: '1. Quais dados coletamos',
-    texto: `Coletamos apenas os dados necessários para a prestação dos serviços: dados de identificação (nome, e-mail, CPF/CNPJ, telefone), dados de localização para cálculo de frete e rastreamento de pedidos, dados de pagamento processados com segurança pela Stripe (não armazenamos dados de cartão), histórico de pedidos e avaliações, e dados de uso da plataforma para melhoria do serviço.`,
+    texto: `Coletamos dados necessários para operar a plataforma: identificação e contato (nome, e-mail, telefone e, quando aplicável, CPF/CNPJ), endereço de entrega, localização aproximada ou precisa quando autorizada, histórico de pedidos, itens do carrinho, avaliações, denúncias, tickets de suporte, dados de dispositivo e registros de uso. Dados de pagamento são tratados pelos provedores integrados e pela própria forma de pagamento escolhida; não armazenamos dados completos de cartão.`,
   },
   {
     icone: Eye,
     titulo: '2. Como usamos seus dados',
-    texto: `Seus dados são utilizados exclusivamente para: processar e entregar seus pedidos; calcular rotas e taxas de entrega; enviar notificações sobre o status do pedido; melhorar nossos serviços com base no comportamento de uso; cumprir obrigações legais e fiscais; e prevenir fraudes e garantir a segurança da plataforma. Não utilizamos seus dados para publicidade de terceiros.`,
+    texto: `Usamos seus dados para criar e proteger sua conta, processar pedidos, calcular distância e frete, sugerir restaurantes próximos, permitir contato entre cliente, estabelecimento e entregador, acompanhar entrega, enviar mensagens de status, prestar suporte, prevenir fraude, gerar relatórios operacionais e cumprir obrigações legais. A localização é usada para funcionalidades ligadas a entrega e proximidade.`,
   },
   {
     icone: UserCheck,
     titulo: '3. Compartilhamento de dados',
-    texto: `Compartilhamos seus dados apenas nas seguintes situações: com o restaurante parceiro para processamento do pedido (nome e endereço de entrega); com o entregador para realização da entrega (nome e localização de entrega); com a Stripe para processamento seguro do pagamento; e com autoridades públicas quando exigido por lei. Nunca vendemos seus dados a terceiros.`,
+    texto: `Compartilhamos dados apenas quando necessário para o serviço: com o estabelecimento parceiro para preparar o pedido, com o entregador para realizar a entrega, com provedores de pagamento, hospedagem, banco de dados, mapas, e-mail, suporte e segurança, e com autoridades quando houver obrigação legal. Não vendemos dados pessoais.`,
   },
   {
     icone: Lock,
@@ -32,17 +32,17 @@ const secoes = [
   {
     icone: Trash2,
     titulo: '6. Retenção e exclusão',
-    texto: `Mantemos seus dados pelo tempo necessário para a prestação dos serviços e cumprimento de obrigações legais. Dados de pedidos são mantidos por 5 anos conforme exigência fiscal. Após o encerramento da conta, dados pessoais são anonimizados ou excluídos em até 30 dias, exceto quando houver obrigação legal de retenção. Você pode solicitar a exclusão da sua conta a qualquer momento pelo suporte.`,
+    texto: `Mantemos seus dados pelo tempo necessário para prestar o serviço, proteger direitos, prevenir fraude e cumprir obrigações legais, fiscais, contábeis ou regulatórias. Quando a retenção não for mais necessária, os dados podem ser excluídos ou anonimizados. Você pode solicitar atualização, acesso ou exclusão da conta pelo suporte, observadas as hipóteses legais de retenção.`,
   },
   {
     icone: Database,
     titulo: '7. Cookies e rastreamento',
-    texto: `Utilizamos cookies essenciais para o funcionamento da plataforma (autenticação, preferências) e cookies analíticos para entender como os usuários interagem com o serviço. Não utilizamos cookies de publicidade ou rastreamento de terceiros. Você pode gerenciar as preferências de cookies nas configurações do seu navegador, mas desabilitar cookies essenciais pode afetar o funcionamento da plataforma.`,
+    texto: `Utilizamos armazenamento local, cookies ou tecnologias semelhantes para autenticação, carrinho, endereço, preferência de tema, segurança e melhoria da experiência. O navegador permite apagar ou bloquear essas informações, mas isso pode afetar login, carrinho, localização e funcionamento da plataforma.`,
   },
   {
     icone: Mail,
     titulo: '8. Contato e DPO',
-    texto: `Para exercer seus direitos ou esclarecer dúvidas sobre o tratamento dos seus dados, entre em contato com nosso Encarregado de Proteção de Dados (DPO): vdasilvasouza77@gmail.com. Responderemos em até 15 dias úteis. Para reclamações não resolvidas, você pode acionar a Autoridade Nacional de Proteção de Dados (ANPD) em gov.br/anpd.`,
+    texto: `Para exercer direitos previstos na LGPD ou esclarecer dúvidas sobre tratamento de dados, entre em contato pelo canal de privacidade: vdasilvasouza77@gmail.com. Responderemos às solicitações conforme os prazos e condições previstos na legislação aplicável.`,
   },
 ]
 
@@ -66,7 +66,7 @@ export default function PoliticaPrivacidade() {
             <Lock size={18} className="text-primary" />
             <h1 className="font-display text-lg font-extrabold text-text-primary">Política de Privacidade</h1>
           </div>
-          <span className="ml-auto text-xs text-text-muted font-semibold">Atualizado em jan/2025</span>
+          <span className="ml-auto text-xs text-text-muted font-semibold">Atualizado em jun/2026</span>
         </div>
       </div>
 

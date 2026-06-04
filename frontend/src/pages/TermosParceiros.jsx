@@ -7,37 +7,37 @@ const secoes = [
   {
     icone: Store,
     titulo: '1. Adesão à Plataforma',
-    texto: `Ao se cadastrar como restaurante parceiro na FoodExpress, você (pessoa jurídica ou pessoa física com CNPJ) concorda com estes Termos para Parceiros e com nossa Política de Privacidade. O cadastro é liberado para configuração imediata, e a loja passa a aparecer para clientes quando tiver ao menos um produto disponível no cardápio. Reservamo-nos o direito de suspender ou cancelar parcerias que não atendam aos nossos critérios de qualidade, legalidade e conformidade.`,
+    texto: `Ao se cadastrar como parceiro da FoodExpress, seja estabelecimento, mercado, restaurante, gerente responsável ou entregador, você concorda com estes Termos para Parceiros e com a Política de Privacidade. O cadastro pode passar por validação técnica, documental, operacional ou de segurança antes ou depois da ativação. Podemos suspender ou cancelar contas que não atendam aos critérios de qualidade, legalidade, segurança ou conformidade.`,
   },
   {
     icone: DollarSign,
     titulo: '2. Comissão e Repasses',
-    texto: `A FoodExpress cobra uma taxa de comissão de 15% sobre o valor bruto de cada pedido concluído. Os repasses são realizados semanalmente, toda segunda-feira, referentes aos pedidos entregues na semana anterior. Pedidos cancelados, disputados ou com chargeback não são contabilizados para repasse. A FoodExpress pode alterar a taxa de comissão com aviso prévio de 30 dias.`,
+    texto: `Comissões, taxas, promoções, descontos, repasses e prazos de pagamento podem variar conforme tipo de parceiro, plano comercial, meio de pagamento, status do pedido e acordos vigentes. Pedidos cancelados, estornados, disputados, fraudulentos ou não concluídos podem ser retidos, descontados ou analisados antes do repasse. Valores de entregadores são calculados conforme a regra exibida no painel ou definida operacionalmente.`,
   },
   {
     icone: FileText,
     titulo: '3. Cardápio e Informações',
-    texto: `É responsabilidade do parceiro manter o cardápio atualizado, com preços corretos, descrições verdadeiras e informações sobre alérgenos. O parceiro garante que os produtos ofertados estão disponíveis e serão entregues conforme descrito. Informações falsas ou enganosas podem resultar em suspensão imediata da conta e medidas legais conforme o Código de Defesa do Consumidor.`,
+    texto: `Estabelecimentos são responsáveis por manter cardápio, preços, fotos, descrições, ingredientes, disponibilidade, promoções, horários, endereço e dados de contato corretos. Informações falsas, enganosas, incompletas ou desatualizadas podem gerar reclamações, reembolsos, suspensão do item, suspensão da loja ou outras medidas cabíveis.`,
   },
   {
     icone: Star,
     titulo: '4. Qualidade e Padrões',
-    texto: `O parceiro compromete-se a manter padrões mínimos de qualidade: manter avaliação média acima de 3.5 estrelas; cumprir os tempos de preparo informados; embalar os produtos de forma adequada e higiênica; operar dentro das normas sanitárias da ANVISA e vigilância sanitária local; e possuir todos os alvarás e licenças exigidos pela legislação vigente.`,
+    texto: `Parceiros devem cumprir boas práticas de atendimento, higiene, segurança, pontualidade, comunicação e respeito aos usuários. Estabelecimentos devem observar normas sanitárias, licenças e regras aplicáveis ao seu ramo. Entregadores devem manter conduta segura, respeitosa, cumprir rotas combinadas e atualizar corretamente o status das entregas.`,
   },
   {
     icone: AlertTriangle,
     titulo: '5. Disputas e Reclamações',
-    texto: `O parceiro concorda em cooperar na resolução de disputas abertas por clientes. A FoodExpress pode, a seu critério, realizar reembolso ao cliente e debitar o valor do próximo repasse do parceiro em casos de: produto não entregue por falha do estabelecimento, produto em desacordo com o pedido, ou evidências de adulteração. O parceiro tem até 48h para contestar uma disputa com evidências.`,
+    texto: `O parceiro deve cooperar na análise de reclamações, denúncias, disputas e solicitações de suporte. A FoodExpress pode solicitar evidências, respostas internas, ajustes de produto, correção de informações, reembolso, estorno, desconto em repasse ou outras medidas proporcionais quando houver falha operacional, divergência no pedido, atraso relevante, produto incorreto, má conduta ou suspeita de fraude.`,
   },
   {
     icone: AlertTriangle,
     titulo: '6. Suspensão e Encerramento',
-    texto: `A FoodExpress pode suspender ou encerrar a parceria imediatamente em caso de: violação dos Termos ou da legislação vigente; avaliação média abaixo de 3.0 por mais de 30 dias consecutivos; reclamações graves de saúde ou segurança alimentar; fraude ou tentativa de manipulação do sistema; ou qualquer conduta que comprometa a reputação da plataforma.`,
+    texto: `A FoodExpress pode limitar, pausar, suspender ou encerrar contas em caso de violação destes Termos, descumprimento legal, fraude, manipulação de avaliações, uso indevido de dados, reclamações graves, risco à segurança, inatividade, dados falsos, baixa qualidade operacional ou conduta que prejudique usuários, parceiros ou a plataforma.`,
   },
   {
     icone: DollarSign,
     titulo: '7. Uso da Marca FoodExpress',
-    texto: `O parceiro poderá utilizar o logo e a marca FoodExpress exclusivamente para fins de divulgação da parceria, conforme diretrizes fornecidas. É proibido modificar a identidade visual, associar a marca a conteúdos negativos, ou usar a marca após o encerramento da parceria. O parceiro concede à FoodExpress licença para utilizar seu nome e logotipo na plataforma durante a vigência do contrato.`,
+    texto: `O parceiro pode utilizar a marca FoodExpress apenas para divulgar sua participação na plataforma, quando autorizado e conforme diretrizes fornecidas. O parceiro concede à FoodExpress permissão para exibir nome, logotipo, fotos, cardápio, avaliação e informações comerciais necessárias à operação da loja ou do perfil durante a vigência da parceria.`,
   },
   {
     icone: FileText,
@@ -66,7 +66,7 @@ export default function TermosParceiros() {
             <Store size={18} className="text-secondary" />
             <h1 className="font-display text-lg font-extrabold text-text-primary">Termos para Parceiros</h1>
           </div>
-          <span className="ml-auto text-xs text-text-muted font-semibold">Atualizado em jan/2025</span>
+          <span className="ml-auto text-xs text-text-muted font-semibold">Atualizado em jun/2026</span>
         </div>
       </div>
 
@@ -90,10 +90,10 @@ export default function TermosParceiros() {
           className="grid grid-cols-3 gap-4 mb-8"
           initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
         >
-          {[
-            { label: 'Taxa de comissão', valor: '15%', desc: 'sobre cada pedido' },
-            { label: 'Repasse', valor: 'Semanal', desc: 'toda segunda-feira' },
-            { label: 'Avaliação mínima', valor: '3.5 ★', desc: 'para manter parceria' },
+              {[
+            { label: 'Taxas', valor: 'Variável', desc: 'por plano ou acordo' },
+            { label: 'Repasse', valor: 'Painel', desc: 'conforme status' },
+            { label: 'Qualidade', valor: 'Contínua', desc: 'pedidos e avaliações' },
           ].map((item) => (
             <div key={item.label} className="bg-white rounded-2xl border border-border p-4 text-center shadow-sm">
               <p className="font-display text-xl font-extrabold text-secondary">{item.valor}</p>

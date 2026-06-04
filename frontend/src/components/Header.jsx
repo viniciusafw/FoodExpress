@@ -302,8 +302,19 @@ export default function Header() {
             <button
               onClick={() => setMenuMobile(m => !m)}
               className="lg:hidden w-10 h-10 rounded-full border-none bg-transparent flex items-center justify-center text-text-secondary cursor-pointer hover:bg-primary-light hover:text-primary transition-all"
+              aria-label={menuMobile ? 'Fechar menu' : 'Abrir menu'}
             >
               {menuMobile ? <X size={20} /> : <Menu size={20} />}
+            </button>
+
+            <button
+              type="button"
+              onClick={toggle}
+              className="sm:hidden w-10 h-10 rounded-full border-none bg-transparent flex items-center justify-center text-text-secondary cursor-pointer transition-all hover:bg-surface-2 hover:text-primary"
+              title={dark ? 'Modo claro' : 'Modo escuro'}
+              aria-label={dark ? 'Ativar modo claro' : 'Ativar modo escuro'}
+            >
+              {dark ? <Sun size={18} className="text-yellow-400" /> : <Moon size={18} />}
             </button>
 
             {logado ? (

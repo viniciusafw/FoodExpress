@@ -63,13 +63,14 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (!atual.rows.length) return res.status(404).json({ erro: 'Cliente não encontrado' }) as any
     if (!podeAcessarCliente(req, atual.rows[0])) return res.status(403).json({ erro: 'Você não pode alterar este cliente' }) as any
 
-    const { nome, email, telefone, endereco_principal, latitude, longitude } = req.body
+    const { nome, email, telefone, endereco_principal, endereco_label, latitude, longitude } = req.body
     const sets: string[] = []
     const args: any[] = []
     if (nome) { sets.push('nome = ?'); args.push(nome) }
     if (email) { sets.push('email = ?'); args.push(email) }
     if (telefone) { sets.push('telefone = ?'); args.push(telefone) }
     if (endereco_principal) { sets.push('endereco_principal = ?'); args.push(endereco_principal) }
+    if (endereco_label) { sets.push('endereco_label = ?'); args.push(String(endereco_label).trim().slice(0, 80)) }
     if (latitude !== undefined) { sets.push('latitude = ?'); args.push(latitude) }
     if (longitude !== undefined) { sets.push('longitude = ?'); args.push(longitude) }
     if (!sets.length) return res.status(400).json({ erro: 'Nenhum campo para atualizar' }) as any

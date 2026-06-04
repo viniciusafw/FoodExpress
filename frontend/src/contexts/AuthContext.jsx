@@ -245,6 +245,10 @@ export function AuthProvider({ children }) {
       email: dados.email,
       telefone: dados.telefone || dados.phone,
       senha: dados.senha || dados.password,
+      endereco: dados.endereco || dados.endereco_principal || '',
+      endereco_label: dados.endereco_label || dados.enderecoLabel || '',
+      latitude: dados.latitude ?? null,
+      longitude: dados.longitude ?? null,
     })
   };
 

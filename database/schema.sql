@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS clientes (
   telefone VARCHAR(32) NULL,
   data_nascimento DATE NULL,
   endereco_principal TEXT NULL,
+  endereco_label VARCHAR(80) NULL,
   latitude DOUBLE NULL,
   longitude DOUBLE NULL,
   senha_hash TEXT NULL,

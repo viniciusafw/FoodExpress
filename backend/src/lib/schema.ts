@@ -170,6 +170,7 @@ export async function ensureDatabaseHealth() {
 
       await ensureColumn('clientes', 'senha_hash', 'TEXT')
       await ensureColumn('clientes', 'deletado_em', 'DATETIME')
+      await ensureColumn('clientes', 'endereco_label', 'VARCHAR(80)')
       await ensureColumn('gerentes', 'senha_hash', 'TEXT')
       await ensureColumn('operadores', 'senha_hash', 'TEXT')
       await ensureColumn('entregadores', 'saldo_disponivel', 'DOUBLE DEFAULT 0')

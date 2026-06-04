@@ -224,7 +224,7 @@ function respostaSessaoPerfil(usuario: any) {
 // Etapa 1: Salva email como pendente e envia código de confirmação
 router.post('/registrar', async (req, res) => {
   try {
-    const { email, telefone, nome, senha, password } = req.body;
+    const { email, telefone, nome, senha, password, endereco, endereco_principal, endereco_label, latitude, longitude } = req.body;
     if (!email) return res.status(400).json({ erro: 'E-mail obrigatório' });
     const telefoneLimpo = String(telefone || '').replace(/\D/g, '');
     if (telefoneLimpo.length < 10) return res.status(400).json({ erro: 'Telefone obrigatório para contato da entrega' });
@@ -243,13 +243,28 @@ router.post('/registrar', async (req, res) => {
 
     const clienteId = `cli_${crypto.randomUUID().slice(0, 8)}`;
     const senhaHash = hashSenha(senhaInformada);
+    const enderecoFinal = String(endereco || endereco_principal || '').trim();
+    const enderecoLabel = String(endereco_label || '').trim().slice(0, 80) || null;
+    const lat = latitude === null || latitude === undefined ? null : Number(latitude);
+    const lng = longitude === null || longitude === undefined ? null : Number(longitude);
     await db.execute({
-      sql: `INSERT INTO clientes (id, user_id, nome, email, telefone, senha_hash, total_pedidos)
-            VALUES (?, ?, ?, ?, ?, ?, 0)`,
-      args: [clienteId, clienteId, nome || emailLimpo.split('@')[0], emailLimpo, telefone || '', senhaHash]
+      sql: `INSERT INTO clientes (id, user_id, nome, email, telefone, endereco_principal, endereco_label, latitude, longitude, senha_hash, total_pedidos)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      args: [
+        clienteId,
+        clienteId,
+        nome || emailLimpo.split('@')[0],
+        emailLimpo,
+        telefone || '',
+        enderecoFinal || null,
+        enderecoLabel,
+        Number.isFinite(lat) ? lat : null,
+        Number.isFinite(lng) ? lng : null,
+        senhaHash,
+      ]
     });
 
-    const cliente = await db.execute({ sql: 'SELECT id, nome, email, telefone FROM clientes WHERE id = ?', args: [clienteId] });
+    const cliente = await db.execute({ sql: 'SELECT id, nome, email, telefone, endereco_principal, endereco_label, latitude, longitude FROM clientes WHERE id = ?', args: [clienteId] });
     res.status(201).json(respostaSessaoCliente(cliente.rows[0] as any));
   } catch (error) {
     console.error(error);
