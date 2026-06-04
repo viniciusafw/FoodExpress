@@ -62,8 +62,8 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
     let sql = 'SELECT * FROM entregadores'
     const args: any[] = []
     if (status) { sql += ' WHERE status = ?'; args.push(status) }
-    sql += ' ORDER BY created_at DESC LIMIT ?'
-    args.push(parseInt(limite as string))
+    const limiteFinal = Math.max(1, Math.min(parseInt(limite as string) || 50, 200))
+    sql += ` ORDER BY created_at DESC LIMIT ${limiteFinal}`
     const result = await db.execute({ sql, args })
     res.json(result.rows)
   } catch (error) {
