@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Eye, EyeOff, Lock, CheckCircle, XCircle } from 'lucide-react'
-import { motion as Motion } from 'framer-motion'
 import { criteriosSenhaForte } from '../utils/senha'
 
 export default function CampoSenhaForte({
@@ -17,16 +16,21 @@ export default function CampoSenhaForte({
   const [mostrarSenha, setMostrarSenha] = useState(false)
   const [mostrarConfirmacao, setMostrarConfirmacao] = useState(false)
   const criterios = criteriosSenhaForte(senha, confirmarSenha)
-  const inputBase = 'w-full py-3.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all placeholder:text-text-muted placeholder:font-normal'
-  const senhaPadding = iconPadding ? 'pl-10 pr-14' : 'px-4 pr-14'
-  const eyeButtonClass = 'absolute right-2.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full text-text-muted bg-transparent border-none cursor-pointer hover:text-text-primary transition-colors flex items-center justify-center'
+  const wrapperFocusClass = focusClass.replaceAll('focus:', 'focus-within:')
+  const wrapperBase = `grid items-stretch overflow-hidden rounded-xl border border-border bg-surface-2 transition-all ${wrapperFocusClass}`
+  const inputClass = 'min-w-0 w-full bg-transparent px-4 py-3.5 text-sm font-semibold text-text-primary outline-none placeholder:text-text-muted placeholder:font-normal'
+  const eyeButtonClass = 'aspect-square self-stretch border-none bg-transparent text-text-muted cursor-pointer hover:text-text-primary transition-colors grid place-items-center'
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">{label}</label>
-        <div className="relative">
-          {iconPadding && <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />}
+        <div className={`${wrapperBase} ${iconPadding ? 'grid-cols-[auto_1fr_auto]' : 'grid-cols-[1fr_auto]'}`}>
+          {iconPadding && (
+            <span className="grid place-items-center pl-4 text-text-muted pointer-events-none">
+              <Lock size={15} />
+            </span>
+          )}
           <input
             type={mostrarSenha ? 'text' : 'password'}
             placeholder="Mínimo 8 caracteres"
@@ -34,23 +38,22 @@ export default function CampoSenhaForte({
             onChange={e => onSenhaChange(e.target.value)}
             minLength={8}
             required
-            className={`${inputBase} ${senhaPadding} ${focusClass}`}
+            className={inputClass}
           />
-          <Motion.button
+          <button
             type="button"
             onClick={() => setMostrarSenha(s => !s)}
             className={eyeButtonClass}
-            whileTap={{ scale: 0.85 }}
             aria-label={mostrarSenha ? 'Ocultar senha' : 'Mostrar senha'}
           >
             {mostrarSenha ? <EyeOff size={16} className="block shrink-0" /> : <Eye size={16} className="block shrink-0" />}
-          </Motion.button>
+          </button>
         </div>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">{confirmLabel}</label>
-        <div className="relative">
+        <div className={`${wrapperBase} grid-cols-[1fr_auto]`}>
           <input
             type={mostrarConfirmacao ? 'text' : 'password'}
             placeholder="Digite novamente"
@@ -58,17 +61,16 @@ export default function CampoSenhaForte({
             onChange={e => onConfirmarSenhaChange(e.target.value)}
             minLength={8}
             required
-            className={`${inputBase} px-4 pr-14 ${focusClass}`}
+            className={inputClass}
           />
-          <Motion.button
+          <button
             type="button"
             onClick={() => setMostrarConfirmacao(s => !s)}
             className={eyeButtonClass}
-            whileTap={{ scale: 0.85 }}
             aria-label={mostrarConfirmacao ? 'Ocultar confirmação de senha' : 'Mostrar confirmação de senha'}
           >
             {mostrarConfirmacao ? <EyeOff size={16} className="block shrink-0" /> : <Eye size={16} className="block shrink-0" />}
-          </Motion.button>
+          </button>
         </div>
       </div>
 
