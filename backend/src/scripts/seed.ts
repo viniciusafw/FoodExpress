@@ -13,6 +13,7 @@ let ensureDatabaseHealth: () => Promise<void>
 
 const args = new Set(process.argv.slice(2))
 const shouldReset = args.has('--reset')
+const shouldClear = args.has('--clear')
 const shouldHelp = args.has('--help') || args.has('-h')
 
 const PASSWORD_FAKE = process.env.SEED_FAKE_PASSWORD || 'Teste1234'
@@ -99,6 +100,7 @@ if (shouldHelp) {
 Uso:
   npm run seed
   npm run seed -- --reset
+  npm run seed -- --clear
 
 Variáveis opcionais:
   SEED_RESTAURANTES=700
@@ -108,6 +110,11 @@ Variáveis opcionais:
   SEED_FAKE_PASSWORD=Teste1234
 `)
   process.exit(0)
+}
+
+if (shouldReset && shouldClear) {
+  console.error('Use apenas uma flag por vez: --reset recria os dados fake, --clear apenas remove os dados fake.')
+  process.exit(1)
 }
 
 function mulberry32(seed: number) {
@@ -421,8 +428,9 @@ async function countFake(table: string, where = "id LIKE 'fake_%'") {
   return Number((result.rows[0] as { total?: number })?.total || 0)
 }
 
-async function resetFakeData() {
-  console.log('Reset solicitado: removendo somente dados fake com prefixo fake_.')
+async function resetFakeData(action: 'reset' | 'clear' = 'reset') {
+  const label = action === 'clear' ? 'Clear solicitado' : 'Reset solicitado'
+  console.log(`${label}: removendo somente dados fake com prefixo fake_.`)
   const deletions: Array<[string, string]> = [
     ['denuncias_produtos', "id LIKE 'fake_%'"],
     ['avaliacoes', "id LIKE 'fake_%'"],
@@ -967,7 +975,11 @@ async function main() {
   await ensureDatabaseHealth()
 
   if (shouldReset) {
-    await resetFakeData()
+    await resetFakeData('reset')
+  } else if (shouldClear) {
+    await resetFakeData('clear')
+    console.log('Clear finalizado. Nenhum dado novo foi recriado.')
+    process.exit(0)
   } else {
     await assertDatabaseIsNotPopulated()
   }
