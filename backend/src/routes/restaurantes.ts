@@ -12,6 +12,14 @@ function normalizarTexto(valor: any) {
   return String(valor || '').trim()
 }
 
+function validarSenhaForte(senha: string) {
+  const valor = String(senha || '')
+  if (valor.length < 8) return 'A senha precisa ter pelo menos 8 caracteres.'
+  if (!/[A-Z]/.test(valor)) return 'A senha precisa ter pelo menos uma letra maiúscula.'
+  if (!/[@!#$%]/.test(valor)) return 'A senha precisa ter pelo menos um caractere especial: @ ! # $ %.'
+  return ''
+}
+
 function cnpjTemporario(userId: string) {
   return `TEMP-${userId}`.slice(0, 32)
 }
@@ -171,6 +179,10 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
       password,
     } = req.body
     const senhaInformada = String(senha || password || '')
+    if (senhaInformada) {
+      const erroSenha = validarSenhaForte(senhaInformada)
+      if (erroSenha) return res.status(400).json({ erro: erroSenha }) as any
+    }
     const senhaHash = senhaInformada ? hashSenha(senhaInformada) : null
 
     const existente = await buscarRestauranteDoUsuario(userId, email || req.userEmail, ownerName || req.userName)

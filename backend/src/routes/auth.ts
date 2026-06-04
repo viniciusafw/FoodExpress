@@ -230,7 +230,8 @@ router.post('/registrar', async (req, res) => {
     if (telefoneLimpo.length < 10) return res.status(400).json({ erro: 'Telefone obrigatório para contato da entrega' });
     const senhaInformada = String(senha || password || '');
     if (!senhaInformada) return res.status(400).json({ erro: 'Senha obrigatória' });
-    if (senhaInformada.length < 6) return res.status(400).json({ erro: 'Senha deve ter pelo menos 6 caracteres' });
+    const erroSenha = validarSenhaForte(senhaInformada);
+    if (erroSenha) return res.status(400).json({ erro: erroSenha });
 
     const emailLimpo = email.toLowerCase().trim();
 
@@ -425,9 +426,8 @@ router.post('/session', async (req, res) => {
       const usuarioLogin = await buscarUsuarioParaLogin(emailLimpo, perfilNormalizado);
       if (!usuarioLogin) return res.status(404).json({ erro: 'Conta não encontrada ou inativa.' });
       if (!usuarioLogin.senha_hash) {
-        if (senhaInformada.length < 6) {
-          return res.status(401).json({ erro: 'Esta conta antiga ainda não tinha senha. Digite uma senha com pelo menos 6 caracteres para ativar o acesso.' });
-        }
+        const erroSenha = validarSenhaForte(senhaInformada);
+        if (erroSenha) return res.status(401).json({ erro: `Esta conta antiga ainda não tinha senha. ${erroSenha}` });
         const senhaHash = hashSenha(senhaInformada);
         await definirSenhaInicial(emailLimpo, perfilNormalizado, senhaHash);
         usuarioLogin.senha_hash = senhaHash;
@@ -436,6 +436,12 @@ router.post('/session', async (req, res) => {
         return res.status(401).json({ erro: 'E-mail ou senha inválidos.' });
       }
       return res.json(respostaSessaoPerfil(usuarioLogin));
+    }
+
+    if (cadastro) {
+      if (!senhaInformada) return res.status(400).json({ erro: 'Senha obrigatória' });
+      const erroSenha = validarSenhaForte(senhaInformada);
+      if (erroSenha) return res.status(400).json({ erro: erroSenha });
     }
 
     if (['gerente', 'restaurante'].includes(perfilNormalizado) && !cadastro) {

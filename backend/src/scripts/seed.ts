@@ -16,7 +16,7 @@ const shouldReset = args.has('--reset')
 const shouldClear = args.has('--clear')
 const shouldHelp = args.has('--help') || args.has('-h')
 
-const PASSWORD_FAKE = process.env.SEED_FAKE_PASSWORD || 'Teste1234'
+const PASSWORD_FAKE = process.env.SEED_FAKE_PASSWORD || 'Teste@1234'
 let PASSWORD_FAKE_HASH = ''
 
 const TOTAL_RESTAURANTES = Number(process.env.SEED_RESTAURANTES || 700)
@@ -107,7 +107,7 @@ Variáveis opcionais:
   SEED_CLIENTES=2000
   SEED_ENTREGADORES=250
   SEED_PEDIDOS=18000
-  SEED_FAKE_PASSWORD=Teste1234
+  SEED_FAKE_PASSWORD=Teste@1234
 `)
   process.exit(0)
 }

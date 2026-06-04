@@ -6,7 +6,9 @@ const DIGEST = 'sha256'
 
 export function hashSenha(senha: string) {
   const valor = String(senha || '')
-  if (valor.length < 6) throw new Error('Senha deve ter pelo menos 6 caracteres')
+  if (valor.length < 8) throw new Error('Senha precisa ter pelo menos 8 caracteres')
+  if (!/[A-Z]/.test(valor)) throw new Error('Senha precisa ter pelo menos uma letra maiúscula')
+  if (!/[@!#$%]/.test(valor)) throw new Error('Senha precisa ter pelo menos um caractere especial: @ ! # $ %')
   const salt = crypto.randomBytes(16).toString('hex')
   const hash = crypto.pbkdf2Sync(valor, salt, ITERATIONS, KEYLEN, DIGEST).toString('hex')
   return `pbkdf2$${ITERATIONS}$${salt}$${hash}`

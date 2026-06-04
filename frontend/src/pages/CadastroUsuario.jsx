@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { mascaraTelefone } from '../utils/mascaras'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, Link } from 'react-router-dom'
-import { Mail, Phone, ArrowLeft, User, Lock, Eye, EyeOff } from 'lucide-react'
+import { Mail, Phone, ArrowLeft, User } from 'lucide-react'
 import { motion as Motion } from 'framer-motion'
 import logoSrc from '../imgs/Logo-site.png'
+import CampoSenhaForte from '../components/CampoSenhaForte'
+import { senhaForteValida } from '../utils/senha'
 
 const itemVariants = {
   hidden: { opacity: 0, y: 16 },
@@ -12,8 +14,7 @@ const itemVariants = {
 }
 
 export default function CadastroUsuario() {
-  const [dados, setDados] = useState({ nome: '', email: '', telefone: '', senha: '' })
-  const [mostrarSenha, setMostrarSenha] = useState(false)
+  const [dados, setDados] = useState({ nome: '', email: '', telefone: '', senha: '', confirmarSenha: '' })
   const [carregando, setCarregando] = useState(false)
   const [aceitouTermos, setAceitouTermos] = useState(false)
   const [erro, setErro] = useState('')
@@ -29,8 +30,8 @@ export default function CadastroUsuario() {
       setErro('Informe um telefone válido para o entregador conseguir entrar em contato.')
       return
     }
-    if (dados.senha.length < 6) {
-      setErro('A senha deve ter pelo menos 6 caracteres.')
+    if (!senhaForteValida(dados.senha, dados.confirmarSenha)) {
+      setErro('Confira os requisitos da senha antes de continuar.')
       return
     }
 
@@ -134,18 +135,14 @@ export default function CadastroUsuario() {
                 </div>
               </Motion.div>
 
-              <Motion.div className="flex flex-col gap-1.5" variants={itemVariants} initial="hidden" animate="show" transition={{ delay: 0.2 }}>
-                <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Senha *</label>
-                <div className="relative">
-                  <Lock size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
-                  <input name="senha" type={mostrarSenha ? 'text' : 'password'} placeholder="Mínimo 6 caracteres"
-                    value={dados.senha} onChange={handleChange} minLength={6} required
-                    className="w-full pl-10 pr-12 py-3.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,107,53,0.08)] placeholder:text-text-muted placeholder:font-normal" />
-                  <button type="button" onClick={() => setMostrarSenha(s => !s)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted bg-transparent border-none cursor-pointer hover:text-text-primary">
-                    {mostrarSenha ? <EyeOff size={15} /> : <Eye size={15} />}
-                  </button>
-                </div>
+              <Motion.div variants={itemVariants} initial="hidden" animate="show" transition={{ delay: 0.2 }}>
+                <CampoSenhaForte
+                  senha={dados.senha}
+                  confirmarSenha={dados.confirmarSenha}
+                  onSenhaChange={valor => setDados(d => ({ ...d, senha: valor }))}
+                  onConfirmarSenhaChange={valor => setDados(d => ({ ...d, confirmarSenha: valor }))}
+                  focusClass="focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,107,53,0.08)]"
+                />
               </Motion.div>
 
               <label className="flex items-start gap-2.5 cursor-pointer">
@@ -156,7 +153,7 @@ export default function CadastroUsuario() {
                 </span>
               </label>
 
-              <Motion.button type="submit" disabled={carregando || !aceitouTermos}
+              <Motion.button type="submit" disabled={carregando || !aceitouTermos || !senhaForteValida(dados.senha, dados.confirmarSenha)}
                 className="w-full py-4 bg-primary text-white border-none rounded-xl font-display font-bold text-base cursor-pointer disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed"
                 whileHover={{ scale: 1.02, boxShadow: '0 4px 20px rgba(255,107,53,0.35)' }}
                 whileTap={{ scale: 0.98 }}>

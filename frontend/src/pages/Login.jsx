@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff, Store, User, Bike, ArrowRight, ShieldCheck, CheckCircle, XCircle } from 'lucide-react'
+import { Eye, EyeOff, Store, User, Bike, ArrowRight, ShieldCheck } from 'lucide-react'
 import logoSrc from '../imgs/Logo-site.png'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
+import CampoSenhaForte from '../components/CampoSenhaForte'
+import { senhaForteValida } from '../utils/senha'
 
 // ─── Typewriter hook ──────────────────────────────────────────────────────────
 function useTypewriter(phrases, { typingSpeed = 60, deletingSpeed = 35, pauseMs = 2200 } = {}) {
@@ -75,15 +77,6 @@ const fieldVariant = {
   show:   { opacity: 1, y: 0, transition: { duration: 0.36, ease: 'easeOut' } },
 }
 const GOOGLE_PASSWORD_PENDING_KEY = 'foodexpress.googlePasswordPending'
-
-function criteriosSenhaGoogle(senha, confirmarSenha) {
-  return [
-    { id: 'minimo', texto: 'Pelo menos 8 caracteres', ok: senha.length >= 8 },
-    { id: 'maiuscula', texto: 'Uma letra maiúscula', ok: /[A-Z]/.test(senha) },
-    { id: 'especial', texto: 'Um caractere especial (@ ! # $ %)', ok: /[@!#$%]/.test(senha) },
-    { id: 'confirmacao', texto: 'Confirmação igual à senha', ok: Boolean(senha) && senha === confirmarSenha },
-  ]
-}
 
 // ─── Config por perfil ────────────────────────────────────────────────────────
 function getConfig(arg1, arg2) {
@@ -227,7 +220,6 @@ export default function Login() {
   const [sucesso, setSucesso]           = useState('')
   const [senhaGoogle, setSenhaGoogle] = useState('')
   const [confirmarSenhaGoogle, setConfirmarSenhaGoogle] = useState('')
-  const [mostrarSenhaGoogle, setMostrarSenhaGoogle] = useState(false)
   const [googlePendente, setGooglePendente] = useState(null)
   const { entrar, entrarComGoogle, concluirLoginGoogleComSenha }  = useAuth()
   const navigate    = useNavigate()
@@ -278,8 +270,7 @@ export default function Login() {
     }
   }
 
-  const criteriosGoogle = criteriosSenhaGoogle(senhaGoogle, confirmarSenhaGoogle)
-  const senhaGoogleValida = criteriosGoogle.every(item => item.ok)
+  const senhaGoogleValida = senhaForteValida(senhaGoogle, confirmarSenhaGoogle)
 
   const handleConcluirGoogle = async (e) => {
     e.preventDefault()
@@ -419,45 +410,15 @@ export default function Login() {
                 className="flex flex-col gap-4"
                 variants={formVariants} initial="hidden" animate="show"
               >
-                <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
-                  <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Senha *</label>
-                  <div className="relative">
-                    <input
-                      type={mostrarSenhaGoogle ? 'text' : 'password'}
-                      placeholder="Mínimo 8 caracteres"
-                      value={senhaGoogle}
-                      onChange={e => setSenhaGoogle(e.target.value)}
-                      className="w-full px-4 py-3.5 pr-12 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,107,53,0.08)] placeholder:text-text-muted placeholder:font-normal"
-                      required
-                    />
-                    <Motion.button type="button" onClick={() => setMostrarSenhaGoogle(s => !s)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted bg-transparent border-none cursor-pointer hover:text-text-primary transition-colors"
-                      whileTap={{ scale: 0.85 }}>
-                      {mostrarSenhaGoogle ? <EyeOff size={16} /> : <Eye size={16} />}
-                    </Motion.button>
-                  </div>
-                </Motion.div>
-
-                <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
-                  <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Confirme sua senha *</label>
-                  <input
-                    type={mostrarSenhaGoogle ? 'text' : 'password'}
-                    placeholder="Digite novamente"
-                    value={confirmarSenhaGoogle}
-                    onChange={e => setConfirmarSenhaGoogle(e.target.value)}
-                    className={inputCls}
-                    required
+                <Motion.div variants={fieldVariant}>
+                  <CampoSenhaForte
+                    senha={senhaGoogle}
+                    confirmarSenha={confirmarSenhaGoogle}
+                    onSenhaChange={setSenhaGoogle}
+                    onConfirmarSenhaChange={setConfirmarSenhaGoogle}
+                    iconPadding={false}
                   />
                 </Motion.div>
-
-                <div className="rounded-xl border border-border bg-surface-2 p-3 flex flex-col gap-2">
-                  {criteriosGoogle.map(item => (
-                    <div key={item.id} className={`flex items-center gap-2 text-xs font-bold ${item.ok ? 'text-accent' : 'text-red-500'}`}>
-                      {item.ok ? <CheckCircle size={14} /> : <XCircle size={14} />}
-                      {item.texto}
-                    </div>
-                  ))}
-                </div>
 
                 <Motion.button
                   type="submit"

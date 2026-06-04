@@ -28,6 +28,14 @@ function normalizarEmail(email?: string) {
   return String(email || '').trim().toLowerCase()
 }
 
+function validarSenhaForte(senha: string) {
+  const valor = String(senha || '')
+  if (valor.length < 8) return 'A senha precisa ter pelo menos 8 caracteres.'
+  if (!/[A-Z]/.test(valor)) return 'A senha precisa ter pelo menos uma letra maiúscula.'
+  if (!/[@!#$%]/.test(valor)) return 'A senha precisa ter pelo menos um caractere especial: @ ! # $ %.'
+  return ''
+}
+
 function emailLocal(userId: string) {
   return `${String(userId || 'entregador').replace(/[^a-zA-Z0-9._-]/g, '_')}@local.foodexpress`
 }
@@ -80,6 +88,10 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
     const id = `ent_${userId}`
     const cpfFinal = cpfAutomatico(userId)
     const senhaInformada = String(senha || password || '')
+    if (senhaInformada) {
+      const erroSenha = validarSenhaForte(senhaInformada)
+      if (erroSenha) return res.status(400).json({ erro: erroSenha }) as any
+    }
     const senhaHash = senhaInformada ? hashSenha(senhaInformada) : null
 
     const existente = await db.execute({
@@ -185,6 +197,10 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     if (existente.rows.length) return res.status(409).json({ erro: 'CPF já cadastrado' }) as any
 
     const senhaInformada = String(senha || password || '')
+    if (senhaInformada) {
+      const erroSenha = validarSenhaForte(senhaInformada)
+      if (erroSenha) return res.status(400).json({ erro: erroSenha }) as any
+    }
     const senhaHash = senhaInformada ? hashSenha(senhaInformada) : null
 
     const id = `ent_${crypto.randomUUID().slice(0, 12)}`
