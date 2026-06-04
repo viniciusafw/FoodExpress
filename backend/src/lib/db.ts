@@ -28,15 +28,14 @@ function configFromUrl(rawUrl?: string) {
 const urlConfig = configFromUrl(
   process.env.MYSQL_URL ||
   process.env.MARIADB_URL ||
-  process.env.DATABASE_URL ||
-  process.env.DB_URL
+  process.env.DATABASE_URL
 )
 
 const host = process.env.DB_HOST || process.env.MYSQLHOST || urlConfig?.host || 'localhost'
 const port = Number(process.env.DB_PORT || process.env.MYSQLPORT || urlConfig?.port || 3306)
 const user = process.env.DB_USER || process.env.MYSQLUSER || urlConfig?.user || 'root'
 const password = process.env.DB_PASSWORD || process.env.MYSQLPASSWORD || urlConfig?.password || ''
-const database = process.env.DB_NAME || process.env.MYSQLDATABASE || urlConfig?.database || 'foodexpress'
+const database = process.env.MYSQLDATABASE || urlConfig?.database || 'railway'
 
 if (process.env.NODE_ENV === 'production' && host === 'localhost') {
   console.warn('⚠️ MariaDB configurado como localhost. No Railway, vincule as variáveis do banco ao serviço do backend.')
