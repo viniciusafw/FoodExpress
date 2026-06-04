@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Eye, EyeOff, Store, User, Bike, ArrowRight, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Store, User, Bike, ArrowRight, ShieldCheck, CheckCircle, XCircle } from 'lucide-react'
 import logoSrc from '../imgs/Logo-site.png'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 
@@ -73,6 +73,16 @@ const formVariants = {
 const fieldVariant = {
   hidden: { opacity: 0, y: 14 },
   show:   { opacity: 1, y: 0, transition: { duration: 0.36, ease: 'easeOut' } },
+}
+const GOOGLE_PASSWORD_PENDING_KEY = 'foodexpress.googlePasswordPending'
+
+function criteriosSenhaGoogle(senha, confirmarSenha) {
+  return [
+    { id: 'minimo', texto: 'Pelo menos 8 caracteres', ok: senha.length >= 8 },
+    { id: 'maiuscula', texto: 'Uma letra maiúscula', ok: /[A-Z]/.test(senha) },
+    { id: 'especial', texto: 'Um caractere especial (@ ! # $ %)', ok: /[@!#$%]/.test(senha) },
+    { id: 'confirmacao', texto: 'Confirmação igual à senha', ok: Boolean(senha) && senha === confirmarSenha },
+  ]
 }
 
 // ─── Config por perfil ────────────────────────────────────────────────────────
@@ -215,7 +225,11 @@ export default function Login() {
   const [carregando, setCarregando]     = useState(false)
   const [erro, setErro]                 = useState('')
   const [sucesso, setSucesso]           = useState('')
-  const { entrar, entrarComGoogle }  = useAuth()
+  const [senhaGoogle, setSenhaGoogle] = useState('')
+  const [confirmarSenhaGoogle, setConfirmarSenhaGoogle] = useState('')
+  const [mostrarSenhaGoogle, setMostrarSenhaGoogle] = useState(false)
+  const [googlePendente, setGooglePendente] = useState(null)
+  const { entrar, entrarComGoogle, concluirLoginGoogleComSenha }  = useAuth()
   const navigate    = useNavigate()
   const config      = getConfig({ eParceiro, eEntregador, eOperador })
   const perfilLogin = eOperador ? 'operador' : eEntregador ? 'entregador' : eParceiro ? 'gerente' : 'cliente'
@@ -226,6 +240,20 @@ export default function Login() {
     sessionStorage.removeItem('authError')
     setErro(authError)
   }, [])
+
+  useEffect(() => {
+    const raw = sessionStorage.getItem(GOOGLE_PASSWORD_PENDING_KEY)
+    if (!raw) {
+      setGooglePendente(null)
+      return
+    }
+    try {
+      setGooglePendente(JSON.parse(raw))
+    } catch {
+      sessionStorage.removeItem(GOOGLE_PASSWORD_PENDING_KEY)
+      setGooglePendente(null)
+    }
+  }, [params])
 
   const handleEnviar = async (e) => {
     e.preventDefault()
@@ -243,9 +271,31 @@ export default function Login() {
 
   const handleGoogleLogin = async () => {
     try {
+      setErro('')
       await entrarComGoogle()
     } catch (error) {
       setErro(error?.message || 'Não foi possível iniciar o login com Google.')
+    }
+  }
+
+  const criteriosGoogle = criteriosSenhaGoogle(senhaGoogle, confirmarSenhaGoogle)
+  const senhaGoogleValida = criteriosGoogle.every(item => item.ok)
+
+  const handleConcluirGoogle = async (e) => {
+    e.preventDefault()
+    setErro('')
+    setSucesso('')
+    if (!senhaGoogleValida) {
+      setErro('Confira os requisitos da senha antes de continuar.')
+      return
+    }
+    setCarregando(true)
+    try {
+      await concluirLoginGoogleComSenha(senhaGoogle)
+    } catch (error) {
+      setErro(error?.message || 'Não foi possível concluir o login com Google.')
+    } finally {
+      setCarregando(false)
     }
   }
 
@@ -347,9 +397,11 @@ export default function Login() {
             </div>
 
             <h2 className="font-display text-2xl font-extrabold text-text-primary mb-1 tracking-tight">
-              Bem-vindo de volta!
+              {googlePendente ? 'Crie sua senha' : 'Bem-vindo de volta!'}
             </h2>
-            <p className="text-sm text-text-muted font-semibold mb-7">{config.subtitulo}</p>
+            <p className="text-sm text-text-muted font-semibold mb-7">
+              {googlePendente ? `Complete o acesso com Google para ${googlePendente.email}` : config.subtitulo}
+            </p>
             {erro && (
               <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
                 {erro}
@@ -361,12 +413,71 @@ export default function Login() {
               </div>
             )}
 
-            {/* Form */}
-            <Motion.form
-              onSubmit={handleEnviar}
-              className="flex flex-col gap-4"
-              variants={formVariants} initial="hidden" animate="show"
-            >
+            {googlePendente ? (
+              <Motion.form
+                onSubmit={handleConcluirGoogle}
+                className="flex flex-col gap-4"
+                variants={formVariants} initial="hidden" animate="show"
+              >
+                <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
+                  <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Senha *</label>
+                  <div className="relative">
+                    <input
+                      type={mostrarSenhaGoogle ? 'text' : 'password'}
+                      placeholder="Mínimo 8 caracteres"
+                      value={senhaGoogle}
+                      onChange={e => setSenhaGoogle(e.target.value)}
+                      className="w-full px-4 py-3.5 pr-12 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,107,53,0.08)] placeholder:text-text-muted placeholder:font-normal"
+                      required
+                    />
+                    <Motion.button type="button" onClick={() => setMostrarSenhaGoogle(s => !s)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-text-muted bg-transparent border-none cursor-pointer hover:text-text-primary transition-colors"
+                      whileTap={{ scale: 0.85 }}>
+                      {mostrarSenhaGoogle ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </Motion.button>
+                  </div>
+                </Motion.div>
+
+                <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
+                  <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Confirme sua senha *</label>
+                  <input
+                    type={mostrarSenhaGoogle ? 'text' : 'password'}
+                    placeholder="Digite novamente"
+                    value={confirmarSenhaGoogle}
+                    onChange={e => setConfirmarSenhaGoogle(e.target.value)}
+                    className={inputCls}
+                    required
+                  />
+                </Motion.div>
+
+                <div className="rounded-xl border border-border bg-surface-2 p-3 flex flex-col gap-2">
+                  {criteriosGoogle.map(item => (
+                    <div key={item.id} className={`flex items-center gap-2 text-xs font-bold ${item.ok ? 'text-accent' : 'text-red-500'}`}>
+                      {item.ok ? <CheckCircle size={14} /> : <XCircle size={14} />}
+                      {item.texto}
+                    </div>
+                  ))}
+                </div>
+
+                <Motion.button
+                  type="submit"
+                  disabled={carregando || !senhaGoogleValida}
+                  className="w-full py-4 text-white border-none rounded-xl font-display font-bold text-base cursor-pointer flex items-center justify-center gap-2 transition-colors disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed mt-1 bg-primary hover:bg-primary-dark"
+                  variants={fieldVariant}
+                  whileHover={!carregando && senhaGoogleValida ? { scale: 1.02, boxShadow: '0 6px 28px rgba(0,0,0,0.18)' } : {}}
+                  whileTap={!carregando && senhaGoogleValida ? { scale: 0.97 } : {}}
+                >
+                  {carregando ? 'Concluindo...' : <>Concluir acesso <ArrowRight size={16} /></>}
+                </Motion.button>
+              </Motion.form>
+            ) : (
+              <>
+                {/* Form */}
+                <Motion.form
+                  onSubmit={handleEnviar}
+                  className="flex flex-col gap-4"
+                  variants={formVariants} initial="hidden" animate="show"
+                >
               <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
                 <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">E-mail *</label>
                 <input type="email" placeholder="seu@email.com"
@@ -406,10 +517,10 @@ export default function Login() {
                   <>{config.ctaTexto} <ArrowRight size={16} /></>
                 )}
               </Motion.button>
-            </Motion.form>
+                </Motion.form>
 
-            {/* Google + Cadastro — só clientes */}
-            {config.mostrarCadastro && (
+                {/* Google + Cadastro — só clientes */}
+                {config.mostrarCadastro && (
               <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.55 }}>
                 <div className="flex items-center gap-4 my-5 text-text-muted text-xs font-bold">
                   <div className="flex-1 h-px bg-border" /> ou <div className="flex-1 h-px bg-border" />
@@ -438,6 +549,8 @@ export default function Login() {
                   </button>
                 </p>
               </Motion.div>
+            )}
+              </>
             )}
 
             {config.voltarLabel && (

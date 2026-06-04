@@ -5,6 +5,7 @@ import { useAuth0 } from '@auth0/auth0-react';
 import api, { getApiBaseUrl } from '../services/api';
 
 const AuthContext = createContext();
+const GOOGLE_PASSWORD_PENDING_KEY = 'foodexpress.googlePasswordPending';
 
 function normalizarIdentificador(valor) {
   return String(valor || '')
@@ -96,82 +97,15 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    const sincronizarAuth0 = async () => {
-      setAuth0Sincronizado(false);
-      try {
-        const response = await fetch(`${getApiBaseUrl()}/api/auth/auth0-sync`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: auth0Email,
-            nome: auth0Name,
-          }),
-        });
-
-        if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
-          const erro = new Error(data?.erro || 'Falha ao sincronizar sessão no backend');
-          erro.status = response.status;
-          throw erro;
-        }
-
-        const data = await response.json();
-        if (data?.token) {
-          localStorage.setItem('token', data.token);
-        }
-
-        const usuarioCliente = {
-          id: data?.usuario?.id || auth0Sub,
-          nome: data?.usuario?.nome || auth0Name || (auth0Email ? auth0Email.split('@')[0] : 'Cliente'),
-          email: data?.usuario?.email || auth0Email,
-          telefone: data?.usuario?.telefone || '',
-          perfil: 'cliente',
-          provider: 'auth0',
-        };
-
-        localStorage.setItem('usuario', JSON.stringify(usuarioCliente));
-        setUsuario((atual) => (
-          atual?.id === usuarioCliente.id &&
-          atual?.email === usuarioCliente.email &&
-          atual?.perfil === usuarioCliente.perfil
-            ? atual
-            : usuarioCliente
-        ));
-      } catch (error) {
-        if (
-          localStorage.getItem('preferLocalAuth') === 'true' &&
-          localStorage.getItem('token') &&
-          localStorage.getItem('usuario')
-        ) {
-          return;
-        }
-
-        if (error?.status >= 500) {
-          sessionStorage.setItem(
-            'authError',
-            'Login com Google indisponível no momento. Use e-mail e senha enquanto o banco é verificado.'
-          );
-          navigate('/login', { replace: true });
-          return;
-        }
-
-        localStorage.removeItem('usuario');
-        localStorage.removeItem('token');
-        setUsuario(null);
-        if (error?.status === 409) {
-          sessionStorage.setItem(
-            'authError',
-            `${error.message} Use o login correto com e-mail e senha.`
-          );
-          navigate('/login', { replace: true });
-        }
-      } finally {
-        ultimaContaAuth0Sincronizada.current = chaveContaAuth0;
-        setAuth0Sincronizado(true);
-      }
-    };
-
-    sincronizarAuth0();
+    sessionStorage.setItem(GOOGLE_PASSWORD_PENDING_KEY, JSON.stringify({
+      sub: auth0Sub,
+      email: auth0Email,
+      nome: auth0Name,
+      chave: chaveContaAuth0,
+    }));
+    setAuth0Sincronizado(true);
+    navigate('/login?googleSenha=true', { replace: true });
+    return;
   }, [auth0Configurado, auth0Loading, isAuthenticated, auth0Sub, auth0Email, auth0Name, navigate]);
 
   const entrar = async (email, perfil, extras = {}) => {
@@ -252,6 +186,8 @@ export function AuthProvider({ children }) {
       throw new Error('Auth0 não configurado. Defina VITE_AUTH0_DOMAIN e VITE_AUTH0_CLIENT_ID.');
     }
 
+    sessionStorage.removeItem(GOOGLE_PASSWORD_PENDING_KEY);
+    localStorage.removeItem('preferLocalAuth');
     await loginWithRedirect({
       appState: { returnTo: '/' },
       authorizationParams: {
@@ -260,6 +196,47 @@ export function AuthProvider({ children }) {
         redirect_uri: `${window.location.origin}/auth/callback`,
       },
     });
+  };
+
+  const concluirLoginGoogleComSenha = async (senha) => {
+    const raw = sessionStorage.getItem(GOOGLE_PASSWORD_PENDING_KEY);
+    const pendente = raw ? JSON.parse(raw) : {};
+    const email = pendente.email || auth0Email;
+    const nome = pendente.nome || auth0Name;
+    const chave = pendente.chave || `${auth0Sub}|${auth0Email}|${auth0Name}`;
+
+    if (!email) throw new Error('Não encontramos o e-mail retornado pelo Google. Tente entrar com Google novamente.');
+
+    const response = await fetch(`${getApiBaseUrl()}/api/auth/auth0-sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, nome, senha }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data?.erro || 'Não foi possível concluir o login com Google.');
+    }
+
+    const data = await response.json();
+    if (data?.token) localStorage.setItem('token', data.token);
+
+    const usuarioCliente = {
+      id: data?.usuario?.id || pendente.sub || auth0Sub,
+      nome: data?.usuario?.nome || nome || (email ? email.split('@')[0] : 'Cliente'),
+      email: data?.usuario?.email || email,
+      telefone: data?.usuario?.telefone || '',
+      perfil: 'cliente',
+      provider: 'auth0',
+    };
+
+    localStorage.setItem('usuario', JSON.stringify(usuarioCliente));
+    localStorage.setItem('preferLocalAuth', 'true');
+    sessionStorage.removeItem(GOOGLE_PASSWORD_PENDING_KEY);
+    ultimaContaAuth0Sincronizada.current = chave;
+    setUsuario(usuarioCliente);
+    setAuth0Sincronizado(true);
+    navigate(destinoPorPerfil('cliente'), { replace: true });
   };
 
   const cadastrarCliente = async (dados) => {
@@ -344,6 +321,7 @@ export function AuthProvider({ children }) {
     entrar,
     aplicarSessao,
     entrarComGoogle,
+    concluirLoginGoogleComSenha,
     entrarComEmail: enviarCodigoLoginPorEmail,
     cadastrarCliente,
     cadastrarGerente,
@@ -351,7 +329,7 @@ export function AuthProvider({ children }) {
     estaLogado: !!usuario,
     perfil: usuario?.perfil ?? null,
     carregando: carregando || (auth0Configurado && (auth0Loading || !auth0Sincronizado)),
-  }), [usuario, carregando, auth0Configurado, auth0Loading, auth0Sincronizado]);
+  }), [usuario, carregando, auth0Configurado, auth0Loading, auth0Sincronizado, auth0Email, auth0Name, auth0Sub]);
 
   return <AuthContext.Provider value={valor}>{children}</AuthContext.Provider>;
 }

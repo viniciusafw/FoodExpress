@@ -41,6 +41,14 @@ function normalizarEmail(email: string) {
   return String(email || '').trim().toLowerCase();
 }
 
+function validarSenhaForte(senha: string) {
+  const valor = String(senha || '');
+  if (valor.length < 8) return 'A senha precisa ter pelo menos 8 caracteres.';
+  if (!/[A-Z]/.test(valor)) return 'A senha precisa ter pelo menos uma letra maiúscula.';
+  if (!/[@!#$%]/.test(valor)) return 'A senha precisa ter pelo menos um caractere especial: @ ! # $ %.';
+  return '';
+}
+
 function gerarCodigoVerificacao() {
   return String(Math.floor(100000 + Math.random() * 900000));
 }
@@ -470,17 +478,31 @@ router.post('/session', async (req, res) => {
 // ── POST /api/auth/auth0-sync ─────────────────────────────────────────────────
 router.post('/auth0-sync', async (req, res) => {
   try {
-    const { email, nome } = req.body;
+    const { email, nome, senha, password } = req.body;
     if (!email) return res.status(400).json({ erro: 'E-mail obrigatório' });
 
     const emailLimpo = email.toLowerCase().trim();
+    const senhaInformada = String(senha || password || '');
+    if (!senhaInformada) return res.status(400).json({ erro: 'Crie ou confirme sua senha para concluir o login com Google.' });
+
     const existente = await db.execute({
-      sql: 'SELECT * FROM clientes WHERE email = ?',
+      sql: 'SELECT * FROM clientes WHERE lower(email) = ?',
       args: [emailLimpo]
     });
 
     if (existente.rows.length) {
-      const cliente = existente.rows[0];
+      const cliente = existente.rows[0] as any;
+      if (cliente.senha_hash) {
+        if (!verificarSenha(senhaInformada, cliente.senha_hash)) {
+          return res.status(401).json({ erro: 'Senha incorreta para este e-mail.' });
+        }
+      } else {
+        const erroSenha = validarSenhaForte(senhaInformada);
+        if (erroSenha) return res.status(400).json({ erro: erroSenha });
+        const senhaHash = hashSenha(senhaInformada);
+        await db.execute({ sql: 'UPDATE clientes SET senha_hash = ? WHERE id = ?', args: [senhaHash, cliente.id] });
+        cliente.senha_hash = senhaHash;
+      }
       const token = gerarToken(cliente.id, 'cliente', {
         email: cliente.email,
         nome: cliente.nome,
@@ -500,11 +522,14 @@ router.post('/auth0-sync', async (req, res) => {
       return res.status(409).json({ erro: `Este e-mail já está cadastrado como ${perfisDiferentes.join(', ')}. Entre pelo perfil correto com e-mail e senha.` });
     }
 
+    const erroSenha = validarSenhaForte(senhaInformada);
+    if (erroSenha) return res.status(400).json({ erro: erroSenha });
+    const senhaHash = hashSenha(senhaInformada);
     const clienteId = `cli_${crypto.randomUUID().slice(0, 8)}`;
     await db.execute({
-      sql: `INSERT INTO clientes (id, user_id, nome, email, telefone, total_pedidos)
-            VALUES (?, ?, ?, ?, ?, 0)`,
-      args: [clienteId, clienteId, nome || emailLimpo.split('@')[0], emailLimpo, '']
+      sql: `INSERT INTO clientes (id, user_id, nome, email, telefone, senha_hash, total_pedidos)
+            VALUES (?, ?, ?, ?, ?, ?, 0)`,
+      args: [clienteId, clienteId, nome || emailLimpo.split('@')[0], emailLimpo, '', senhaHash]
     });
 
     const token = gerarToken(clienteId, 'cliente', {

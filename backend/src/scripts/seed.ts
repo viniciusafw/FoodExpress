@@ -155,6 +155,12 @@ function slug(value: string) {
     .replace(/^_+|_+$/g, '')
 }
 
+function hashTexto(value: string) {
+  return String(value || '').split('').reduce((total, char) => (
+    ((total << 5) - total + char.charCodeAt(0)) | 0
+  ), 0)
+}
+
 function sqlDate(date: Date) {
   return date.toISOString().slice(0, 19).replace('T', ' ')
 }
@@ -236,12 +242,61 @@ function termoImagem(categoria: string) {
   return termos[categoria] || 'food,restaurant'
 }
 
+const fotosComida = [
+  '1513104890138-7c749659a591',
+  '1568901346375-23c9450c58cd',
+  '1579871494447-9811cf80d66c',
+  '1590301157890-4810ed352733',
+  '1546069901-ba9599a7e63c',
+  '1604908176997-125f25cc6f3d',
+  '1555939594-58d7cb561ad1',
+  '1512621776951-a57141f2eefd',
+  '1488477181946-6428a0291777',
+  '1509440159596-0249088772ff',
+  '1509042239860-f550ce710b93',
+  '1601050690597-df0568f70950',
+  '1541518763669-27fef04b14ea',
+  '1565299585323-38d6b0865b47',
+  '1563805042-7684c019e1cb',
+  '1504674900247-0877df9cc836',
+  '1504754524776-8f4f37790ca0',
+  '1565958011703-44f9829ba187',
+  '1473093295043-cdd812d0e601',
+  '1551183053-bf91a1d81141',
+]
+
+const fotosPorCategoria: Record<string, string> = {
+  Pizza: '1513104890138-7c749659a591',
+  Lanches: '1568901346375-23c9450c58cd',
+  Sushi: '1579871494447-9811cf80d66c',
+  Açaí: '1590301157890-4810ed352733',
+  Brasileira: '1546069901-ba9599a7e63c',
+  Nordestina: '1604908176997-125f25cc6f3d',
+  Churrasco: '1555939594-58d7cb561ad1',
+  'Frutos do Mar': '1559847844-5315695dadae',
+  Saladas: '1512621776951-a57141f2eefd',
+  Sobremesas: '1488477181946-6428a0291777',
+  Padaria: '1509440159596-0249088772ff',
+  Cafeteria: '1509042239860-f550ce710b93',
+  Pastel: '1601050690597-df0568f70950',
+  Árabe: '1541518763669-27fef04b14ea',
+  Mexicana: '1565299585323-38d6b0865b47',
+  Saudável: '1512621776951-a57141f2eefd',
+  Mercado: '1542838132-92c53300491e',
+  Conveniência: '1528698827591-e19ccd7bc23d',
+}
+
+function imagemUnsplash(photoId: string) {
+  return `https://images.unsplash.com/photo-${photoId}?auto=format&fit=crop&w=900&h=700&q=80`
+}
+
 function imagemCategoria(categoria: string, seed = 1) {
-  return `https://source.unsplash.com/900x700/?${encodeURIComponent(termoImagem(categoria))}&sig=${seed}`
+  return imagemUnsplash(fotosPorCategoria[categoria] || fotosComida[Math.abs(seed) % fotosComida.length])
 }
 
 function imagemProdutoCategoria(categoria: string, restIndex: number, itemIndex: number, nome: string) {
-  return `https://source.unsplash.com/900x700/?${encodeURIComponent(`${nome},${termoImagem(categoria)}`)}&sig=${restIndex + 1}${itemIndex}`
+  const foto = fotosComida[Math.abs(hashTexto(`${categoria}-${nome}-${restIndex}-${itemIndex}`)) % fotosComida.length]
+  return imagemUnsplash(foto)
 }
 
 function nomeRestaurante(categoria: string, index: number, bairro: string) {
