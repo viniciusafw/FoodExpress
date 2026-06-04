@@ -99,7 +99,7 @@ export default function SearchPage() {
   }, [])
 
   useEffect(() => {
-    api.restaurantes.listar(paramsComLocalizacao()).then(dados => {
+    api.restaurantes.listar(paramsComLocalizacao({ limite: 200 })).then(dados => {
       const lojas = dados.map(r => ({
         ...r,
         emoji: emojiRestaurante(r),

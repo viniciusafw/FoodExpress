@@ -557,6 +557,9 @@ export default function StorePage() {
         fechado: rest.status === 'fechado' || rest.status === 'inativo',
         superRestaurante: (rest.avaliacao_media || 0) >= 4.8,
         horarios: (() => {
+          if (rest.status === 'fechado' || rest.status === 'inativo') {
+            return [{ dia: 'Status da loja', horario: 'Fechada temporariamente no app' }]
+          }
           let dias = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']
           try { dias = rest.dias_aberto ? JSON.parse(rest.dias_aberto) : dias } catch { dias = String(rest.dias_aberto || '').split(',').map(d => d.trim()).filter(Boolean) || dias }
           return [{ dia: dias.join(', ') || 'Todos os dias', horario: `${rest.horario_abertura || '18:00'} - ${rest.horario_fechamento || '23:00'}` }]

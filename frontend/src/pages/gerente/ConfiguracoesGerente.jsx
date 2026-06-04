@@ -254,18 +254,18 @@ export default function ConfiguracoesGerente() {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={labelCls}>E-mail</label>
+                <label className={labelCls}>E-mail *</label>
                 <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="contato@loja.com" className={inputCls} />
               </div>
               <div>
-                <label className={labelCls}>Telefone</label>
+                <label className={labelCls}>Telefone *</label>
                 <input type="text" value={telefone} onChange={e => setTelefone(e.target.value)}
                   placeholder="(85) 99999-9999" className={inputCls} />
               </div>
             </div>
             <div>
-              <label className={labelCls}>Endereço</label>
+              <label className={labelCls}>Endereço *</label>
               <input type="text" value={endereco} onChange={e => setEndereco(e.target.value)}
                 placeholder="Ex: Av. Principal, 123 - Aldeota, Fortaleza" className={inputCls} />
             </div>
@@ -297,7 +297,7 @@ export default function ConfiguracoesGerente() {
               <p className="text-xs text-text-muted font-semibold mt-2">Esses valores são salvos no banco e usados no cálculo de rotas/frete.</p>
             </div>
             <div>
-              <label className={labelCls}>Categoria</label>
+              <label className={labelCls}>Categoria *</label>
               <input type="text" value={categoria} onChange={e => setCategoria(e.target.value)}
                 placeholder="Ex: Pizzas, Hambúrgueres, Japonesa…" className={inputCls} />
             </div>

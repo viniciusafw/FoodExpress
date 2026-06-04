@@ -49,20 +49,23 @@ const bairros = [
 
 const categorias = [
   'Pizza',
-  'Hamburguer',
+  'Lanches',
   'Sushi',
-  'Acai',
+  'Açaí',
   'Brasileira',
   'Nordestina',
   'Churrasco',
-  'Marmita',
+  'Frutos do Mar',
+  'Saladas',
+  'Sobremesas',
   'Padaria',
   'Cafeteria',
   'Pastel',
-  'Arabe',
+  'Árabe',
   'Mexicana',
-  'Saudavel',
-  'Sorveteria',
+  'Saudável',
+  'Mercado',
+  'Conveniência',
 ] as const
 
 const nomes = [
@@ -97,7 +100,7 @@ Uso:
   npm run seed
   npm run seed -- --reset
 
-Variaveis opcionais:
+Variáveis opcionais:
   SEED_RESTAURANTES=700
   SEED_CLIENTES=2000
   SEED_ENTREGADORES=250
@@ -202,30 +205,66 @@ function enderecoFake(bairro: string) {
   return `${pick(ruas)}, ${int(40, 3990)} - ${bairro}, Fortaleza - CE`
 }
 
-function imagemCategoria(categoria: string) {
-  const imagens: Record<string, string> = {
-    Pizza: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=900',
-    Hamburguer: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=900',
-    Sushi: 'https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=900',
-    Acai: 'https://images.unsplash.com/photo-1590301157890-4810ed352733?w=900',
-    Brasileira: 'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=900',
-    Nordestina: 'https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=900',
-    Churrasco: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=900',
-    Marmita: 'https://images.unsplash.com/photo-1512058564366-18510be2db19?w=900',
-    Padaria: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=900',
-    Cafeteria: 'https://images.unsplash.com/photo-1509042239860-f550ce710b93?w=900',
-    Pastel: 'https://images.unsplash.com/photo-1601050690597-df0568f70950?w=900',
-    Arabe: 'https://images.unsplash.com/photo-1541518763669-27fef04b14ea?w=900',
-    Mexicana: 'https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=900',
-    Saudavel: 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=900',
-    Sorveteria: 'https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=900',
+function termoImagem(categoria: string) {
+  const termos: Record<string, string> = {
+    Pizza: 'pizza,restaurant',
+    Lanches: 'burger,sandwich,restaurant',
+    Sushi: 'sushi,japanese-food',
+    Açaí: 'acai,bowl,fruit',
+    Brasileira: 'brazilian-food,lunch',
+    Nordestina: 'brazilian-food,meat,rice',
+    Churrasco: 'barbecue,steak',
+    'Frutos do Mar': 'seafood,shrimp,fish',
+    Saladas: 'salad,healthy-food',
+    Sobremesas: 'dessert,cake,ice-cream',
+    Padaria: 'bakery,bread',
+    Cafeteria: 'coffee,café',
+    Pastel: 'fried-pastry,street-food',
+    Árabe: 'kebab,hummus,arabic-food',
+    Mexicana: 'tacos,mexican-food',
+    Saudável: 'healthy-bowl,salad',
+    Mercado: 'grocery,supermarket,produce',
+    Conveniência: 'convenience-store,snacks',
   }
-  return imagens[categoria] || imagens.Brasileira
+  return termos[categoria] || 'food,restaurant'
+}
+
+function imagemCategoria(categoria: string, seed = 1) {
+  return `https://source.unsplash.com/900x700/?${encodeURIComponent(termoImagem(categoria))}&sig=${seed}`
+}
+
+function imagemProdutoCategoria(categoria: string, restIndex: number, itemIndex: number, nome: string) {
+  return `https://source.unsplash.com/900x700/?${encodeURIComponent(`${nome},${termoImagem(categoria)}`)}&sig=${restIndex + 1}${itemIndex}`
+}
+
+function nomeRestaurante(categoria: string, index: number, bairro: string) {
+  const nomesPorCategoria: Record<string, string[]> = {
+    Pizza: ['Vignoli Pizzaria', 'Pasto & Pizzas', 'Pizza Hut', 'Domino’s Pizza', 'Forneria Coriolano', 'Pizzaria O Forno'],
+    Lanches: ['McDonald’s', 'Burger King', 'Bulls Burger', 'The Burger House', 'Johnny Rockets', 'Subway'],
+    Sushi: ['Ryori Sushi', 'Soho Restaurante', 'Misaki Sushi', 'Sushi Hito', 'Kina Sushi', 'Temakeria Fortal'],
+    Açaí: ['Açaí Concept', 'Oakberry Açaí', 'Açaí do Joca', 'Point do Açaí', 'Açaí Beat', 'Amazon Açaí'],
+    Brasileira: ['Coco Bambu', 'Geppos Restaurante', 'Santa Grelha', 'Mangai', 'João do Frango', 'Kina do Feijão Verde'],
+    Nordestina: ['Carneiro do Ordones', 'Colher de Pau', 'Lá na Roça', 'Cantinho do Frango', 'Restaurante Dallas', 'Panelinha Nordestina'],
+    Churrasco: ['Santa Grelha', 'Cabana del Primo', 'Sal e Brasa', 'Boi Preto Grill', 'Picanha do Cowboy', 'Brasa Premium'],
+    'Frutos do Mar': ['Coco Bambu Beira Mar', 'Peixada do Meio', 'Mar de Fortaleza', 'Camarão Cearense', 'Barraca Atlantidz', 'O Camarão'],
+    Saladas: ['Greenlife', 'Boali', 'Fit Food Fresh', 'Salad Bowl Fortaleza', 'Natural Leve', 'Vila Saudável'],
+    Sobremesas: ['San Paolo Gelato', '50 Sabores', 'Le Brun Café', 'Brownie do Luiz', 'Casa Bauducco', 'Doceria Sublime'],
+    Padaria: ['Costa Mendes Delicatessen', 'Padaria Ideal', 'Empório do Pão', 'Pão de Açúcar Padaria', 'Monte Carlo Pães', 'Casa do Pão'],
+    Cafeteria: ['Café Viriato', 'Santa Clara Café', 'Le Pain Le Café', 'The Coffee', 'Café Couture', 'Benévolo Café'],
+    Pastel: ['Pastelândia', 'Pastel do Trevo', 'Pastel Brasil', 'Feira do Pastel', 'Pastel & Cia', 'Pastel do Centro'],
+    Árabe: ['Habib’s', 'Esfiha Chic', 'Arabian Grill', 'Casa Libanesa', 'Kebab Fortaleza', 'Saj Restaurante'],
+    Mexicana: ['Taco Alto', 'Guacamole Cocina', 'Los Mex Fortaleza', 'La Frontera', 'Burrito Club', 'El Paso Tex-Mex'],
+    Saudável: ['Greenlife', 'Fit Food', 'Boali', 'Natural Leve', 'Salad Bowl', 'Vila Orgânica'],
+    Mercado: ['Mercadinhos São Luiz', 'Super Lagoa', 'Supermercado Pinheiro', 'Pão de Açúcar', 'Carrefour Bairro', 'Frangolândia'],
+    Conveniência: ['Oxxo Conveniência', 'Shell Select', 'BR Mania', 'ampm Conveniência', 'Mercadinho Express', 'Conveniência 24h'],
+  }
+  const lista = nomesPorCategoria[categoria] || nomesPorCategoria.Brasileira
+  return `${lista[(index - 1) % lista.length]} ${bairro}`
 }
 
 function promoRestaurante(index: number) {
   if (index % 5 === 0) return '20% OFF'
-  if (index % 8 === 0) return 'Frete gratis'
+  if (index % 8 === 0) return 'Frete grátis'
   if (index % 13 === 0) return 'Cupom FAKE'
   if (index % 21 === 0) return 'Combo em oferta'
   return null
@@ -234,34 +273,112 @@ function promoRestaurante(index: number) {
 function produtosPorCategoria(categoria: string) {
   const base: Record<string, Array<[string, string, number, string]>> = {
     Pizza: [
-      ['Pizza Calabresa', 'Massa fina, calabresa, cebola roxa e oregano', 42.9, 'Pizzas'],
-      ['Pizza Frango Catupiry', 'Frango desfiado, catupiry e milho verde', 45.9, 'Pizzas'],
-      ['Pizza Quatro Queijos', 'Mussarela, provolone, parmesao e gorgonzola', 48.9, 'Pizzas'],
-      ['Pizza Chocolate', 'Chocolate cremoso e morango fresco', 39.9, 'Sobremesas'],
+      ['Pizza Calabresa', 'Massa fina, molho de tomate, mussarela, calabresa, cebola roxa, azeitona e orégano', 42.9, 'Pizza'],
+      ['Pizza Frango Catupiry', 'Massa artesanal, frango desfiado, catupiry, milho verde, mussarela e orégano', 45.9, 'Pizza'],
+      ['Pizza Quatro Queijos', 'Mussarela, provolone, parmesão, gorgonzola, molho de tomate e manjericão', 48.9, 'Pizza'],
+      ['Pizza Chocolate com Morango', 'Massa doce, chocolate cremoso, morango fresco e leite em pó', 39.9, 'Sobremesas'],
     ],
-    Hamburguer: [
-      ['Smash Duplo', 'Dois burgers, cheddar e molho da casa', 31.9, 'Hamburgueres'],
-      ['Burger Bacon', 'Blend 160g, bacon crocante e barbecue', 35.9, 'Hamburgueres'],
-      ['Batata Cheddar', 'Batata frita com cheddar e bacon', 22.9, 'Acompanhamentos'],
-      ['Milkshake', 'Milkshake cremoso de chocolate', 18.9, 'Bebidas'],
+    Lanches: [
+      ['Smash Duplo', 'Pão brioche, dois burgers smash, cheddar, picles, cebola e molho da casa', 31.9, 'Lanches'],
+      ['Burger Bacon', 'Pão selado, blend 160g, cheddar, bacon crocante, barbecue e maionese verde', 35.9, 'Lanches'],
+      ['Batata Cheddar Bacon', 'Batata frita, cheddar cremoso, bacon, cebolinha e molho ranch', 22.9, 'Acompanhamentos'],
+      ['Milkshake Chocolate', 'Sorvete de baunilha, calda de chocolate, chantilly e farofa crocante', 18.9, 'Bebidas'],
     ],
     Sushi: [
-      ['Combo 20 Pecas', 'Sushis variados com salmao e skin', 54.9, 'Combos'],
-      ['Temaki Salmao', 'Salmao, cream cheese e cebolinha', 27.9, 'Temakis'],
-      ['Hot Roll', 'Hot roll crocante com molho tare', 32.9, 'Sushis'],
-      ['Yakisoba Misto', 'Macarrao oriental com legumes e carnes', 36.9, 'Pratos quentes'],
+      ['Combo 20 Peças', 'Uramaki, niguiri, hot roll, skin, salmão, cream cheese, arroz japonês e nori', 54.9, 'Sushi'],
+      ['Temaki Salmão', 'Alga nori, arroz japonês, salmão fresco, cream cheese, cebolinha e gergelim', 27.9, 'Sushi'],
+      ['Hot Roll', 'Salmão, cream cheese, arroz japonês, nori, massa crocante e molho tare', 32.9, 'Sushi'],
+      ['Yakisoba Misto', 'Macarrão oriental, carne, frango, legumes, shoyu, gengibre e óleo de gergelim', 36.9, 'Pratos quentes'],
     ],
-    Acai: [
-      ['Acai 500ml', 'Acai cremoso com banana, leite em po e granola', 25.9, 'Acai'],
-      ['Acai 700ml', 'Acai grande com tres complementos', 32.9, 'Acai'],
-      ['Cupuaçu 400ml', 'Creme de cupuaçu com leite condensado', 22.9, 'Cremes'],
-      ['Brownie', 'Brownie de chocolate meio amargo', 13.9, 'Sobremesas'],
+    Açaí: [
+      ['Açaí 500ml', 'Açaí cremoso, banana, granola, leite em pó, leite condensado e morango', 25.9, 'Açaí'],
+      ['Açaí 700ml', 'Açaí batido, cupuaçu, banana, paçoca, granola e creme de ninho', 32.9, 'Açaí'],
+      ['Cupuaçu 400ml', 'Creme de cupuaçu, leite condensado, castanha, banana e granola', 22.9, 'Cremes'],
+      ['Brownie', 'Chocolate meio amargo, manteiga, ovos, farinha, nozes e calda quente', 13.9, 'Sobremesas'],
     ],
     Brasileira: [
-      ['Prato Executivo', 'Arroz, feijao, salada, farofa e proteina', 29.9, 'Pratos'],
-      ['Feijoada Individual', 'Feijoada com arroz, couve e farofa', 34.9, 'Pratos'],
-      ['Frango Grelhado', 'Frango grelhado com legumes e pure', 31.9, 'Pratos'],
-      ['Suco Natural', 'Suco da fruta feito na hora', 10.9, 'Bebidas'],
+      ['Prato Executivo', 'Arroz branco, feijão, farofa, salada, bife acebolado e batata frita', 29.9, 'Pratos'],
+      ['Feijoada Individual', 'Feijão preto, carne seca, calabresa, arroz, couve, farofa e laranja', 34.9, 'Pratos'],
+      ['Frango Grelhado', 'Filé de frango, arroz integral, legumes salteados, purê e molho de ervas', 31.9, 'Pratos'],
+      ['Suco Natural', 'Polpa de fruta, água gelada, gelo e opção de açúcar', 10.9, 'Bebidas'],
+    ],
+    Nordestina: [
+      ['Baião de Dois', 'Arroz, feijão verde, queijo coalho, nata, carne de sol, coentro e manteiga da terra', 38.9, 'Nordestina'],
+      ['Carne de Sol Completa', 'Carne de sol, macaxeira, arroz, feijão verde, farofa, vinagrete e manteiga', 52.9, 'Nordestina'],
+      ['Panelada Cearense', 'Bucho bovino, legumes, caldo temperado, arroz branco, pimenta e cheiro-verde', 34.9, 'Nordestina'],
+      ['Tapioca de Queijo Coalho', 'Goma de tapioca, queijo coalho, manteiga, coco ralado e leite condensado opcional', 18.9, 'Lanches'],
+    ],
+    Churrasco: [
+      ['Picanha Grelhada', 'Picanha, sal grosso, arroz biro-biro, farofa, vinagrete e batata rústica', 89.9, 'Churrasco'],
+      ['Combo Churrasco Família', 'Picanha, frango, linguiça, pão de alho, queijo coalho, farofa e molho campanha', 189.9, 'Churrasco'],
+      ['Costela Assada', 'Costela bovina, barbecue, mandioca, arroz branco, farofa e cheiro-verde', 79.9, 'Churrasco'],
+      ['Pão de Alho', 'Pão baguete, creme de alho, queijo, manteiga, orégano e salsinha', 15.9, 'Acompanhamentos'],
+    ],
+    'Frutos do Mar': [
+      ['Moqueca de Peixe', 'Peixe fresco, leite de coco, pimentões, tomate, cebola, coentro e arroz branco', 58.9, 'Frutos do Mar'],
+      ['Camarão Internacional', 'Camarão, arroz cremoso, ervilha, presunto, queijo gratinado e batata palha', 72.9, 'Frutos do Mar'],
+      ['Peixada Cearense', 'Peixe em postas, legumes, ovos, pirão, arroz e cheiro-verde', 64.9, 'Frutos do Mar'],
+      ['Casquinha de Siri', 'Carne de siri, leite de coco, farinha panko, coentro, queijo e limão', 28.9, 'Entradas'],
+    ],
+    Saladas: [
+      ['Salada Caesar com Frango', 'Alface romana, frango grelhado, parmesão, croutons e molho Caesar', 34.9, 'Saladas'],
+      ['Bowl de Salmão', 'Arroz japonês, salmão, avocado, pepino, manga, gergelim e molho tare', 48.9, 'Saladas'],
+      ['Salada Tropical', 'Folhas, manga, tomate-cereja, castanha, queijo coalho e molho cítrico', 32.9, 'Saladas'],
+      ['Wrap Integral', 'Tortilla integral, frango, folhas, cenoura, cream cheese e ervas', 27.9, 'Lanches'],
+    ],
+    Sobremesas: [
+      ['Gelato Pistache', 'Gelato artesanal de pistache, farofa doce, calda cremosa e castanha', 18.9, 'Sobremesas'],
+      ['Brownie com Sorvete', 'Brownie de chocolate, sorvete de creme, calda quente e castanha', 24.9, 'Sobremesas'],
+      ['Cheesecake Frutas Vermelhas', 'Cream cheese, base crocante, geleia de frutas vermelhas e raspas de limão', 22.9, 'Sobremesas'],
+      ['Torta Banoffee', 'Banana, doce de leite, chantilly, canela e massa amanteigada', 21.9, 'Sobremesas'],
+    ],
+    Padaria: [
+      ['Pão Francês 6 Unidades', 'Farinha de trigo, fermento, água, sal e casca crocante', 6.9, 'Padaria'],
+      ['Croissant Presunto e Queijo', 'Massa folhada, manteiga, presunto, queijo mussarela e orégano', 14.9, 'Padaria'],
+      ['Bolo de Cenoura', 'Cenoura, ovos, farinha, chocolate, manteiga e cobertura cremosa', 12.9, 'Sobremesas'],
+      ['Café com Leite', 'Café espresso, leite vaporizado e canela opcional', 9.9, 'Cafeteria'],
+    ],
+    Cafeteria: [
+      ['Cappuccino Cremoso', 'Café espresso, leite vaporizado, chocolate, canela e espuma cremosa', 13.9, 'Cafeteria'],
+      ['Torrada Avocado', 'Pão artesanal, avocado, ovo, tomate, limão, azeite e pimenta-do-reino', 24.9, 'Lanches'],
+      ['Waffle de Morango', 'Waffle, morango, mel, chantilly, calda de chocolate e castanha', 22.9, 'Sobremesas'],
+      ['Cold Brew', 'Café extraído a frio, gelo e laranja desidratada', 15.9, 'Bebidas'],
+    ],
+    Pastel: [
+      ['Pastel de Carne', 'Massa crocante, carne moída, azeitona, ovo, cebola e cheiro-verde', 12.9, 'Pastel'],
+      ['Pastel de Queijo', 'Massa crocante, queijo mussarela, orégano e tomate', 11.9, 'Pastel'],
+      ['Pastel Camarão Catupiry', 'Massa crocante, camarão, catupiry, cebola e coentro', 18.9, 'Pastel'],
+      ['Caldo de Cana', 'Cana moída na hora, gelo e limão opcional', 8.9, 'Bebidas'],
+    ],
+    Árabe: [
+      ['Esfiha Carne', 'Massa aberta, carne temperada, tomate, cebola, limão e especiarias árabes', 8.9, 'Árabe'],
+      ['Kibe Recheado', 'Trigo, carne bovina, hortelã, cebola, queijo e coalhada seca', 14.9, 'Árabe'],
+      ['Shawarma Frango', 'Pão folha, frango temperado, alface, tomate, picles e molho de alho', 28.9, 'Árabe'],
+      ['Homus com Pão Sírio', 'grão-de-bico, tahine, limão, azeite, páprica e pão sírio', 21.9, 'Entradas'],
+    ],
+    Mexicana: [
+      ['Taco Al Pastor', 'Tortilla, porco marinado, abacaxi, cebola roxa, coentro e salsa picante', 26.9, 'Mexicana'],
+      ['Burrito Carne', 'Tortilla, carne, arroz mexicano, feijão, queijo, sour cream e guacamole', 34.9, 'Mexicana'],
+      ['Nachos Supreme', 'Nachos, cheddar, chilli, jalapeno, pico de gallo, sour cream e guacamole', 39.9, 'Mexicana'],
+      ['Quesadilla Frango', 'Tortilla, frango, queijo, pimentão, cebola e salsa verde', 29.9, 'Mexicana'],
+    ],
+    Saudável: [
+      ['Bowl Proteico', 'Frango grelhado, arroz integral, grão-de-bico, abacate, folhas e molho tahine', 38.9, 'Saudável'],
+      ['Omelete Fit', 'Ovos, queijo branco, tomate, espinafre, cogumelos e ervas', 26.9, 'Saudável'],
+      ['Crepioca Frango', 'Tapioca, ovo, frango desfiado, queijo branco e orégano', 24.9, 'Saudável'],
+      ['Suco Verde', 'Couve, abacaxi, limão, gengibre, hortelã e água de coco', 12.9, 'Bebidas'],
+    ],
+    Mercado: [
+      ['Cesta Café da Manhã', 'Pão francês, queijo, presunto, manteiga, café, leite, banana e mamão', 49.9, 'Mercado'],
+      ['Kit Hortifruti da Semana', 'Banana, tomate, alface, cenoura, batata, cebola, maçã e cheiro-verde', 39.9, 'Hortifruti'],
+      ['Combo Churrasco', 'Carvão, linguiça, pão de alho, queijo coalho, farofa e refrigerante', 79.9, 'Mercado'],
+      ['Leite + Pão + Ovos', 'Leite integral, pão de forma, ovos brancos, manteiga e queijo mussarela', 31.9, 'Mercado'],
+    ],
+    Conveniência: [
+      ['Kit Madrugada', 'Refrigerante, salgadinho, chocolate, água mineral e chiclete', 32.9, 'Conveniência'],
+      ['Energético + Snack', 'Energético gelado, batata chips, amendoim torrado e gelo', 24.9, 'Bebidas'],
+      ['Combo Higiene Rápida', 'Escova dental, pasta, desodorante, sabonete e lenço umedecido', 36.9, 'Conveniência'],
+      ['Sorvete + Chocolate', 'Pote de sorvete, barra de chocolate, cobertura e castanha', 42.9, 'Sobremesas'],
     ],
   }
 
@@ -345,7 +462,7 @@ async function assertDatabaseIsNotPopulated() {
   const populated = counts.filter((item) => item.total > 0)
   if (!populated.length) return
 
-  console.log('Seed abortado: o banco ja possui dados nas tabelas principais.')
+  console.log('Seed abortado: o banco já possui dados nas tabelas principais.')
   populated.forEach((item) => {
     console.log(`- ${item.table}: ${item.total} registros existentes`)
   })
@@ -356,13 +473,11 @@ async function assertDatabaseIsNotPopulated() {
 function createRestaurantes() {
   const rows: Row[] = []
   const gerentes: Row[] = []
-  const nomesLoja = ['Sabor', 'Cantina', 'Casa', 'Point', 'Express', 'Estacao', 'Quintal', 'Bistro', 'Forno', 'Tempero']
-  const sufixos = ['do Sol', 'da Praia', 'Cearense', 'Fortaleza', 'do Bairro', 'Prime', 'da Vila', '85', 'da Esquina', 'Gourmet']
 
   for (let i = 1; i <= TOTAL_RESTAURANTES; i++) {
-    const categoria = pick(categorias)
+    const categoria = categorias[(i - 1) % categorias.length]
     const local = bairroComCoordenada()
-    const nome = `${pick(nomesLoja)} ${categoria} ${pick(sufixos)} ${pad(i, 3)}`
+    const nome = nomeRestaurante(categoria, i, local.bairro)
     const id = `fake_rest_${pad(i, 4)}`
     const email = emailFake('restaurante', i)
 
@@ -377,16 +492,16 @@ function createRestaurantes() {
       latitude: local.latitude,
       longitude: local.longitude,
       categoria,
-      descricao: `${categoria} com atendimento rapido no bairro ${local.bairro}.`,
-      logo: imagemCategoria(categoria),
-      capa: imagemCategoria(categoria),
+      descricao: `${nome} em ${local.bairro}, com cardápio de ${categoria.toLowerCase()} e entrega pelo FoodExpress.`,
+      logo: imagemCategoria(categoria, i * 2),
+      capa: imagemCategoria(categoria, i * 2 + 1),
       promo: promoRestaurante(i),
-      status: i % 33 === 0 ? 'pendente' : i % 41 === 0 ? 'fechado' : 'ativo',
+      status: 'ativo',
       taxa_comissao: money(rand(10, 18)),
       tempo_medio_preparo: int(15, 42),
       horario_abertura: i % 5 === 0 ? '10:00' : '18:00',
       horario_fechamento: i % 5 === 0 ? '22:30' : '23:59',
-      dias_aberto: JSON.stringify(['Segunda', 'Terca', 'Quarta', 'Quinta', 'Sexta', 'Sabado', 'Domingo']),
+      dias_aberto: JSON.stringify(['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']),
       formas_pagamento: JSON.stringify(formasPagamento),
       motivo_rejeicao: null,
       senha_hash: PASSWORD_FAKE_HASH,
@@ -487,7 +602,7 @@ function createCardapio(restaurantes: Row[]) {
   restaurantes.forEach((restaurante, restIndex) => {
     const categoria = String(restaurante.categoria)
     const produtos = produtosPorCategoria(categoria)
-    const extras = ['Coca-Cola Lata', 'Suco de Caja', 'Agua Mineral', 'Pudim da Casa']
+    const extras = ['Coca-Cola Lata', 'Suco de Caju', 'Água Mineral', categoria === 'Mercado' || categoria === 'Conveniência' ? 'Chocolate Barra' : 'Pudim da Casa']
 
     produtos.forEach((produto, index) => {
       rows.push(cardapioRow(restaurante, restIndex, index + 1, produto))
@@ -496,7 +611,9 @@ function createCardapio(restaurantes: Row[]) {
     extras.forEach((extra, index) => {
       rows.push(cardapioRow(restaurante, restIndex, produtos.length + index + 1, [
         extra,
-        index < 3 ? 'Bebida gelada para acompanhar o pedido' : 'Sobremesa individual',
+        index < 3
+          ? `${extra}, gelo, embalagem lacrada e acompanhamento para o pedido`
+          : `${extra}, leite condensado, creme fresco e calda artesanal`,
         index < 3 ? rand(5.9, 12.9) : rand(10.9, 18.9),
         index < 3 ? 'Bebidas' : 'Sobremesas',
       ]))
@@ -520,8 +637,8 @@ function cardapioRow(restaurante: Row, restIndex: number, itemIndex: number, pro
     preco_original: emPromocao ? precoBase : null,
     categoria,
     subcategoria: categoria,
-    imagem: imagemCategoria(String(restaurante.categoria)),
-    ingredientes: JSON.stringify(['produto fresco', 'preparo diario', 'receita da casa']),
+    imagem: imagemProdutoCategoria(String(restaurante.categoria), restIndex, itemIndex, nome),
+    ingredientes: JSON.stringify(descricao.split(',').map(item => item.trim()).filter(Boolean)),
     promocao_ativa: emPromocao ? 1 : 0,
     promocao_tipo: emPromocao ? 'desconto' : null,
     promocao_label: emPromocao ? String(restaurante.promo) : null,
@@ -645,10 +762,10 @@ function createPedidos(restaurantes: Row[], clientes: Row[], entregadores: Row[]
       pronto_em: ['pronto', 'entregando', 'entregue'].includes(String(status)) ? sqlDate(pronto) : null,
       entregue_em: status === 'entregue' ? sqlDate(entregue) : null,
       cancelado_em: status === 'cancelado' ? sqlDate(addMinutes(createdAt, int(3, 20))) : null,
-      motivo_cancelamento: status === 'cancelado' ? pick(['Cliente desistiu', 'Produto indisponivel', 'Restaurante fechou mais cedo']) : null,
+      motivo_cancelamento: status === 'cancelado' ? pick(['Cliente desistiu', 'Produto indisponível', 'Restaurante fechou mais cedo']) : null,
       avaliacao_restaurante: starsRest,
       avaliacao_entregador: starsEnt,
-      comentario: avalia ? pick(['Muito bom', 'Chegou rapido', 'Comida bem embalada', 'Compraria novamente']) : null,
+      comentario: avalia ? pick(['Muito bom', 'Chegou rápido', 'Comida bem embalada', 'Compraria novamente']) : null,
       ganho_entregador: ganhoEntregador,
       repasse_entregador_status: status === 'entregue' && i % 5 !== 0 ? 'pago' : 'pendente',
       repasse_entregador_em: status === 'entregue' && i % 5 !== 0 ? sqlDate(addMinutes(entregue, int(20, 2880))) : null,
@@ -684,7 +801,7 @@ function createPedidos(restaurantes: Row[], clientes: Row[], entregadores: Row[]
         restaurante_id: restaurante.id,
         entregador_id: entregador.id,
         estrelas: starsRest,
-        comentario: pick(['Comida excelente', 'Bom custo beneficio', 'Entrega dentro do prazo', 'Pedido veio certinho']),
+        comentario: pick(['Comida excelente', 'Bom custo-benefício', 'Entrega dentro do prazo', 'Pedido veio certinho']),
         tipo: 'restaurante',
         created_at: sqlDate(addMinutes(entregue, int(10, 1440))),
       })
@@ -695,7 +812,7 @@ function createPedidos(restaurantes: Row[], clientes: Row[], entregadores: Row[]
         restaurante_id: restaurante.id,
         entregador_id: entregador.id,
         estrelas: starsEnt,
-        comentario: pick(['Entregador educado', 'Achou o endereco facil', 'Boa comunicacao', 'Entrega cuidadosa']),
+        comentario: pick(['Entregador educado', 'Achou o endereço fácil', 'Boa comunicação', 'Entrega cuidadosa']),
         tipo: 'entregador',
         created_at: sqlDate(addMinutes(entregue, int(10, 1440))),
       })
@@ -725,10 +842,10 @@ function createTickets(pedidos: Row[], clientes: Row[]) {
     return {
       id: `fake_ticket_${pad(i, 5)}`,
       cliente_id: cliente.id,
-      titulo: pick(['Pedido atrasado', 'Duvida sobre cupom', 'Produto faltando', 'Pagamento duplicado', 'Alterar endereco']),
+      titulo: pick(['Pedido atrasado', 'Dúvida sobre cupom', 'Produto faltando', 'Pagamento duplicado', 'Alterar endereço']),
       descricao: pick([
         'Cliente informou dificuldade no fluxo do pedido.',
-        'Solicitacao aberta para acompanhamento do suporte.',
+        'Solicitação aberta para acompanhamento do suporte.',
         'Cliente pediu retorno sobre uma compra recente.',
       ]),
       categoria: pick(['pedido', 'pagamento', 'cupom', 'endereco', 'atendimento']),
@@ -757,12 +874,12 @@ function createDisputas(pedidos: Row[], operadores: Row[]) {
       categoria: pick(['atraso', 'produto_incorreto', 'pagamento', 'cancelamento', 'entrega']),
       descricao: pick([
         'Parte reclamante abriu disputa para revisar o pedido.',
-        'Houve divergencia entre o que foi solicitado e o que foi entregue.',
-        'Pedido precisa de avaliacao de suporte por diferenca no valor.',
+        'Houve divergência entre o que foi solicitado e o que foi entregue.',
+        'Pedido precisa de avaliação de suporte por diferença no valor.',
       ]),
       evidencias: JSON.stringify([]),
       status,
-      resposta_outra_parte: status === 'aberta' ? null : 'Outra parte enviou explicacao pelo painel.',
+      resposta_outra_parte: status === 'aberta' ? null : 'Outra parte enviou explicação pelo painel.',
       resolucao: resolvida ? 'Disputa analisada e resolvida pelo suporte.' : null,
       resultado: resolvida ? (index % 2) : null,
       motivo_resolucao: resolvida ? pick(['reembolso_parcial', 'orientacao', 'credito_cupom']) : null,
@@ -785,8 +902,8 @@ function createDenuncias(cardapio: Row[], clientes: Row[]) {
       restaurante_id: produto.restaurante_id,
       cliente_id: pick(clientes).id,
       produto_nome: produto.nome,
-      motivo: pick(['Imagem incorreta', 'Preco divergente', 'Descricao confusa', 'Item indisponivel', 'Produto diferente']),
-      detalhe: 'Denuncia fake para validar tela do restaurante e acompanhamento do suporte.',
+      motivo: pick(['Imagem incorreta', 'Preço divergente', 'Descrição confusa', 'Item indisponível', 'Produto diferente']),
+      detalhe: 'Denúncia fake para validar tela do restaurante e acompanhamento do suporte.',
       status,
       resposta: status === 'resolvida' ? 'Restaurante revisou o item denunciado.' : null,
       created_at: sqlDate(dateMonthsAgo()),
@@ -896,7 +1013,9 @@ async function main() {
   process.exit(0)
 }
 
-main().catch((error) => {
-  console.error('Erro ao executar seed:', error)
-  process.exit(1)
-})
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('Erro ao executar seed:', error)
+    process.exit(1)
+  })
+}

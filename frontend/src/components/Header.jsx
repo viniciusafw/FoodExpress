@@ -415,10 +415,9 @@ export default function Header() {
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-[0.8fr_1.2fr]">
                           <input
                             type="text"
-                            inputMode="numeric"
                             autoComplete="address-line2"
                             value={numeroEndereco}
-                            onChange={(e) => setNumeroEndereco(e.target.value.replace(/[^\dA-Za-z/-]/g, '').slice(0, 12))}
+                            onChange={(e) => setNumeroEndereco(e.target.value.replace(/[^\p{L}\p{N}\s/-]/gu, '').slice(0, 24))}
                             placeholder="Número"
                             className="w-full h-12 rounded-2xl border border-border bg-white px-4 text-sm font-bold text-text-primary outline-none transition-all focus:border-primary"
                             required

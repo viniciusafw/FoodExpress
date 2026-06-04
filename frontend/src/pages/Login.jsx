@@ -368,14 +368,14 @@ export default function Login() {
               variants={formVariants} initial="hidden" animate="show"
             >
               <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
-                <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">E-mail</label>
+                <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">E-mail *</label>
                 <input type="email" placeholder="seu@email.com"
                   value={email} onChange={e => setEmail(e.target.value)}
                   required className={inputCls} />
               </Motion.div>
 
               <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
-                <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Senha</label>
+                <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">Senha *</label>
                 <div className="relative">
                   <input
                     type={mostrarSenha ? 'text' : 'password'} placeholder="••••••••"

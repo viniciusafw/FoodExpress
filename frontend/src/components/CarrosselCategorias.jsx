@@ -17,13 +17,13 @@ const categorias = [
   { Icon: Utensils, nome: 'Restaurantes', bg: '#FFE8D6', rota: '/Restaurantes' },
   { Icon: ShoppingCart, nome: 'Mercados', bg: '#D6F5F2', rota: '/Mercados' },
   { Icon: Pizza, nome: 'Pizzas', bg: '#FFE0D6', categoria: 'Pizza' },
-  { Icon: Sandwich, nome: 'Lanches', bg: '#FFF3D6', categoria: 'Hambúrguer' },
-  { Icon: Coffee, nome: 'Cafés', bg: '#EDD9C0', categoria: 'Café' },
+  { Icon: Sandwich, nome: 'Lanches', bg: '#FFF3D6', categoria: 'Lanches' },
+  { Icon: Coffee, nome: 'Cafés', bg: '#EDD9C0', categoria: 'Cafeteria' },
   { Icon: Fish, nome: 'Frutos do Mar', bg: '#D6E8FF', categoria: 'Frutos do Mar' },
   { Icon: Apple, nome: 'Saudável', bg: '#D6FFDD', categoria: 'Saudável' },
-  { Icon: IceCream, nome: 'Sobremesas', bg: '#F5D6FF', categoria: 'Sobremesa' },
+  { Icon: IceCream, nome: 'Sobremesas', bg: '#F5D6FF', categoria: 'Sobremesas' },
   { Icon: Beef, nome: 'Churrasco', bg: '#FFD6D6', categoria: 'Churrasco' },
-  { Icon: Salad, nome: 'Saladas', bg: '#D6FFE8', categoria: 'Salada' },
+  { Icon: Salad, nome: 'Saladas', bg: '#D6FFE8', categoria: 'Saladas' },
 ]
 
 export default function CategoriesCarousel() {

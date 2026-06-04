@@ -94,13 +94,13 @@ export default function Home() {
           <h2 className="font-display text-xl font-extrabold text-text-primary">🍽️ Restaurantes próximos</h2>
           <Link to="/Restaurantes" className="text-sm text-primary font-bold hover:underline whitespace-nowrap ml-4">Ver todos</Link>
         </Motion.div>
-        <StoreGrid />
+        <StoreGrid limite={8} somenteLinha />
         <Motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: "easeOut" }}
           className="flex items-center justify-between mt-10 mb-5">
           <h2 className="font-display text-xl font-extrabold text-text-primary">🛒 Mercados & Conveniência</h2>
           <Link to="/Mercados" className="text-sm text-primary font-bold hover:underline whitespace-nowrap ml-4">Ver todos</Link>
         </Motion.div>
-        <StoreGrid tipo="mercado" />
+        <StoreGrid tipo="mercado" limite={4} somenteLinha />
       </main>
 
       <Rodape />

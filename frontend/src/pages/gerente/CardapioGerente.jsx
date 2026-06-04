@@ -310,7 +310,7 @@ function ModalPromocao({ categorias, restauranteId, onFechar, onSalvo }) {
           <div className="min-h-0">
             {modo === 'categoria' && (
               <div className="mb-3">
-                <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Categoria</label>
+                <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Categoria *</label>
                 <select
                   value={categoriaSelecionada}
                   onChange={e => setCategoriaSelecionada(e.target.value)}
@@ -367,7 +367,7 @@ function ModalPromocao({ categorias, restauranteId, onFechar, onSalvo }) {
           <div className="rounded-2xl border border-border bg-surface-2 p-4 h-fit">
             {modo !== 'combo' ? (
               <>
-                <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Desconto</label>
+                <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Desconto *</label>
                 <div className="flex items-center gap-2">
                   <input
                     type="number"
@@ -400,10 +400,10 @@ function ModalPromocao({ categorias, restauranteId, onFechar, onSalvo }) {
               </>
             ) : (
               <>
-                <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Nome do combo</label>
+                <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Nome do combo *</label>
                 <input value={comboNome} onChange={e => setComboNome(e.target.value)} placeholder="Ex: Combo casal"
                   className="w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all" />
-                <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mt-3 mb-1.5">Preço do combo</label>
+                <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mt-3 mb-1.5">Preço do combo *</label>
                 <input type="number" min="0" step="0.01" value={comboPreco} onChange={e => setComboPreco(e.target.value)} placeholder="0,00"
                   className="w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all" />
                 <p className="text-xs font-semibold text-text-muted mt-2">Soma dos itens: <span className="font-extrabold text-text-primary">{formatarPreco(somaCombo)}</span></p>

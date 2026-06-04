@@ -154,7 +154,7 @@ export default function Suporte() {
 
                 {/* Categoria */}
                 <div className="mb-5">
-                  <label className="block text-sm font-bold text-text-primary mb-2">Categoria</label>
+                  <label className="block text-sm font-bold text-text-primary mb-2">Categoria *</label>
                   <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {categorias.map(cat => (
                       <button key={cat.id} onClick={() => setNovoTicket(p => ({ ...p, categoria: cat.id }))}
@@ -171,7 +171,7 @@ export default function Suporte() {
 
                 {/* Assunto */}
                 <div className="mb-5">
-                  <label className="block text-sm font-bold text-text-primary mb-2">Assunto</label>
+                  <label className="block text-sm font-bold text-text-primary mb-2">Assunto *</label>
                   <input
                     type="text"
                     value={novoTicket.titulo}
@@ -183,7 +183,7 @@ export default function Suporte() {
 
                 {/* Descrição */}
                 <div className="mb-6">
-                  <label className="block text-sm font-bold text-text-primary mb-2">Descrição</label>
+                  <label className="block text-sm font-bold text-text-primary mb-2">Descrição *</label>
                   <textarea
                     value={novoTicket.descricao}
                     onChange={e => setNovoTicket(p => ({ ...p, descricao: e.target.value }))}

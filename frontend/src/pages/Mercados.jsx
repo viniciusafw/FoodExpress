@@ -13,7 +13,7 @@ export default function Mercados() {
           className="font-display text-2xl sm:text-3xl font-extrabold text-text-primary mb-6">
           🛒 Mercados
         </Motion.h1>
-        <StoreGrid tipo="mercado" />
+        <StoreGrid tipo="mercado" limite={80} />
       </main>
       <Rodape />
       <MobileNavBar />

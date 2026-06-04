@@ -251,7 +251,7 @@ export default function CadastroEntregador() {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className={labelClass}>Tipo de veículo</label>
+                <label className={labelClass}>Tipo de veículo *</label>
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { value: 'moto', label: 'Moto', emoji: '🛵' },

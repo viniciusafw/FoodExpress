@@ -3,7 +3,7 @@ import StoreCard from './CartaoLoja'
 import api from '../services/api'
 import { paramsComLocalizacao } from '../utils/localizacao'
 
-export default function StoreGrid({ tipo }) {
+export default function StoreGrid({ tipo, limite = 50, somenteLinha = false }) {
   const [lista, setLista] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
@@ -18,7 +18,8 @@ export default function StoreGrid({ tipo }) {
   useEffect(() => {
     setErro('')
     setCarregando(true)
-    api.restaurantes.listar(paramsComLocalizacao(tipo ? { categoria: tipo } : {}))
+    const categoria = tipo === 'mercado' ? 'Mercado' : tipo
+    api.restaurantes.listar(paramsComLocalizacao({ ...(categoria ? { categoria } : {}), limite }))
       .then(dados => {
         const normalizados = dados.map(r => ({
           ...r,
@@ -38,7 +39,7 @@ export default function StoreGrid({ tipo }) {
         }
       })
       .finally(() => setCarregando(false))
-  }, [tipo, versaoLocalizacao])
+  }, [tipo, limite, versaoLocalizacao])
 
   if (carregando) {
     return (
@@ -70,7 +71,10 @@ export default function StoreGrid({ tipo }) {
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5">
+    <div className={somenteLinha
+      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5'
+      : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5'
+    }>
       {lista.map((loja, i) => (
         <StoreCard key={loja.id} loja={loja} index={i} />
       ))}

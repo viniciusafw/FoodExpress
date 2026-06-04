@@ -13,7 +13,7 @@ export default function Restaurantes() {
           className="font-display text-2xl sm:text-3xl font-extrabold text-text-primary mb-6">
           🍽️ Restaurantes
         </Motion.h1>
-        <StoreGrid />
+        <StoreGrid limite={80} />
       </main>
       <Rodape />
       <MobileNavBar />
