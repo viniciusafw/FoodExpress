@@ -2,7 +2,6 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { db } from './db'
-import { hashSenha } from './password'
 
 let schemaPromise: Promise<void> | null = null
 
@@ -164,6 +163,7 @@ export async function ensureDatabaseHealth() {
       await ensureColumn('restaurantes', 'formas_pagamento', 'TEXT')
       await ensureColumn('restaurantes', 'logo', 'TEXT')
       await ensureColumn('restaurantes', 'capa', 'TEXT')
+      await ensureColumn('restaurantes', 'promo', 'VARCHAR(120)')
       await ensureColumn('restaurantes', 'motivo_rejeicao', 'TEXT')
       await ensureColumn('restaurantes', 'senha_hash', 'TEXT')
       await ensureColumn('restaurantes', 'avaliacao_media', 'DOUBLE DEFAULT 0')
@@ -176,6 +176,11 @@ export async function ensureDatabaseHealth() {
       await ensureColumn('entregadores', 'saldo_total', 'DOUBLE DEFAULT 0')
       await ensureColumn('entregadores', 'senha_hash', 'TEXT')
       await ensureColumn('cardapio', 'imagem', 'TEXT')
+      await ensureColumn('cardapio', 'preco_original', 'DOUBLE')
+      await ensureColumn('cardapio', 'promocao_ativa', 'TINYINT(1) DEFAULT 0')
+      await ensureColumn('cardapio', 'promocao_tipo', 'VARCHAR(50)')
+      await ensureColumn('cardapio', 'promocao_label', 'VARCHAR(120)')
+      await ensureColumn('cardapio', 'combo_itens', 'LONGTEXT')
       await ensureColumn('pedidos', 'desconto', 'DOUBLE DEFAULT 0')
       await ensureColumn('pedidos', 'troco', 'DOUBLE DEFAULT 0')
       await ensureColumn('pedidos', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
@@ -185,50 +190,7 @@ export async function ensureDatabaseHealth() {
       await ensureColumn('tickets', 'resposta', 'TEXT')
       await ensureColumn('tickets', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
 
-      await db.execute("UPDATE restaurantes SET status = 'ativo' WHERE status IS NULL OR status = ''")
-      await db.execute("UPDATE restaurantes SET user_id = SUBSTRING(id, 6) WHERE (user_id IS NULL OR user_id = '') AND id LIKE 'rest_%'")
-      await db.execute("UPDATE entregadores SET cpf = CONCAT('AUTO-', user_id) WHERE cpf = '000.000.000-00' AND user_id IS NOT NULL AND user_id != ''")
-
-      const operadorEmail = normalizarEmail(process.env.OPERATOR_EMAIL || process.env.OPERADOR_EMAIL)
-      if (operadorEmail) {
-        const operadorBaseId = idEstavel(operadorEmail)
-        const operadorSenhaHash = process.env.OPERATOR_PASSWORD || process.env.OPERADOR_SENHA
-          ? hashSenha(String(process.env.OPERATOR_PASSWORD || process.env.OPERADOR_SENHA))
-          : null
-        await db.execute({
-          sql: `INSERT INTO operadores (id, user_id, nome, email, telefone, turno, status, senha_hash)
-                VALUES (?, ?, ?, ?, ?, ?, 'ativo', ?)
-                ON DUPLICATE KEY UPDATE
-                  nome = VALUES(nome),
-                  telefone = COALESCE(NULLIF(VALUES(telefone), ''), telefone),
-                  senha_hash = COALESCE(VALUES(senha_hash), senha_hash),
-                  status = 'ativo'`,
-          args: [
-            `op_${operadorBaseId}`,
-            `op_${operadorBaseId}`,
-            process.env.OPERATOR_NAME || process.env.OPERADOR_NOME || 'Operador FoodExpress',
-            operadorEmail,
-            process.env.OPERATOR_PHONE || process.env.OPERADOR_TELEFONE || '',
-            process.env.OPERATOR_SHIFT || process.env.OPERADOR_TURNO || 'geral',
-            operadorSenhaHash,
-          ]
-        })
-      }
-
-      await db.execute(`INSERT IGNORE INTO gerentes
-        (id, user_id, nome, email, telefone, cargo, restaurante_id, permissoes, status)
-        SELECT
-          CONCAT('ger_', r.user_id),
-          r.user_id,
-          COALESCE(NULLIF(r.nome, ''), 'Gerente'),
-          COALESCE(NULLIF(r.email, ''), CONCAT(r.user_id, '@local.dev')),
-          COALESCE(r.telefone, ''),
-          'gerente',
-          r.id,
-          'admin',
-          'ativo'
-        FROM restaurantes r
-        WHERE r.user_id IS NOT NULL AND r.user_id != ''`)
+      console.log('✅ Estrutura do banco validada sem popular dados')
     } catch (error: any) {
       console.error('⚠️ Falha ao validar schema automaticamente:', error.message)
       throw error

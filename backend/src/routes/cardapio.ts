@@ -58,16 +58,50 @@ router.get('/:id', async (req, res: Response) => {
 // POST /api/cardapio
 router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    const { restauranteId, nome, preco, categoria, descricao, imagem, tempo_preparo } = req.body
+    const {
+      restauranteId,
+      nome,
+      preco,
+      preco_original,
+      categoria,
+      descricao,
+      imagem,
+      tempo_preparo,
+      promocao_ativa,
+      promocao_tipo,
+      promocao_label,
+      combo_itens,
+    } = req.body
     if (!restauranteId || !nome || !preco || !categoria) return res.status(400).json({ erro: 'Campos obrigatórios faltando' }) as any
     if (!(await podeGerenciarRestaurante(req, String(restauranteId)))) {
       return res.status(403).json({ erro: 'Você não pode alterar este cardápio' }) as any
     }
     const id = `card_${crypto.randomUUID().slice(0, 12)}`
+    const precoFinal = Number(preco)
+    const precoOriginal = preco_original !== undefined && preco_original !== null && Number(preco_original) > precoFinal
+      ? Number(preco_original)
+      : null
+    const promocaoAtiva = promocao_ativa || precoOriginal ? 1 : 0
     await db.execute({
-      sql: `INSERT INTO cardapio (id, restaurante_id, nome, preco, categoria, descricao, imagem, tempo_preparo, disponivel)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-      args: [id, restauranteId, nome, preco, categoria, descricao || '', imagem || '', tempo_preparo || 30]
+      sql: `INSERT INTO cardapio
+            (id, restaurante_id, nome, preco, preco_original, categoria, descricao, imagem, tempo_preparo,
+             promocao_ativa, promocao_tipo, promocao_label, combo_itens, disponivel)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      args: [
+        id,
+        restauranteId,
+        nome,
+        precoFinal,
+        precoOriginal,
+        categoria,
+        descricao || '',
+        imagem || '',
+        tempo_preparo || 30,
+        promocaoAtiva,
+        promocao_tipo || (promocaoAtiva ? 'desconto' : null),
+        promocao_label || (promocaoAtiva ? 'Oferta' : null),
+        combo_itens ? JSON.stringify(combo_itens) : null,
+      ]
     })
     const criado = await db.execute({ sql: 'SELECT * FROM cardapio WHERE id = ?', args: [id] })
     res.status(201).json(criado.rows[0])
@@ -85,17 +119,36 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (!(await podeGerenciarRestaurante(req, restauranteId))) {
       return res.status(403).json({ erro: 'Você não pode alterar este item' }) as any
     }
-    const { nome, preco, categoria, descricao, imagem, tempo_preparo, disponivel, destaque } = req.body
+    const {
+      nome,
+      preco,
+      preco_original,
+      categoria,
+      descricao,
+      imagem,
+      tempo_preparo,
+      disponivel,
+      destaque,
+      promocao_ativa,
+      promocao_tipo,
+      promocao_label,
+      combo_itens,
+    } = req.body
     const sets: string[] = []
     const args: any[] = []
     if (nome) { sets.push('nome = ?'); args.push(nome) }
     if (preco !== undefined) { sets.push('preco = ?'); args.push(preco) }
+    if (preco_original !== undefined) { sets.push('preco_original = ?'); args.push(preco_original || null) }
     if (categoria) { sets.push('categoria = ?'); args.push(categoria) }
     if (descricao !== undefined) { sets.push('descricao = ?'); args.push(descricao) }
     if (imagem !== undefined) { sets.push('imagem = ?'); args.push(imagem) }
     if (tempo_preparo !== undefined) { sets.push('tempo_preparo = ?'); args.push(tempo_preparo) }
     if (disponivel !== undefined) { sets.push('disponivel = ?'); args.push(disponivel ? 1 : 0) }
     if (destaque !== undefined) { sets.push('destaque = ?'); args.push(destaque ? 1 : 0) }
+    if (promocao_ativa !== undefined) { sets.push('promocao_ativa = ?'); args.push(promocao_ativa ? 1 : 0) }
+    if (promocao_tipo !== undefined) { sets.push('promocao_tipo = ?'); args.push(promocao_tipo || null) }
+    if (promocao_label !== undefined) { sets.push('promocao_label = ?'); args.push(promocao_label || null) }
+    if (combo_itens !== undefined) { sets.push('combo_itens = ?'); args.push(combo_itens ? JSON.stringify(combo_itens) : null) }
     if (!sets.length) return res.status(400).json({ erro: 'Nenhum campo para atualizar' }) as any
     args.push(req.params.id)
     await db.execute({ sql: `UPDATE cardapio SET ${sets.join(', ')} WHERE id = ?`, args })

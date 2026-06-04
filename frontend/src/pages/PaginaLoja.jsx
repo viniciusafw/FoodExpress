@@ -160,6 +160,11 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
 
                 {/* Preço */}
                 <div className="flex items-center gap-2 mb-4">
+                  {produto.promocaoLabel && (
+                    <span className="rounded-md bg-primary text-white px-2 py-0.5 text-[0.68rem] font-extrabold uppercase tracking-wide">
+                      {produto.promocaoLabel}
+                    </span>
+                  )}
                   <span className="font-display text-2xl font-extrabold text-accent">
                     R$ {produto.preco.toFixed(2).replace('.', ',')}
                   </span>
@@ -379,6 +384,11 @@ function ProdutoCard({ produto, onAbrir, index }) {
           <p className="text-sm text-text-secondary font-medium leading-relaxed line-clamp-2 mb-3">{produto.desc}</p>
         )}
         <div className="flex items-center gap-2 flex-wrap">
+          {produto.promocaoLabel && (
+            <span className="rounded-md bg-primary text-white px-2 py-0.5 text-[0.68rem] font-extrabold uppercase tracking-wide">
+              {produto.promocaoLabel}
+            </span>
+          )}
           <span className="font-display text-base font-extrabold text-accent">R$ {produto.preco.toFixed(2).replace('.', ',')}</span>
           {produto.precoAnterior && (
             <span className="text-xs text-text-muted line-through font-semibold">R$ {produto.precoAnterior.toFixed(2).replace('.', ',')}</span>
@@ -521,6 +531,11 @@ export default function StorePage() {
           nome: item.nome,
           desc: item.descricao,
           preco: Number(item.preco) || 0,
+          precoAnterior: item.preco_original && Number(item.preco_original) > Number(item.preco)
+            ? Number(item.preco_original)
+            : null,
+          promocaoLabel: item.promocao_label || null,
+          promocaoTipo: item.promocao_tipo || null,
           emoji: emojiProduto(item),
           imagem: imagemProduto(item),
           serve: 1,
