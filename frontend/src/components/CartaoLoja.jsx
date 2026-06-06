@@ -62,7 +62,7 @@ export default function StoreCard({ loja, index = 0 }) {
       className="bg-white rounded-xl overflow-hidden border border-border cursor-pointer"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: index * 0.06, ease: 'easeOut' }}
+      transition={{ duration: 0.35, delay: Math.min(index, 8) * 0.04, ease: 'easeOut' }}
       whileHover={{ y: -4, boxShadow: '0 12px 32px rgba(0,0,0,0.12)', borderColor: 'transparent' }}
       onClick={() => navigate(`/loja/${loja_.id}`)}
     >
