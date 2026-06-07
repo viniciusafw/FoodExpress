@@ -3,6 +3,17 @@ import { createContext, useContext, useState, useEffect } from 'react';
 
 const CartContext = createContext();
 
+function lerCarrinhoPersistido() {
+  if (typeof window === 'undefined') return [];
+  try {
+    const salvo = JSON.parse(localStorage.getItem('carrinho') || '[]');
+    return Array.isArray(salvo) ? salvo : [];
+  } catch {
+    localStorage.removeItem('carrinho');
+    return [];
+  }
+}
+
 function getRestauranteId(item) {
   const id = item?.restauranteId || item?.restaurante_id || item?.loja?.id || item?.restaurantId;
   return id == null || id === '' ? '' : String(id);
@@ -10,9 +21,7 @@ function getRestauranteId(item) {
 
 export function CartProvider({ children }) {
   const [itens, setItens] = useState(() => {
-    if (typeof window === 'undefined') return [];
-    const carrinhoPersistido = localStorage.getItem('carrinho');
-    return carrinhoPersistido ? JSON.parse(carrinhoPersistido) : [];
+    return lerCarrinhoPersistido();
   });
   const [carregando] = useState(false);
 

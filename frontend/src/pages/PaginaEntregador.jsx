@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import {
@@ -8,8 +8,14 @@ import {
   TrendingUp, ArrowUpRight, Wifi, WifiOff, Wallet
 } from 'lucide-react'
 import logoSrc from '../imgs/Logo-site.png'
+import MapaOSM from '../components/MapaOSM'
 import api from '../services/api'
 import { formatarHoraBanco, parseDataBanco, mesmoDiaLocal } from '../utils/datas'
+import {
+  coordenadasTexto,
+  criarUrlNavegacaoGoogle,
+  montarPontoMapa,
+} from '../utils/mapas'
 
 // aqui e o back gelado - dados de entregador devem vir do backend
 // dados carregados do backend no componente principal
@@ -75,122 +81,54 @@ function normalizarEntregaAtiva(p) {
     valor: ganho,
     distancia: p.distancia_km ? `${Number(p.distancia_km).toFixed(1)} km` : '--',
     tempoEstimado: p.tempo_entrega_estimado ? `${p.tempo_entrega_estimado} min` : '--',
-    etapa: 'coletando',
+    etapa: p.coletado_em ? 'entregando' : 'coletando',
     _id: p.id,
   }
 }
 
-function coordenadasValidas(latitude, longitude) {
-  const lat = Number(latitude)
-  const lng = Number(longitude)
-  return Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)
-}
-
-function textoEnderecoValido(valor) {
-  const texto = String(valor || '').trim()
-  if (!texto) return ''
-  if (/não informado/i.test(texto)) return ''
-  return texto
-}
-
-function montarDestinoMapa(destino, tipo) {
-  if (!destino) return ''
-  if (coordenadasValidas(destino.latitude, destino.longitude)) {
-    return `${Number(destino.latitude)},${Number(destino.longitude)}`
+function normalizarOferta(p) {
+  const ganho = Number(p.ganho_entregador ?? 0) || Number(p.taxa_entrega ?? 0) || Number(p.total || 0) * 0.12
+  const restanteMs = Math.max(
+    0,
+    Number(p.oferta_expira_em_epoch || 0) - Number(p.servidor_agora_epoch || 0)
+  )
+  return {
+    id: numeroPedido(p.id, 6),
+    _id: p.id,
+    loja: valorTexto(p.restaurante_nome || p.restaurante_id, 'Restaurante'),
+    enderecoLoja: valorTexto(p.restaurante_endereco, 'Endereço da loja não informado'),
+    destino: valorTexto(p.endereco_entrega, 'Endereço não informado'),
+    cliente: valorTexto(p.cliente_nome || p.cliente_id, 'Cliente'),
+    valor: ganho,
+    distancia: p.distancia_oferta_km ? `${Number(p.distancia_oferta_km).toFixed(1)} km` : 'A calcular',
+    tempo: p.tempo_oferta_minutos ? `${p.tempo_oferta_minutos} min` : 'A calcular',
+    expiraEm: Date.now() + restanteMs,
   }
-
-  const endereco = textoEnderecoValido(destino.endereco || destino.rua)
-  if (!endereco) return ''
-
-  if (tipo === 'loja') {
-    const nome = textoEnderecoValido(destino.nome)
-    return [nome, endereco, 'Brasil'].filter(Boolean).join(', ')
-  }
-
-  return [endereco, destino.bairro, destino.cidade, 'Brasil'].filter(Boolean).join(', ')
 }
 
-// ── Mini mapa SVG ─────────────────────────────────────────────────────────────
+// ── Mapa e navegação ─────────────────────────────────────────────────────────
 function MiniMapa({ etapa, localizacao, entrega }) {
   const destinoAtual = etapa === 'coletando' ? entrega?.loja : entrega?.destino
   const tipoDestino = etapa === 'coletando' ? 'loja' : 'cliente'
-  const destinoTexto = montarDestinoMapa(destinoAtual, tipoDestino)
-  const origem = coordenadasValidas(localizacao?.latitude, localizacao?.longitude)
-    ? `${localizacao.latitude},${localizacao.longitude}`
-    : ''
-  const embedUrl = destinoTexto
-    ? origem
-      ? `https://maps.google.com/maps?saddr=${encodeURIComponent(origem)}&daddr=${encodeURIComponent(destinoTexto)}&output=embed`
-      : `https://maps.google.com/maps?q=${encodeURIComponent(destinoTexto)}&z=16&output=embed`
-    : origem
-      ? `https://maps.google.com/maps?q=${encodeURIComponent(origem)}&z=15&output=embed`
-      : ''
-
-  const abrirMaps = () => {
-    if (!destinoTexto && !origem) return
-    const url = destinoTexto
-      ? `https://www.google.com/maps/dir/?api=1${origem ? `&origin=${origem}` : ''}&destination=${encodeURIComponent(destinoTexto)}&travelmode=driving`
-      : origem
-        ? `https://www.google.com/maps/@${origem},16z`
-        : 'https://www.google.com/maps'
-    window.open(url, '_blank', 'noopener,noreferrer')
-  }
+  const destinoTexto = montarPontoMapa(destinoAtual, tipoDestino)
+  const origem = coordenadasTexto(localizacao?.latitude, localizacao?.longitude)
+  const urlNavegacao = criarUrlNavegacaoGoogle({ origem, destino: destinoTexto })
 
   return (
-    <div className="relative w-full h-56 rounded-2xl overflow-hidden bg-surface-2 border border-border group">
-      {embedUrl ? (
-        <iframe
-          title="Mapa da entrega"
-          src={embedUrl}
-          className="absolute inset-0 w-full h-full border-0"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-      ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
-          <MapPin size={28} className="text-primary mb-2" />
-          <p className="text-sm font-bold text-text-primary">
-            {tipoDestino === 'loja' ? 'Localização da loja não cadastrada' : 'Destino não informado'}
-          </p>
-          <p className="text-xs font-semibold text-text-muted mt-1">
-            {tipoDestino === 'loja'
-              ? 'Peça para o gerente salvar endereço e localização da loja nas configurações.'
-              : 'Assim que houver endereço, a rota aparece aqui.'}
-          </p>
-        </div>
+    <MapaOSM
+      origem={localizacao}
+      destino={destinoAtual}
+      destinoTexto={destinoTexto || (
+        tipoDestino === 'loja'
+          ? 'Peça para o gerente salvar endereço e localização da loja nas configurações.'
+          : 'Assim que houver endereço, a rota aparece aqui.'
       )}
-      <div className="absolute inset-x-0 top-0 p-3 bg-gradient-to-b from-black/35 to-transparent pointer-events-none">
-        <div className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-extrabold text-text-primary shadow-sm">
-          <Navigation size={13} className="text-primary" />
-          {etapa === 'coletando' ? 'Rota até a loja' : 'Rota até o cliente'}
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={abrirMaps}
-        disabled={!destinoTexto && !origem}
-        className="absolute right-3 bottom-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-white shadow-lg border-none hover:bg-primary/90 transition-colors disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed"
-      >
-        <MapPin size={13} /> Abrir rota
-      </button>
-      {localizacao && (
-        <div className="absolute top-2 right-2 bg-accent text-white text-[10px] font-extrabold px-2 py-1 rounded-full flex items-center gap-1">
-          <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-          GPS ativo
-        </div>
-      )}
-      <div className="absolute bottom-3 left-3 flex items-center gap-2 bg-white/95 backdrop-blur-sm rounded-full px-3 py-1.5 shadow-sm">
-        <div className="flex items-center gap-1 text-[10px] font-bold text-secondary">
-          <div className="w-2 h-2 rounded-full bg-secondary" /> Loja
-        </div>
-        <div className="flex items-center gap-1 text-[10px] font-bold text-primary">
-          <div className="w-2 h-2 rounded-full bg-primary" /> Destino
-        </div>
-        <div className="flex items-center gap-1 text-[10px] font-bold text-accent">
-          <div className="w-2 h-2 rounded-full bg-accent" /> Você
-        </div>
-      </div>
-    </div>
+      titulo={etapa === 'coletando' ? 'Rota até a loja' : 'Rota até o cliente'}
+      legendaOrigem="Você"
+      legendaDestino={etapa === 'coletando' ? 'Loja' : 'Cliente'}
+      urlNavegacao={urlNavegacao}
+      alturaClasse="h-56"
+    />
   )
 }
 
@@ -307,7 +245,7 @@ function EntregaAtiva({ entrega, onAvançar, localizacao }) {
           whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }}
         >
           {naLoja ? (
-            <><CheckCircle size={18} /> Cheguei na loja</>
+            <><Package size={18} /> Confirmar retirada</>
           ) : (
             <><CheckCircle size={18} /> Entrega concluída</>
           )}
@@ -317,43 +255,152 @@ function EntregaAtiva({ entrega, onAvançar, localizacao }) {
   )
 }
 
-// ── Fila de pedidos ────────────────────────────────────────────────────────────
-function FilaPedidos({ fila = [], onAceitar }) {
+// ── Despacho exclusivo de entrega ─────────────────────────────────────────────
+function OfertaEntrega({ oferta, segundos, online, buscando, processando, onAceitar, onRecusar }) {
+  const progresso = Math.max(0, Math.min(100, (segundos / 30) * 100))
+
   return (
-    <div className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-        <h3 className="font-display text-base font-bold text-text-primary">Próximas entregas</h3>
-        <span className="text-xs font-extrabold text-primary bg-primary-light px-2 py-0.5 rounded-full">{fila.length} na fila</span>
-      </div>
-      <div className="divide-y divide-border">
-        {fila.length === 0 && (
-          <div className="px-5 py-6 text-sm text-text-muted font-semibold">Nenhum pedido disponível agora.</div>
+    <>
+      <div className="bg-white rounded-2xl border border-border shadow-sm p-5">
+        <div className="flex items-start gap-3">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            online ? 'bg-accent/10 text-accent' : 'bg-surface-2 text-text-muted'
+          }`}>
+            {online ? <Navigation size={19} className={buscando ? 'animate-pulse' : ''} /> : <WifiOff size={18} />}
+          </div>
+          <div>
+            <h3 className="font-display text-base font-bold text-text-primary">
+              {online ? 'Despacho automático ativo' : 'Você está offline'}
+            </h3>
+            <p className="text-xs font-semibold text-text-muted mt-1">
+              {online
+                ? 'Quando surgir uma entrega compatível, ela será reservada só para você por 30 segundos.'
+                : 'Fique online para começar a receber ofertas.'}
+            </p>
+          </div>
+        </div>
+        {online && (
+          <div className="mt-4 flex items-center gap-2 rounded-xl bg-surface-2 border border-border px-3 py-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-60" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent" />
+            </span>
+            <span className="text-xs font-bold text-text-secondary">
+              {buscando ? 'Procurando entrega próxima...' : 'Aguardando nova oferta'}
+            </span>
+          </div>
         )}
-        {fila.map((pedido, i) => (
-          <Motion.div key={pedido.id}
-            className="flex items-center gap-3 px-5 py-4"
-            initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.08 }}
-          >
-            <div className="w-10 h-10 rounded-xl bg-surface-2 border border-border flex items-center justify-center text-xl shrink-0">
-              {pedido.emoji}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <span className="font-bold text-sm text-text-primary">{pedido.loja}</span>
-                <span className="text-[10px] font-bold text-text-muted">{pedido.id}</span>
-              </div>
-              <p className="text-xs text-text-muted font-medium truncate">{pedido.destino}</p>
-            </div>
-            <div className="text-right shrink-0">
-              <p className="font-display text-sm font-extrabold text-accent">R$ {Number(pedido.valor || 0).toFixed(2).replace('.', ',')}</p>
-              <p className="text-xs text-text-muted font-semibold mb-1">{pedido.distancia}</p>
-              <button type="button" onClick={() => onAceitar?.(pedido)} className="px-2.5 py-1 rounded-lg bg-accent text-white text-[10px] font-extrabold border-none cursor-pointer">Aceitar</button>
-            </div>
-          </Motion.div>
-        ))}
       </div>
-    </div>
+
+      <AnimatePresence>
+        {oferta && (
+          <Motion.div
+            className="fixed inset-0 z-[180] flex items-end justify-center bg-black/55 p-0 sm:items-center sm:p-5"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <Motion.div
+              role="dialog"
+              aria-modal="true"
+              aria-label="Nova oferta de entrega"
+              className="w-full max-w-md overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+              initial={{ y: 80, scale: 0.96 }}
+              animate={{ y: 0, scale: 1 }}
+              exit={{ y: 80, scale: 0.96 }}
+              transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+            >
+              <div className="bg-secondary px-5 pt-5 text-white">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold uppercase text-white/65">Nova entrega</p>
+                    <h2 className="font-display text-xl font-extrabold">Aceitar corrida?</h2>
+                  </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white/10 font-display text-lg font-extrabold">
+                    {segundos}s
+                  </div>
+                </div>
+                <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-white/15">
+                  <Motion.div
+                    className="h-full bg-primary"
+                    animate={{ width: `${progresso}%` }}
+                    transition={{ duration: 0.25, ease: 'linear' }}
+                  />
+                </div>
+              </div>
+
+              <div className="p-5">
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { label: 'Você ganha', valor: `R$ ${oferta.valor.toFixed(2).replace('.', ',')}`, icon: DollarSign },
+                    { label: 'Distância', valor: oferta.distancia, icon: Bike },
+                    { label: 'Estimativa', valor: oferta.tempo, icon: Clock },
+                  ].map(item => {
+                    const Icon = item.icon
+                    return (
+                      <div key={item.label} className="rounded-xl border border-border bg-surface-2 px-2 py-3 text-center">
+                        <Icon size={14} className="mx-auto mb-1 text-accent" />
+                        <p className="font-display text-sm font-extrabold text-text-primary">{item.valor}</p>
+                        <p className="mt-0.5 text-[10px] font-semibold text-text-muted">{item.label}</p>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                <div className="mt-5">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
+                      <Package size={15} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase text-text-muted">Retirada</p>
+                      <p className="text-sm font-bold text-text-primary">{oferta.loja}</p>
+                      <p className="text-xs font-medium text-text-muted">{oferta.enderecoLoja}</p>
+                    </div>
+                  </div>
+                  <div className="ml-4 h-5 w-px bg-border" />
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
+                      <MapPin size={15} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-extrabold uppercase text-text-muted">Entrega</p>
+                      <p className="text-sm font-bold text-text-primary">{oferta.destino}</p>
+                      <p className="text-xs font-medium text-text-muted">{oferta.cliente}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="mt-4 text-center text-[11px] font-semibold text-text-muted">
+                  {oferta.id} · Esta oferta está visível somente para você
+                </p>
+
+                <div className="mt-4 grid grid-cols-[0.8fr_1.2fr] gap-3">
+                  <button
+                    type="button"
+                    onClick={onRecusar}
+                    disabled={processando}
+                    className="flex h-12 items-center justify-center gap-2 rounded-xl border border-border bg-white text-sm font-extrabold text-text-secondary hover:border-red-300 hover:text-red-500 disabled:opacity-60"
+                  >
+                    <XCircle size={17} />
+                    Recusar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onAceitar}
+                    disabled={processando || segundos <= 0}
+                    className="flex h-12 items-center justify-center gap-2 rounded-xl border-none bg-accent text-sm font-extrabold text-white hover:bg-[#158f82] disabled:opacity-60"
+                  >
+                    <CheckCircle size={18} />
+                    {processando ? 'Confirmando...' : 'Aceitar entrega'}
+                  </button>
+                </div>
+              </div>
+            </Motion.div>
+          </Motion.div>
+        )}
+      </AnimatePresence>
+    </>
   )
 }
 
@@ -418,7 +465,7 @@ function Historico({ historico = [] }) {
 }
 
 // ── Header do entregador ──────────────────────────────────────────────────────
-function HeaderEntregador({ online, onToggle, usuario }) {
+function HeaderEntregador({ online, onToggle, usuario, temOferta, entregaAtiva }) {
   const nome = usuario?.nome || 'Entregador'
   return (
     <header className="bg-white border-b border-border sticky top-0 z-50 shadow-sm">
@@ -445,20 +492,27 @@ function HeaderEntregador({ online, onToggle, usuario }) {
           {/* Toggle online */}
           <button
             onClick={onToggle}
+            disabled={online && entregaAtiva}
+            title={online && entregaAtiva ? 'Conclua a entrega antes de ficar offline' : ''}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-xs font-extrabold transition-all cursor-pointer ${
+              online && entregaAtiva
+                ? 'bg-surface-2 border-border text-text-muted cursor-not-allowed'
+                :
               online
                 ? 'bg-accent/10 border-accent/30 text-accent hover:bg-red-50 hover:border-red-300 hover:text-red-500'
                 : 'bg-surface-2 border-border text-text-muted hover:bg-accent/10 hover:border-accent/30 hover:text-accent'
             }`}
           >
             {online ? <Wifi size={13} /> : <WifiOff size={13} />}
-            <span className="hidden sm:inline">{online ? 'Ficar offline' : 'Ficar online'}</span>
+            <span className="hidden sm:inline">{online && entregaAtiva ? 'Em entrega' : online ? 'Ficar offline' : 'Ficar online'}</span>
           </button>
 
           {/* Notificações */}
           <button className="relative w-9 h-9 rounded-full bg-transparent border border-border flex items-center justify-center cursor-pointer hover:bg-surface-2 transition-all">
             <Bell size={16} className="text-text-secondary" />
-            <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary rounded-full text-white text-[0.55rem] font-extrabold flex items-center justify-center border border-white">2</span>
+            {temOferta && (
+              <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-primary rounded-full text-white text-[0.55rem] font-extrabold flex items-center justify-center border border-white">1</span>
+            )}
           </button>
 
           {/* Avatar */}
@@ -483,9 +537,19 @@ export default function PaginaEntregador() {
   const [etapa, setEtapa] = useState('coletando')
   const [entregaConcluida, setEntregaConcluida] = useState(false)
   const [entregaAtiva, setEntregaAtiva] = useState(null)
-  const [fila, setFila] = useState([])
+  const [oferta, setOferta] = useState(null)
+  const [segundosOferta, setSegundosOferta] = useState(0)
+  const [buscandoOferta, setBuscandoOferta] = useState(false)
+  const [processandoOferta, setProcessandoOferta] = useState(false)
+  const buscandoOfertaRef = useRef(false)
+  const ultimaLocalizacaoEnviadaRef = useRef(0)
   const [historico, setHistorico] = useState([])
-  const [stats, setStats] = useState([])
+  const [stats, setStats] = useState([
+    { label: 'Ganhos hoje', valor: 'R$ 0,00', icon: DollarSign, cor: 'text-accent', bg: 'bg-accent/10', variacao: '' },
+    { label: 'Saldo disponível', valor: 'R$ 0,00', icon: Wallet, cor: 'text-accent', bg: 'bg-accent/10', variacao: 'Total R$ 0,00' },
+    { label: 'Entregas hoje', valor: '0', icon: Package, cor: 'text-primary', bg: 'bg-primary-light', variacao: '' },
+    { label: 'Total entregas', valor: '0', icon: Bike, cor: 'text-secondary', bg: 'bg-secondary/10', variacao: '' },
+  ])
   const [ganhosSemana, setGanhosSemana] = useState([
     { dia: 'Seg', val: 0, valor: 0 }, { dia: 'Ter', val: 0, valor: 0 }, { dia: 'Qua', val: 0, valor: 0 },
     { dia: 'Qui', val: 0, valor: 0 }, { dia: 'Sex', val: 0, valor: 0 }, { dia: 'Sáb', val: 0, valor: 0 },
@@ -518,10 +582,14 @@ export default function PaginaEntregador() {
           })
         } catch (e2) {
           console.warn('Não foi possível criar entregador no backend:', e2)
+          setLocErro(e2.message || 'Não foi possível carregar seu cadastro de entregador. Tente entrar novamente.')
           return
         }
       }
-      if (!ent?.id) return
+      if (!ent?.id) {
+        setLocErro('Seu cadastro de entregador não foi encontrado. Tente entrar novamente.')
+        return
+      }
       setEntregadorId(ent.id)
       setAvaliacaoEntregador(Number(ent.avaliacao_media || 0))
       setSaldoDisponivel(Number(ent.saldo_disponivel || 0))
@@ -529,13 +597,24 @@ export default function PaginaEntregador() {
       if (ent.latitude !== undefined && ent.longitude !== undefined && Number(ent.latitude) !== 0 && Number(ent.longitude) !== 0) {
         setLocalizacao({ latitude: Number(ent.latitude), longitude: Number(ent.longitude) })
       }
-      if (ent.status === 'disponivel' || ent.status === 'ocupado') setOnline(true)
+      if (ent.status === 'ocupado') {
+        setOnline(true)
+      } else if (ent.status === 'disponivel') {
+        if (navigator.geolocation) {
+          setOnline(true)
+        } else {
+          setLocErro('GPS indisponível neste navegador. Ative a localização para ficar online.')
+          api.entregadores.atualizarDisponibilidade(ent.id, false).catch(() => {})
+        }
+      }
       // Pedido ativo (entregando)
       try {
         const pedidosAtivos = await api.pedidos.listar({ entregadorId: ent.id, status: 'entregando' })
         if (pedidosAtivos.length > 0) {
           const p = pedidosAtivos[0]
-          setEntregaAtiva(normalizarEntregaAtiva(p))
+          const ativa = normalizarEntregaAtiva(p)
+          setEntregaAtiva(ativa)
+          setEtapa(ativa.etapa)
         }
       } catch (e) {
         console.warn('Erro ao buscar pedidos ativos:', e)
@@ -640,53 +719,92 @@ export default function PaginaEntregador() {
 
 
 
-  const carregarFilaDisponivel = async () => {
-    if (!online || !entregadorId) {
-      setFila([])
+  const carregarOferta = async () => {
+    if (!online || !entregadorId || entregaAtiva || buscandoOfertaRef.current) {
+      if (!online || entregaAtiva) setOferta(null)
       return
     }
+    buscandoOfertaRef.current = true
+    setBuscandoOferta(true)
     try {
-      const lista = await api.pedidos.listarDisponiveis()
-      setFila((Array.isArray(lista) ? lista : []).map(p => ({
-        id: numeroPedido(p.id, 6),
-        _id: p.id,
-        loja: p.restaurante_nome || p.restaurante_id || 'Restaurante',
-        emoji: '🍽️',
-        destino: p.endereco_entrega || 'Endereço não informado',
-        cliente: p.cliente_nome || p.cliente_id || 'Cliente',
-        valor: Number(p.total || 0) * 0.2,
-        distancia: p.distancia_km ? `${Number(p.distancia_km).toFixed(1)} km` : 'sem distância',
-      })))
+      const resposta = await api.pedidos.solicitarOferta()
+      const novaOferta = resposta?.oferta ? normalizarOferta(resposta.oferta) : null
+      setOferta(anterior => {
+        if (novaOferta && anterior?._id !== novaOferta._id) {
+          navigator.vibrate?.([180, 80, 180])
+          document.title = 'Nova entrega · FoodExpress'
+        }
+        return novaOferta
+      })
+      if (novaOferta) {
+        setSegundosOferta(Math.max(0, Math.ceil((novaOferta.expiraEm - Date.now()) / 1000)))
+      }
     } catch (e) {
-      console.warn('Erro ao carregar pedidos disponíveis:', e)
-      setFila([])
+      console.warn('Erro ao buscar oferta:', e)
+    } finally {
+      buscandoOfertaRef.current = false
+      setBuscandoOferta(false)
     }
   }
 
   useEffect(() => {
-    carregarFilaDisponivel()
-    if (!online || !entregadorId) return
-    const id = setInterval(carregarFilaDisponivel, 10000)
+    carregarOferta()
+    if (!online || !entregadorId || entregaAtiva) return
+    const id = setInterval(carregarOferta, 5000)
     return () => clearInterval(id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [online, entregadorId])
+  }, [online, entregadorId, entregaAtiva?._id])
 
-  const aceitarPedido = async (pedido) => {
-    if (!pedido?._id || !entregadorId) return
-    try {
-      await api.entregadores.atualizarDisponibilidade(entregadorId, true).catch(() => {})
-      await api.pedidos.atribuirEntregador(pedido._id, entregadorId)
-      const atualizados = await api.pedidos.listar({ entregadorId, status: 'entregando' })
-      const p = atualizados.find(x => x.id === pedido._id) || atualizados[0]
-      if (p) {
-        setEntregaAtiva(normalizarEntregaAtiva(p))
+  useEffect(() => {
+    if (!oferta) {
+      document.title = 'FoodExpress'
+      return
+    }
+    const atualizarContagem = () => {
+      const restante = Math.max(0, Math.ceil((oferta.expiraEm - Date.now()) / 1000))
+      setSegundosOferta(restante)
+      if (restante === 0) {
+        setOferta(null)
+        document.title = 'FoodExpress'
       }
-      setFila(prev => prev.filter(x => x._id !== pedido._id))
+    }
+    atualizarContagem()
+    const id = setInterval(atualizarContagem, 250)
+    return () => clearInterval(id)
+  }, [oferta?._id, oferta?.expiraEm])
+
+  const aceitarOferta = async () => {
+    if (!oferta?._id || !entregadorId || processandoOferta) return
+    setProcessandoOferta(true)
+    try {
+      const resposta = await api.pedidos.aceitarOferta(oferta._id)
+      if (resposta?.pedido) {
+        const ativa = normalizarEntregaAtiva(resposta.pedido)
+        setEntregaAtiva(ativa)
+        setEtapa(ativa.etapa)
+      }
+      setOferta(null)
       setOnline(true)
     } catch (e) {
-      setFila(prev => prev.filter(x => x._id !== pedido._id))
-      carregarFilaDisponivel()
+      setOferta(null)
       setLocErro(e.message || 'Não foi possível aceitar o pedido.')
+    } finally {
+      setProcessandoOferta(false)
+    }
+  }
+
+  const recusarOferta = async () => {
+    if (!oferta?._id || processandoOferta) return
+    const ofertaAtual = oferta
+    setProcessandoOferta(true)
+    setOferta(null)
+    try {
+      await api.pedidos.recusarOferta(ofertaAtual._id)
+      setTimeout(carregarOferta, 400)
+    } catch (e) {
+      setLocErro(e.message || 'Não foi possível recusar a oferta.')
+    } finally {
+      setProcessandoOferta(false)
     }
   }
 
@@ -695,13 +813,13 @@ export default function PaginaEntregador() {
   // Ao ficar online, pede localização e envia pro backend a cada 30s
   const handleToggleOnline = () => {
     if (!online) {
+      if (!entregadorId) {
+        setLocErro('Seu cadastro de entregador ainda não foi carregado. Tente entrar novamente.')
+        return
+      }
       // Ficar online: pede permissão de localização
       if (!navigator.geolocation) {
-        setLocErro('Seu navegador não suporta geolocalização')
-        setOnline(true) // fica online mesmo assim
-        if (entregadorId) {
-          api.entregadores.atualizarDisponibilidade(entregadorId, true).catch(console.error)
-        }
+        setLocErro('GPS indisponível neste navegador. Ative a localização para ficar online.')
         return
       }
       navigator.geolocation.getCurrentPosition(
@@ -718,20 +836,22 @@ export default function PaginaEntregador() {
         },
         (err) => {
           if (err.code === 1) {
-            setLocErro('Permissão de localização negada. Ative nas configurações do navegador.')
+            setLocErro('Permissão de localização negada. Autorize o GPS para ficar online.')
           } else {
-            setLocErro('Não foi possível obter sua localização.')
+            setLocErro('Não foi possível confirmar sua localização. Tente novamente em uma área aberta.')
           }
-          setOnline(true) // fica online mesmo sem localização
-          if (entregadorId) {
-            api.entregadores.atualizarDisponibilidade(entregadorId, true).catch(console.error)
-          }
+          setOnline(false)
         },
-        { enableHighAccuracy: true, timeout: 8000 }
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 5000 }
       )
     } else {
+      if (entregaAtiva) {
+        setLocErro('Conclua a entrega ativa antes de ficar offline.')
+        return
+      }
       // Ficar offline
       setOnline(false)
+      setOferta(null)
       if (entregadorId) {
         api.entregadores.atualizarDisponibilidade(entregadorId, false).catch(console.error)
       }
@@ -745,39 +865,53 @@ export default function PaginaEntregador() {
       (pos) => {
         const { latitude, longitude } = pos.coords
         setLocalizacao({ latitude, longitude })
-        api.entregadores.atualizar(entregadorId, { latitude, longitude }).catch(() => {})
+        const agora = Date.now()
+        if (agora - ultimaLocalizacaoEnviadaRef.current >= 10000) {
+          ultimaLocalizacaoEnviadaRef.current = agora
+          api.entregadores.atualizar(entregadorId, { latitude, longitude }).catch(() => {})
+        }
       },
-      () => {},
-      { enableHighAccuracy: true, maximumAge: 30000, timeout: 10000 }
+      (erro) => {
+        setLocErro(
+          erro.code === 1
+            ? 'O acesso ao GPS foi removido. Autorize a localização para continuar online.'
+            : 'Sinal de GPS indisponível. Verifique a localização do aparelho.'
+        )
+        if (!entregaAtiva) {
+          setOnline(false)
+          api.entregadores.atualizarDisponibilidade(entregadorId, false).catch(() => {})
+        }
+      },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
     )
     return () => navigator.geolocation.clearWatch(watchId)
-  }, [online, entregadorId])
+  }, [online, entregadorId, entregaAtiva?._id])
 
   const handleAvançar = async () => {
     if (!entrega) return
     if (etapa === 'coletando') {
-      // Saiu do restaurante — status: entregando
-      setEtapa('entregando')
-      if (entrega._id) {
-        await api.pedidos.atualizarStatus(entrega._id, 'entregando').catch(console.error)
+      try {
+        if (entrega._id) await api.pedidos.confirmarColeta(entrega._id)
+        setEtapa('entregando')
+        setEntregaAtiva(atual => atual ? { ...atual, etapa: 'entregando' } : atual)
+      } catch (erro) {
+        setLocErro(erro.message || 'Não foi possível confirmar a retirada.')
       }
     } else {
       // Entregue ao cliente
       let ganhoCreditado = Number(entrega.valor || 0)
-      if (entrega._id) {
-        const resposta = await api.pedidos.atualizarStatus(entrega._id, 'entregue').catch((err) => {
-          console.error(err)
-          return null
-        })
+      try {
+        const resposta = entrega._id
+          ? await api.pedidos.atualizarStatus(entrega._id, 'entregue')
+          : null
         if (Number(resposta?.ganho_entregador_creditado || 0) > 0) {
           ganhoCreditado = Number(resposta.ganho_entregador_creditado)
           setSaldoDisponivel(v => v + ganhoCreditado)
           setSaldoTotal(v => v + ganhoCreditado)
         }
-        // Libera o entregador
-        if (entregadorId) {
-          await api.entregadores.atualizarDisponibilidade(entregadorId, true).catch(console.error)
-        }
+      } catch (erro) {
+        setLocErro(erro.message || 'Não foi possível concluir a entrega. Tente novamente.')
+        return
       }
       setGanhoEntregaConcluida(ganhoCreditado)
       setEntregaAtiva(null)
@@ -790,7 +924,13 @@ export default function PaginaEntregador() {
 
   return (
     <div className="min-h-screen bg-background pb-8">
-      <HeaderEntregador online={online} onToggle={handleToggleOnline} usuario={usuario} />
+      <HeaderEntregador
+        online={online}
+        onToggle={handleToggleOnline}
+        usuario={usuario}
+        temOferta={Boolean(oferta)}
+        entregaAtiva={Boolean(entregaAtiva)}
+      />
 
       {/* Toast de entrega concluída */}
       <AnimatePresence>
@@ -870,7 +1010,15 @@ export default function PaginaEntregador() {
 
           {/* Coluna direita */}
           <div className="flex flex-col gap-5">
-            <FilaPedidos fila={fila} onAceitar={aceitarPedido} />
+            <OfertaEntrega
+              oferta={oferta}
+              segundos={segundosOferta}
+              online={online}
+              buscando={buscandoOferta}
+              processando={processandoOferta}
+              onAceitar={aceitarOferta}
+              onRecusar={recusarOferta}
+            />
 
             {/* Card ganhos da semana */}
             <Motion.div

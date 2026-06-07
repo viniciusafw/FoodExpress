@@ -144,3 +144,20 @@ Authorization: Bearer <token>
 
 Para gerar tokens, implemente `POST /api/auth/login` que receba email/senha,
 valide no banco e retorne `jwt.sign({ userId, role }, process.env.JWT_SECRET)`.
+# FoodExpress
+
+## Acesso administrativo
+
+A área do dono da plataforma fica em `/admin`. O login direto fica em
+`/admin/login`.
+
+Configure a conta principal no backend:
+
+```env
+ADMIN_NAME=Administrador FoodExpress
+ADMIN_EMAIL=admin@seudominio.com
+ADMIN_PASSWORD=UmaSenhaForte@123
+```
+
+Ao iniciar, o backend cria ou atualiza esse operador sem disponibilizar cadastro
+público de administradores.

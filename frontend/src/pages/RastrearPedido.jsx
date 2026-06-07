@@ -2,27 +2,18 @@ import { useState, useEffect } from 'react'
 import { motion as Motion } from 'framer-motion'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import Header from '../components/Header'
+import MapaOSM from '../components/MapaOSM'
 import api from '../services/api'
 import MobileNavBar from '../components/MobileNavBar'
 import {
   ArrowLeft, MapPin, Clock, Truck, Phone,
   AlertCircle, UtensilsCrossed, Navigation, Star, X
 } from 'lucide-react'
+import {
+  criarUrlNavegacaoGoogle,
+  montarPontoMapa,
+} from '../utils/mapas'
 
-
-// ── Mapa real ────────────────────────────────────────────────────────────────
-function coordenadasValidas(lat, lng) {
-  const latitude = Number(lat)
-  const longitude = Number(lng)
-  return Number.isFinite(latitude) && Number.isFinite(longitude) && !(latitude === 0 && longitude === 0)
-}
-
-function textoEnderecoValido(valor) {
-  const texto = String(valor || '').trim()
-  if (!texto) return ''
-  if (/não informado/i.test(texto)) return ''
-  return texto
-}
 
 function normalizarTelefone(telefone) {
   let digitos = String(telefone || '').replace(/\D/g, '')
@@ -32,71 +23,30 @@ function normalizarTelefone(telefone) {
 }
 
 function MiniMapa({ dados }) {
-  const destino = dados?.destino?.localizacao
+  const destinoAtual = dados?.rota?.destino_atual
+  const destino = destinoAtual
+    ? { latitude: destinoAtual.lat, longitude: destinoAtual.lng, endereco: destinoAtual.endereco }
+    : {
+        latitude: dados?.destino?.localizacao?.lat,
+        longitude: dados?.destino?.localizacao?.lng,
+        endereco: dados?.destino?.endereco,
+      }
   const entregador = dados?.entregador?.localizacao_atual
-  const destinoCoords = coordenadasValidas(destino?.lat, destino?.lng) ? `${Number(destino.lat)},${Number(destino.lng)}` : ''
-  const entregadorCoords = coordenadasValidas(entregador?.lat, entregador?.lng) ? `${Number(entregador.lat)},${Number(entregador.lng)}` : ''
-  const destinoTexto = destinoCoords || textoEnderecoValido(dados?.destino?.endereco)
-  const embedUrl = destinoTexto
-    ? entregadorCoords
-      ? `https://maps.google.com/maps?saddr=${encodeURIComponent(entregadorCoords)}&daddr=${encodeURIComponent(destinoTexto)}&output=embed`
-      : `https://maps.google.com/maps?q=${encodeURIComponent(destinoTexto)}&z=16&output=embed`
-    : entregadorCoords
-      ? `https://maps.google.com/maps?q=${encodeURIComponent(entregadorCoords)}&z=15&output=embed`
-      : ''
-
-  const abrirMaps = () => {
-    if (!destinoTexto && !entregadorCoords) return
-    const url = destinoTexto
-      ? `https://www.google.com/maps/dir/?api=1${entregadorCoords ? `&origin=${entregadorCoords}` : ''}&destination=${encodeURIComponent(destinoTexto)}&travelmode=driving`
-      : `https://www.google.com/maps/@${entregadorCoords},16z`
-    window.open(url, '_blank', 'noopener,noreferrer')
-  }
+  const destinoTexto = montarPontoMapa(destino, destinoAtual?.tipo === 'restaurante' ? 'loja' : 'cliente')
+  const entregadorCoords = entregador ? { latitude: entregador.lat, longitude: entregador.lng } : null
+  const urlMapa = criarUrlNavegacaoGoogle({ origem: entregadorCoords, destino: destinoTexto })
 
   return (
-    <div className="relative w-full h-72 rounded-2xl overflow-hidden bg-surface-2 border border-border">
-      {embedUrl ? (
-        <iframe
-          title="Mapa do rastreamento"
-          src={embedUrl}
-          className="absolute inset-0 w-full h-full border-0"
-          loading="lazy"
-          referrerPolicy="no-referrer-when-downgrade"
-        />
-      ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center px-6">
-          <MapPin size={30} className="text-primary mb-2" />
-          <p className="text-sm font-bold text-text-primary">Mapa indisponível</p>
-          <p className="text-xs font-semibold text-text-muted mt-1">Ainda não há localização para este pedido.</p>
-        </div>
-      )}
-      <div className="absolute inset-x-0 top-0 p-3 bg-gradient-to-b from-black/35 to-transparent">
-        <div className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-extrabold text-text-primary shadow-sm">
-          <Navigation size={13} className="text-primary" />
-          Acompanhamento da entrega
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={abrirMaps}
-        disabled={!destinoTexto && !entregadorCoords}
-        className="absolute right-3 bottom-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-xs font-extrabold text-white shadow-lg border-none hover:bg-primary/90 transition-colors disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed"
-      >
-        <MapPin size={13} /> Abrir rota
-      </button>
-      <div className="absolute bottom-3 left-3 flex gap-2">
-        {[
-          { cor: 'bg-secondary', label: 'Restaurante' },
-          { cor: 'bg-primary',   label: 'Entregador' },
-          { cor: 'bg-accent',    label: 'Destino' },
-        ].map(({ cor, label }) => (
-          <div key={label} className="flex items-center gap-1 bg-white/95 rounded-full px-2.5 py-1 shadow-sm">
-            <div className={`w-2 h-2 rounded-full ${cor}`} />
-            <span className="text-[10px] font-bold text-text-primary">{label}</span>
-          </div>
-        ))}
-      </div>
-    </div>
+    <MapaOSM
+      origem={entregadorCoords}
+      destino={destino}
+      destinoTexto={destinoTexto || 'Ainda não há localização para este pedido.'}
+      titulo={dados?.etapa === 'coletando' ? 'Entregador indo até a loja' : 'Pedido a caminho'}
+      legendaOrigem="Entregador"
+      legendaDestino={destinoAtual?.tipo === 'restaurante' ? 'Loja' : 'Destino'}
+      urlNavegacao={urlMapa}
+      alturaClasse="h-72"
+    />
   )
 }
 
@@ -119,16 +69,18 @@ export default function RastrearPedido() {
   const navigate = useNavigate()
   const [d, setD] = useState(null)
   const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
   const [tempoAtualizado, setTempoAtualizado] = useState(0)
   const [conviteAvaliacaoFechado, setConviteAvaliacaoFechado] = useState(false)
 
   const buscar = () => {
     api.pedidos.rastrear(id)
       .then(dados => {
+        setErro('')
         setD(dados)
         setTempoAtualizado(dados?.rota?.tempo_estimado_minutos ?? 0)
       })
-      .catch(console.error)
+      .catch(error => setErro(error.message || 'Não foi possível atualizar o rastreamento.'))
       .finally(() => setCarregando(false))
   }
 
@@ -137,17 +89,12 @@ export default function RastrearPedido() {
 
   // Polling a cada 15s para atualizar posição do entregador
   useEffect(() => {
+    if (!d || ['entregue', 'cancelado'].includes(String(d.status || '').toLowerCase())) return undefined
     const iv = setInterval(() => {
       buscar()
     }, 15000)
     return () => clearInterval(iv)
-  }, [id])
-
-  // Conta regressiva a cada 5s
-  useEffect(() => {
-    const iv = setInterval(() => setTempoAtualizado(t => Math.max(0, t - 1)), 5000)
-    return () => clearInterval(iv)
-  }, [])
+  }, [id, d?.status])
 
   const abrirSuporte = () => navigate(`/suporte?pedido=${encodeURIComponent(id)}&categoria=pedido`)
   const deveMostrarConviteAvaliacao = String(d?.status || '').toLowerCase() === 'entregue'
@@ -155,6 +102,17 @@ export default function RastrearPedido() {
     && !conviteAvaliacaoFechado
   const distanciaAtual = d?.rota?.distancia_atual_km
   const distanciaTotal = d?.rota?.distancia_total_km
+  const statusPedido = String(d?.status || '').toLowerCase()
+  const entregaFinalizada = statusPedido === 'entregue'
+  const pedidoCancelado = statusPedido === 'cancelado'
+  const progresso = entregaFinalizada ? 100 : Number(d?.rota?.progresso_percentual || 0)
+  const textoStatus = entregaFinalizada
+    ? 'Pedido entregue'
+    : pedidoCancelado
+      ? 'Pedido cancelado'
+      : d?.etapa === 'coletando'
+        ? 'Entregador a caminho da loja'
+        : 'Pedido a caminho'
   const ligarEntregador = () => {
     const telefone = normalizarTelefone(d?.entregador?.telefone || d?.entregador?.telefone_entregador)
     if (telefone) {
@@ -165,7 +123,14 @@ export default function RastrearPedido() {
   }
 
   if (carregando) return <div className="min-h-screen flex items-center justify-center text-text-muted">Carregando rastreamento...</div>
-  if (!d) return <div className="min-h-screen flex items-center justify-center text-text-muted">Rastreamento não disponível</div>
+  if (!d) return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-4 text-center text-text-muted">
+      <p>{erro || 'Rastreamento não disponível'}</p>
+      <button type="button" onClick={buscar} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white border-none">
+        Tentar novamente
+      </button>
+    </div>
+  )
 
   if (!d?.entregador) {
     return (
@@ -253,6 +218,11 @@ export default function RastrearPedido() {
         <h1 className="font-display text-2xl font-extrabold text-text-primary mb-6">
           Rastrear Pedido #{String(d?.pedido_id).slice(-6)}
         </h1>
+        {erro && (
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+            {erro}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Mapa + progresso */}
@@ -271,9 +241,9 @@ export default function RastrearPedido() {
             >
               <div className="flex justify-between items-center mb-3">
                 <span className="text-sm font-bold text-text-muted">Progresso da entrega</span>
-                <span className="text-sm font-extrabold text-primary">{d?.rota?.progresso_percentual}%</span>
+                <span className="text-sm font-extrabold text-primary">{progresso}%</span>
               </div>
-              <BarraProgresso pct={d?.rota?.progresso_percentual} />
+              <BarraProgresso pct={progresso} />
               <div className="grid grid-cols-3 gap-4 mt-5">
                 {[
                   { Icon: Clock,      label: 'Tempo restante', valor: tempoAtualizado ? `${tempoAtualizado} min` : '--' },
@@ -302,11 +272,13 @@ export default function RastrearPedido() {
               <h3 className="font-display font-extrabold text-text-primary mb-3">Status</h3>
               <div className="flex items-center gap-2.5 mb-4">
                 <div className="w-3 h-3 rounded-full bg-primary animate-pulse" />
-                <span className="font-bold text-primary capitalize">{d?.status}</span>
+                <span className="font-bold text-primary">
+                  {textoStatus}
+                </span>
               </div>
               <p className="text-xs text-text-muted font-semibold flex items-start gap-1.5">
                 <MapPin size={12} className="shrink-0 mt-0.5" />
-                {d?.destino?.endereco}
+                {d?.rota?.destino_atual?.endereco || d?.destino?.endereco}
               </p>
             </Motion.div>
 

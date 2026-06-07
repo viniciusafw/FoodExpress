@@ -1,18 +1,22 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import CartDrawer from './GavetaCarrinho';
-import { Home, Search, ShoppingBag, User, LogIn } from 'lucide-react';
+import {
+  Bike, Home, LayoutDashboard, LifeBuoy, LogIn,
+  Search, Settings, ShoppingBag, User
+} from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../contexts/CartContext';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 
 export default function MobileNavBar() {
-  const { estaLogado } = useAuth();
+  const { estaLogado, usuario } = useAuth();
   const { quantidadeTotal } = useCart();
   const [carrinhoAberto, setCarrinhoAberto] = useState(false);
   const [cartPulse, setCartPulse] = useState(0);
   const location = useLocation();
   const logado = estaLogado;
+  const perfil = usuario?.perfil || 'cliente';
   const ativo = (path) => location.pathname === path;
 
   useEffect(() => {
@@ -21,10 +25,32 @@ export default function MobileNavBar() {
     return () => window.removeEventListener('foodexpress:carrinho-item-adicionado', pulse);
   }, []);
 
-  const navItems = [
+  const navItemsCliente = [
     { to: '/', label: 'Início', Icon: Home },
     { to: '/busca', label: 'Buscar', Icon: Search },
   ];
+  const navItemsPorPerfil = {
+    gerente: [
+      { to: '/gerente', label: 'Painel', Icon: LayoutDashboard },
+      { to: '/gerente/pedidos', label: 'Pedidos', Icon: ShoppingBag },
+      { to: '/suporte', label: 'Suporte', Icon: LifeBuoy },
+      { to: '/gerente/configuracoes', label: 'Ajustes', Icon: Settings },
+    ],
+    entregador: [
+      { to: '/entregador', label: 'Entregas', Icon: Bike },
+      { to: '/suporte', label: 'Suporte', Icon: LifeBuoy },
+    ],
+    operador: [
+      { to: '/admin', label: 'Admin', Icon: LayoutDashboard },
+      { to: '/admin/suporte', label: 'Suporte', Icon: LifeBuoy },
+    ],
+    restaurante: [
+      { to: '/painel-restaurante', label: 'Painel', Icon: LayoutDashboard },
+      { to: '/suporte', label: 'Suporte', Icon: LifeBuoy },
+    ],
+  };
+  const navItems = perfil === 'cliente' ? navItemsCliente : (navItemsPorPerfil[perfil] || navItemsCliente);
+  const mostrarItensCliente = !logado || perfil === 'cliente';
 
   return (
     <>
@@ -40,7 +66,7 @@ export default function MobileNavBar() {
             <Link
               key={to}
               to={to}
-              className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${ativo(to) ? 'text-primary bg-primary-light' : 'text-text-muted'}`}
+              className={`flex min-h-12 min-w-14 flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 transition-all ${ativo(to) ? 'text-primary bg-primary-light' : 'text-text-muted'}`}
             >
               <Motion.div whileTap={{ scale: 0.85 }}>
                 <IconComponent size={22} />
@@ -50,10 +76,10 @@ export default function MobileNavBar() {
           )
         })}
         {/* Botão carrinho */}
-        <Motion.button
+        {mostrarItensCliente && <Motion.button
           data-cart-target="mobile-cart"
           onClick={() => setCarrinhoAberto(true)}
-          className="flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl text-text-muted border-none bg-transparent cursor-pointer"
+          className="flex min-h-12 min-w-14 flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 text-text-muted border-none bg-transparent cursor-pointer"
           animate={cartPulse ? { y: [0, -3, 0], scale: [1, 1.08, 1] } : { y: 0, scale: 1 }}
           transition={{ duration: 0.3, ease: 'easeOut' }}
           whileTap={{ scale: 0.85 }}
@@ -75,13 +101,13 @@ export default function MobileNavBar() {
             </AnimatePresence>
           </div>
           <span className="text-[0.65rem] font-bold">Pedidos</span>
-        </Motion.button>
+        </Motion.button>}
 
         {/* Perfil / Login */}
-        {logado ? (
+        {mostrarItensCliente && (logado ? (
           <Link
             to="/perfil"
-            className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${ativo('/perfil') ? 'text-primary bg-primary-light' : 'text-text-muted'}`}
+            className={`flex min-h-12 min-w-14 flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 transition-all ${ativo('/perfil') ? 'text-primary bg-primary-light' : 'text-text-muted'}`}
           >
             <Motion.div whileTap={{ scale: 0.85 }}>
               <User size={22} />
@@ -91,14 +117,14 @@ export default function MobileNavBar() {
         ) : (
           <Link
             to="/login"
-            className={`flex flex-col items-center gap-1 px-4 py-1.5 rounded-xl transition-all ${ativo('/login') ? 'text-primary bg-primary-light' : 'text-text-muted'}`}
+            className={`flex min-h-12 min-w-14 flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 transition-all ${ativo('/login') ? 'text-primary bg-primary-light' : 'text-text-muted'}`}
           >
             <Motion.div whileTap={{ scale: 0.85 }}>
               <LogIn size={22} />
             </Motion.div>
             <span className="text-[0.65rem] font-bold">Entrar</span>
           </Link>
-        )}
+        ))}
       </Motion.nav>
 
       <CartDrawer isOpen={carrinhoAberto} onClose={() => setCarrinhoAberto(false)} />

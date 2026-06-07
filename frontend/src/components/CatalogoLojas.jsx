@@ -265,6 +265,7 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [versaoLocalizacao, setVersaoLocalizacao] = useState(0)
+  const [tentativa, setTentativa] = useState(0)
   const [busca, setBusca] = useState('')
   const [categoria, setCategoria] = useState('todas')
   const [ordenacao, setOrdenacao] = useState('recomendados')
@@ -305,7 +306,7 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
         setErro(error.message?.includes('Backend offline') ? 'backend_offline' : 'erro_generico')
       })
       .finally(() => setCarregando(false))
-  }, [tipo, versaoLocalizacao])
+  }, [tipo, versaoLocalizacao, tentativa])
 
   useEffect(() => {
     if (!filtrosMobileAbertos) return undefined
@@ -546,6 +547,13 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
                 {erro === 'backend_offline' ? 'Não foi possível conectar ao serviço' : 'Não foi possível carregar as lojas'}
               </p>
               <p className="mt-2 text-sm text-text-muted">Tente novamente em alguns instantes.</p>
+              <button
+                type="button"
+                onClick={() => setTentativa(valor => valor + 1)}
+                className="mt-5 h-10 rounded-lg bg-primary px-5 text-sm font-bold text-white border-none"
+              >
+                Tentar novamente
+              </button>
             </div>
           ) : lojasFiltradas.length === 0 ? (
             <div className="border-y border-border py-16 text-center">
@@ -590,7 +598,7 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
             <Motion.button
               type="button"
               aria-label="Fechar filtros"
-              className="fixed inset-0 z-50 bg-black/40 lg:hidden"
+              className="fixed inset-0 z-[119] bg-black/40 lg:hidden"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -600,7 +608,7 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
               role="dialog"
               aria-modal="true"
               aria-label="Filtros avançados"
-              className="fixed inset-x-0 bottom-0 z-50 max-h-[88vh] overflow-y-auto rounded-t-xl bg-white p-5 shadow-2xl lg:hidden"
+              className="fixed inset-x-0 bottom-0 z-[120] max-h-[92dvh] overflow-y-auto rounded-t-xl bg-white p-5 pb-0 shadow-2xl lg:hidden"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
@@ -621,13 +629,15 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
                 </button>
               </div>
               <PainelFiltros {...propriedadesPainel} />
-              <button
-                type="button"
-                onClick={() => setFiltrosMobileAbertos(false)}
-                className="mt-6 h-12 w-full rounded-lg bg-primary text-sm font-extrabold text-white"
-              >
-                Ver {lojasFiltradas.length} {lojasFiltradas.length === 1 ? 'resultado' : 'resultados'}
-              </button>
+              <div className="sticky bottom-0 -mx-5 mt-6 border-t border-border bg-white px-5 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3">
+                <button
+                  type="button"
+                  onClick={() => setFiltrosMobileAbertos(false)}
+                  className="h-12 w-full rounded-lg bg-primary text-sm font-extrabold text-white"
+                >
+                  Ver {lojasFiltradas.length} {lojasFiltradas.length === 1 ? 'resultado' : 'resultados'}
+                </button>
+              </div>
             </Motion.div>
           </>
         )}

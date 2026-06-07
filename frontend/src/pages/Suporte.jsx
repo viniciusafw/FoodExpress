@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import Header from '../components/Header'
 import api from '../services/api'
 import { formatarDataBanco } from '../utils/datas'
@@ -21,20 +21,31 @@ const categorias = [
 const statusConfig = {
   aberto:          { label: 'Aberto',          cor: 'text-primary bg-primary-light border-primary/20', Icon: Clock },
   em_atendimento:  { label: 'Em atendimento',  cor: 'text-secondary bg-secondary/8 border-secondary/20',       Icon: MessageCircle },
+  em_analise:      { label: 'Em análise',       cor: 'text-secondary bg-secondary/8 border-secondary/20',       Icon: MessageCircle },
   resolvido:       { label: 'Resolvido',       cor: 'text-accent bg-accent/10 border-accent/20',      Icon: CheckCircle },
   fechado:         { label: 'Fechado',          cor: 'text-text-muted bg-surface-2 border-border',     Icon: CheckCircle },
 }
 
 export default function Suporte() {
-  const [aba, setAba] = useState('tickets')
+  const [searchParams] = useSearchParams()
+  const pedidoIdInicial = searchParams.get('pedido') || ''
+  const categoriaInicial = categorias.some(item => item.id === searchParams.get('categoria'))
+    ? searchParams.get('categoria')
+    : 'outro'
+  const [aba, setAba] = useState(pedidoIdInicial ? 'novo' : 'tickets')
   const [tickets, setTickets] = useState([])
+  const [ticketAberto, setTicketAberto] = useState(null)
 
   useEffect(() => {
     api.tickets.listar()
       .then(setTickets)
       .catch(() => setTickets([]))
   }, [])
-  const [novoTicket, setNovoTicket] = useState({ titulo: '', descricao: '', categoria: 'outro' })
+  const [novoTicket, setNovoTicket] = useState({
+    titulo: pedidoIdInicial ? `Problema com o pedido #${String(pedidoIdInicial).slice(-6)}` : '',
+    descricao: '',
+    categoria: categoriaInicial,
+  })
   const [enviando, setEnviando] = useState(false)
   const [enviado, setEnviado] = useState(false)
 
@@ -46,6 +57,7 @@ export default function Suporte() {
         titulo: novoTicket.titulo,
         descricao: novoTicket.descricao,
         categoria: novoTicket.categoria,
+        pedidoId: pedidoIdInicial || undefined,
       })
       setTickets(prev => [novo, ...prev])
       setEnviado(true)
@@ -123,8 +135,10 @@ export default function Suporte() {
                   {tickets.map((ticket, i) => {
                     const cfg = statusConfig[ticket.status] || statusConfig.aberto
                     return (
-                      <Motion.div key={ticket.id}
-                        className="p-5 hover:bg-surface-2 transition-colors cursor-pointer"
+                      <Motion.button key={ticket.id}
+                        type="button"
+                        onClick={() => setTicketAberto(atual => atual === ticket.id ? null : ticket.id)}
+                        className="block w-full p-5 hover:bg-surface-2 transition-colors cursor-pointer text-left bg-white border-none"
                         initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
                       >
                         <div className="flex justify-between items-start mb-2">
@@ -141,7 +155,15 @@ export default function Suporte() {
                           <span className="capitalize">{categorias.find(c => c.id === ticket.categoria)?.nome ?? ticket.categoria}</span>
                           <span>{formatarDataBanco(ticket.created_at)}</span>
                         </div>
-                      </Motion.div>
+                        {ticketAberto === ticket.id && (
+                          <div className="mt-4 rounded-xl border border-border bg-surface-2 px-4 py-3">
+                            <p className="text-xs font-extrabold uppercase text-text-muted">Resposta do suporte</p>
+                            <p className="mt-1 text-sm font-semibold text-text-secondary">
+                              {ticket.resposta || 'Seu ticket ainda está aguardando resposta.'}
+                            </p>
+                          </div>
+                        )}
+                      </Motion.button>
                     )
                   })}
                 </div>

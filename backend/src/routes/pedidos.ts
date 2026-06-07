@@ -36,6 +36,55 @@ function numeroOuNull(valor: any) {
   return numero
 }
 
+function normalizarTexto(valor: any) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+function lerLista(valor: any) {
+  if (Array.isArray(valor)) return valor
+  if (!valor) return []
+  try {
+    const lista = JSON.parse(valor)
+    return Array.isArray(lista) ? lista : []
+  } catch {
+    return String(valor).split(',').map(item => item.trim()).filter(Boolean)
+  }
+}
+
+function lojaRecebePedidosAgora(restaurante: any) {
+  if (String(restaurante?.status || '').toLowerCase() !== 'ativo') return false
+  if (!restaurante?.horario_abertura || !restaurante?.horario_fechamento) return true
+
+  const partes = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Fortaleza',
+    weekday: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date())
+  const valorParte = (tipo: string) => partes.find(parte => parte.type === tipo)?.value || ''
+  const diaAtual = normalizarTexto(valorParte('weekday'))
+  const diasAbertos = lerLista(restaurante.dias_aberto).map(normalizarTexto)
+  if (diasAbertos.length && !diasAbertos.some((dia: string) => dia.startsWith(diaAtual) || diaAtual.startsWith(dia))) {
+    return false
+  }
+
+  const paraMinutos = (horario: any) => {
+    const [hora, minuto] = String(horario).split(':').map(Number)
+    return hora * 60 + minuto
+  }
+  const minutosAgora = Number(valorParte('hour')) * 60 + Number(valorParte('minute'))
+  const abertura = paraMinutos(restaurante.horario_abertura)
+  const fechamento = paraMinutos(restaurante.horario_fechamento)
+  if (![minutosAgora, abertura, fechamento].every(Number.isFinite)) return true
+  if (fechamento < abertura) return minutosAgora >= abertura || minutosAgora <= fechamento
+  return minutosAgora >= abertura && minutosAgora <= fechamento
+}
+
 function ehOperador(req: AuthRequest) {
   return String(req.userRole || '').toLowerCase() === 'operador'
 }
@@ -89,6 +138,76 @@ function calcularGanhoEntregador(taxaEntrega: number, total: number, distanciaKm
     return Number(porDistancia.toFixed(2))
   }
   return Number(Math.max(5, total * 0.12).toFixed(2))
+}
+
+async function expirarOfertas(tx: any) {
+  await tx.execute({
+    sql: `UPDATE ofertas_entrega
+          SET status = 'expirada', respondida_em = CURRENT_TIMESTAMP
+          WHERE status = 'ofertada' AND expira_em <= CURRENT_TIMESTAMP`,
+    args: []
+  })
+  await tx.execute({
+    sql: `UPDATE pedidos
+          SET oferta_entregador_id = NULL,
+              oferta_enviada_em = NULL,
+              oferta_expira_em = NULL
+          WHERE oferta_expira_em IS NOT NULL
+            AND oferta_expira_em <= CURRENT_TIMESTAMP
+            AND (entregador_id IS NULL OR entregador_id = '')`,
+    args: []
+  })
+}
+
+async function buscarOfertaCompleta(tx: any, pedidoId: string, entregadorId: string) {
+  const result = await tx.execute({
+    sql: `SELECT p.*,
+                 r.nome AS restaurante_nome,
+                 r.endereco AS restaurante_endereco,
+                 r.latitude AS restaurante_latitude,
+                 r.longitude AS restaurante_longitude,
+                 e.latitude AS entregador_latitude,
+                 e.longitude AS entregador_longitude,
+                 c.nome AS cliente_nome,
+                 c.telefone AS cliente_telefone,
+                 UNIX_TIMESTAMP(p.oferta_expira_em) * 1000 AS oferta_expira_em_epoch,
+                 UNIX_TIMESTAMP(CURRENT_TIMESTAMP) * 1000 AS servidor_agora_epoch
+          FROM pedidos p
+          LEFT JOIN restaurantes r ON r.id = p.restaurante_id
+          LEFT JOIN entregadores e ON e.id = ?
+          LEFT JOIN clientes c ON c.id = p.cliente_id
+          WHERE p.id = ?
+            AND p.oferta_entregador_id = ?
+            AND p.oferta_expira_em > CURRENT_TIMESTAMP
+          LIMIT 1`,
+    args: [entregadorId, pedidoId, entregadorId]
+  })
+  const pedido = result.rows[0] as any
+  if (!pedido) return null
+  const ateRestaurante = calcularDistancia(
+    Number(pedido.entregador_latitude),
+    Number(pedido.entregador_longitude),
+    Number(pedido.restaurante_latitude),
+    Number(pedido.restaurante_longitude)
+  )
+  const ateCliente = calcularDistancia(
+    Number(pedido.restaurante_latitude),
+    Number(pedido.restaurante_longitude),
+    Number(pedido.latitude_entrega),
+    Number(pedido.longitude_entrega)
+  )
+  const distanciaCalculada = [ateRestaurante, ateCliente].filter(Number.isFinite).reduce((total, valor) => total + valor, 0)
+  const distancia = distanciaCalculada > 0 ? distanciaCalculada : Number(pedido.distancia_km)
+  const ganho = Number(pedido.ganho_entregador || 0) ||
+    calcularGanhoEntregador(Number(pedido.taxa_entrega || 0), Number(pedido.total || 0), distancia)
+  return {
+    ...pedido,
+    ganho_entregador: ganho,
+    distancia_oferta_km: Number.isFinite(distancia) ? Number(distancia.toFixed(2)) : null,
+    tempo_oferta_minutos: Number.isFinite(distancia) ? Math.max(8, Math.ceil(distancia * 3)) : null,
+    oferta_expira_em_epoch: Number(pedido.oferta_expira_em_epoch || 0),
+    servidor_agora_epoch: Number(pedido.servidor_agora_epoch || 0),
+  }
 }
 
 async function calcularDescontoDoCupom(codigoInformado: any, subtotal: number, taxaEntrega: number) {
@@ -171,11 +290,304 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 })
 
 
-// GET /api/pedidos/disponiveis — pedidos sem entregador para motoboy aceitar
+// POST /api/pedidos/oferta/solicitar — reserva uma corrida para um único entregador
+router.post('/oferta/solicitar', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (String(req.userRole || '').toLowerCase() !== 'entregador') {
+      return res.status(403).json({ erro: 'Apenas entregadores podem receber ofertas' }) as any
+    }
+    const vinculado = await entregadorDoUsuario(req)
+    if (!vinculado?.id) return res.status(404).json({ erro: 'Entregador não encontrado' }) as any
+
+    await expirarOfertas(db)
+    const oferta = await db.transaction(async (tx: any) => {
+      const entregadorResult = await tx.execute({
+        sql: `SELECT *,
+                     ultima_atualizacao >= DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 2 MINUTE) AS localizacao_recente
+              FROM entregadores
+              WHERE id = ?
+              FOR UPDATE`,
+        args: [vinculado.id]
+      })
+      const entregador = entregadorResult.rows[0] as any
+      if (!entregador || entregador.status !== 'disponivel') return null
+      if (!entregador.localizacao_recente ||
+          !Number.isFinite(Number(entregador.latitude)) ||
+          !Number.isFinite(Number(entregador.longitude)) ||
+          (Number(entregador.latitude) === 0 && Number(entregador.longitude) === 0)) {
+        return null
+      }
+
+      const entregaAtiva = await tx.execute({
+        sql: `SELECT id FROM pedidos
+              WHERE entregador_id = ? AND status = 'entregando'
+              LIMIT 1`,
+        args: [entregador.id]
+      })
+      if (entregaAtiva.rows.length) return null
+
+      const ofertaAtual = await tx.execute({
+        sql: `SELECT id FROM pedidos
+              WHERE oferta_entregador_id = ?
+                AND oferta_expira_em > CURRENT_TIMESTAMP
+                AND (entregador_id IS NULL OR entregador_id = '')
+                AND status = 'pronto'
+              LIMIT 1 FOR UPDATE`,
+        args: [entregador.id]
+      })
+      if (ofertaAtual.rows.length) {
+        return buscarOfertaCompleta(tx, String((ofertaAtual.rows[0] as any).id), String(entregador.id))
+      }
+
+      const candidatos = await tx.execute({
+        sql: `SELECT p.id, p.created_at,
+                     r.latitude AS restaurante_latitude,
+                     r.longitude AS restaurante_longitude
+              FROM pedidos p
+              LEFT JOIN restaurantes r ON r.id = p.restaurante_id
+              WHERE (p.entregador_id IS NULL OR p.entregador_id = '')
+                AND p.status = 'pronto'
+                AND (p.oferta_entregador_id IS NULL OR p.oferta_expira_em <= CURRENT_TIMESTAMP)
+                AND NOT EXISTS (
+                  SELECT 1 FROM ofertas_entrega oe
+                  WHERE oe.pedido_id = p.id
+                    AND oe.entregador_id = ?
+                    AND (
+                      oe.status IN ('ofertada', 'aceita')
+                      OR COALESCE(oe.respondida_em, oe.created_at) > DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 5 MINUTE)
+                    )
+                )
+              ORDER BY p.created_at ASC
+              LIMIT 30`,
+        args: [entregador.id]
+      })
+
+      const latitude = Number(entregador.latitude)
+      const longitude = Number(entregador.longitude)
+      const ordenados = (candidatos.rows as any[])
+        .map(pedido => ({
+          ...pedido,
+          distanciaOferta: calcularDistancia(
+            latitude,
+            longitude,
+            Number(pedido.restaurante_latitude),
+            Number(pedido.restaurante_longitude)
+          )
+        }))
+        .sort((a, b) => {
+          const distanciaA = Number.isFinite(a.distanciaOferta) ? a.distanciaOferta : Number.POSITIVE_INFINITY
+          const distanciaB = Number.isFinite(b.distanciaOferta) ? b.distanciaOferta : Number.POSITIVE_INFINITY
+          if (distanciaA !== distanciaB) return distanciaA - distanciaB
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        })
+
+      for (const candidato of ordenados) {
+        const bloqueado = await tx.execute({
+          sql: `SELECT id FROM pedidos
+                WHERE id = ?
+                  AND (entregador_id IS NULL OR entregador_id = '')
+                  AND status = 'pronto'
+                  AND (oferta_entregador_id IS NULL OR oferta_expira_em <= CURRENT_TIMESTAMP)
+                FOR UPDATE`,
+          args: [candidato.id]
+        })
+        if (!bloqueado.rows.length) continue
+
+        const ofertaId = `ofe_${crypto.randomUUID().slice(0, 16)}`
+        await tx.execute({
+          sql: `INSERT INTO ofertas_entrega
+                  (id, pedido_id, entregador_id, status, expira_em)
+                VALUES (?, ?, ?, 'ofertada', DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 30 SECOND))
+                ON DUPLICATE KEY UPDATE
+                  id = VALUES(id),
+                  status = 'ofertada',
+                  expira_em = VALUES(expira_em),
+                  respondida_em = NULL,
+                  created_at = CURRENT_TIMESTAMP`,
+          args: [ofertaId, candidato.id, entregador.id]
+        })
+        await tx.execute({
+          sql: `UPDATE pedidos
+                SET oferta_entregador_id = ?,
+                    oferta_enviada_em = CURRENT_TIMESTAMP,
+                    oferta_expira_em = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 30 SECOND)
+                WHERE id = ?`,
+          args: [entregador.id, candidato.id]
+        })
+        return buscarOfertaCompleta(tx, String(candidato.id), String(entregador.id))
+      }
+
+      return null
+    })
+
+    res.json({ oferta })
+  } catch (error) {
+    console.error('Erro ao despachar oferta:', error)
+    res.status(500).json({ erro: 'Erro ao buscar nova oferta' })
+  }
+})
+
+// POST /api/pedidos/oferta/:id/aceitar
+router.post('/oferta/:id/aceitar', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (String(req.userRole || '').toLowerCase() !== 'entregador') {
+      return res.status(403).json({ erro: 'Apenas entregadores podem aceitar ofertas' }) as any
+    }
+    const vinculado = await entregadorDoUsuario(req)
+    if (!vinculado?.id) return res.status(404).json({ erro: 'Entregador não encontrado' }) as any
+
+    await expirarOfertas(db)
+    const pedidoAceito = await db.transaction(async (tx: any) => {
+      const entregadorResult = await tx.execute({
+        sql: 'SELECT * FROM entregadores WHERE id = ? FOR UPDATE',
+        args: [vinculado.id]
+      })
+      const entregador = entregadorResult.rows[0] as any
+      if (!entregador || entregador.status !== 'disponivel') {
+        const erro: any = new Error('Entregador não está disponível')
+        erro.status = 409
+        throw erro
+      }
+
+      const pedidoResult = await tx.execute({
+        sql: `SELECT p.*, r.latitude AS restaurante_latitude, r.longitude AS restaurante_longitude
+              FROM pedidos p
+              LEFT JOIN restaurantes r ON r.id = p.restaurante_id
+              WHERE p.id = ?
+                AND p.oferta_entregador_id = ?
+                AND p.oferta_expira_em > CURRENT_TIMESTAMP
+                AND p.status = 'pronto'
+              FOR UPDATE`,
+        args: [req.params.id, entregador.id]
+      })
+      const pedido = pedidoResult.rows[0] as any
+      if (!pedido ||
+          String(pedido.oferta_entregador_id || '') !== String(entregador.id) ||
+          !pedido.oferta_expira_em ||
+          pedido.entregador_id) {
+        const erro: any = new Error('A oferta expirou ou já foi enviada para outro entregador')
+        erro.status = 409
+        throw erro
+      }
+
+      const distancia = Number(pedido.distancia_km)
+      const tempoEstimado = Number(pedido.tempo_entrega_estimado || 0) ||
+        (Number.isFinite(distancia) ? Math.max(8, Math.ceil(distancia * 3)) : null)
+      const ganho = Number(pedido.ganho_entregador || 0) ||
+        calcularGanhoEntregador(Number(pedido.taxa_entrega || 0), Number(pedido.total || 0), distancia)
+      await tx.execute({
+        sql: `UPDATE pedidos
+              SET entregador_id = ?,
+                  status = 'entregando',
+                  ganho_entregador = ?,
+                  tempo_entrega_estimado = ?,
+                  oferta_entregador_id = NULL,
+                  oferta_enviada_em = NULL,
+                  oferta_expira_em = NULL
+              WHERE id = ?`,
+        args: [entregador.id, ganho, tempoEstimado, pedido.id]
+      })
+      await tx.execute({
+        sql: `UPDATE ofertas_entrega
+              SET status = 'aceita', respondida_em = CURRENT_TIMESTAMP
+              WHERE pedido_id = ? AND entregador_id = ? AND status = 'ofertada'`,
+        args: [pedido.id, entregador.id]
+      })
+      await tx.execute({
+        sql: "UPDATE entregadores SET status = 'ocupado', ultima_atualizacao = CURRENT_TIMESTAMP WHERE id = ?",
+        args: [entregador.id]
+      })
+
+      const rotaExistente = await tx.execute({
+        sql: 'SELECT id FROM rotas WHERE pedido_id = ? LIMIT 1',
+        args: [pedido.id]
+      })
+      if (!rotaExistente.rows.length) {
+        await tx.execute({
+          sql: `INSERT INTO rotas
+                  (id, pedido_id, entregador_id, origem_lat, origem_lng, destino_lat, destino_lng, distancia_km)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          args: [
+            `rota_${crypto.randomUUID().slice(0, 12)}`,
+            pedido.id,
+            entregador.id,
+            Number(pedido.restaurante_latitude || 0),
+            Number(pedido.restaurante_longitude || 0),
+            Number(pedido.latitude_entrega || 0),
+            Number(pedido.longitude_entrega || 0),
+            Number.isFinite(distancia) ? distancia : null,
+          ]
+        })
+      }
+      return pedido.id
+    })
+
+    const atualizado = await db.execute({
+      sql: `SELECT p.*,
+                   r.nome AS restaurante_nome,
+                   r.endereco AS restaurante_endereco,
+                   r.latitude AS restaurante_latitude,
+                   r.longitude AS restaurante_longitude,
+                   c.nome AS cliente_nome,
+                   c.telefone AS cliente_telefone
+            FROM pedidos p
+            LEFT JOIN restaurantes r ON r.id = p.restaurante_id
+            LEFT JOIN clientes c ON c.id = p.cliente_id
+            WHERE p.id = ?`,
+      args: [pedidoAceito]
+    })
+    res.json({ pedido: atualizado.rows[0] })
+  } catch (error: any) {
+    console.error('Erro ao aceitar oferta:', error)
+    res.status(error.status || 500).json({ erro: error.message || 'Erro ao aceitar oferta' })
+  }
+})
+
+// POST /api/pedidos/oferta/:id/recusar
+router.post('/oferta/:id/recusar', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (String(req.userRole || '').toLowerCase() !== 'entregador') {
+      return res.status(403).json({ erro: 'Apenas entregadores podem recusar ofertas' }) as any
+    }
+    const vinculado = await entregadorDoUsuario(req)
+    if (!vinculado?.id) return res.status(404).json({ erro: 'Entregador não encontrado' }) as any
+
+    await db.transaction(async (tx: any) => {
+      const pedidoResult = await tx.execute({
+        sql: 'SELECT * FROM pedidos WHERE id = ? FOR UPDATE',
+        args: [req.params.id]
+      })
+      const pedido = pedidoResult.rows[0] as any
+      if (!pedido || String(pedido.oferta_entregador_id || '') !== String(vinculado.id)) return
+
+      await tx.execute({
+        sql: `UPDATE ofertas_entrega
+              SET status = 'recusada', respondida_em = CURRENT_TIMESTAMP
+              WHERE pedido_id = ? AND entregador_id = ? AND status = 'ofertada'`,
+        args: [pedido.id, vinculado.id]
+      })
+      await tx.execute({
+        sql: `UPDATE pedidos
+              SET oferta_entregador_id = NULL,
+                  oferta_enviada_em = NULL,
+                  oferta_expira_em = NULL
+              WHERE id = ? AND oferta_entregador_id = ?`,
+        args: [pedido.id, vinculado.id]
+      })
+    })
+
+    res.json({ recusada: true })
+  } catch (error) {
+    console.error('Erro ao recusar oferta:', error)
+    res.status(500).json({ erro: 'Erro ao recusar oferta' })
+  }
+})
+
+// Rota legada mantida apenas para operadores; entregadores recebem uma oferta exclusiva.
 router.get('/disponiveis', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
-    if (String(req.userRole || '').toLowerCase() !== 'entregador' && !ehOperador(req)) {
-      return res.status(403).json({ erro: 'Apenas entregadores podem ver pedidos disponíveis' }) as any
+    if (!ehOperador(req)) {
+      return res.status(403).json({ erro: 'Pedidos são distribuídos individualmente pelo despacho automático' }) as any
     }
     const result = await db.execute({
       sql: `SELECT p.*, r.nome as restaurante_nome, r.endereco as restaurante_endereco,
@@ -244,24 +656,35 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     const clienteFinal = role === 'cliente' ? req.userId : clienteId
     if (role !== 'cliente' && !ehOperador(req)) return res.status(403).json({ erro: 'Apenas clientes podem criar pedidos' }) as any
     if (!clienteFinal || !restauranteId || !itens?.length) return res.status(400).json({ erro: 'Dados obrigatórios faltando' }) as any
+    if (!String(endereco_entrega || '').trim()) {
+      return res.status(400).json({ erro: 'Endereço de entrega é obrigatório' }) as any
+    }
 
     const restaurante = await db.execute({ sql: 'SELECT * FROM restaurantes WHERE id = ?', args: [restauranteId] })
     if (!restaurante.rows.length) return res.status(404).json({ erro: 'Restaurante não encontrado' }) as any
+    if (!lojaRecebePedidosAgora(restaurante.rows[0])) {
+      return res.status(409).json({ erro: 'Esta loja está fechada e não pode receber pedidos agora.' }) as any
+    }
 
     let subtotal = 0
     const restaurantesDosItens = new Set<string>()
     for (const item of itens) {
       const cardapioId = item.cardapioId || item.produtoId || item.cardapio_id || item.id
-      const cardapioItem = await db.execute({ sql: 'SELECT preco, restaurante_id FROM cardapio WHERE id = ?', args: [cardapioId] })
-      if (cardapioItem.rows.length) {
-        const row = cardapioItem.rows[0] as any
-        restaurantesDosItens.add(String(row.restaurante_id))
-        subtotal += Number(row.preco) * (Number(item.quantidade) || 1)
-      } else {
-        const itemRestaurante = item.restauranteId || item.restaurante_id || item.loja?.id
-        if (itemRestaurante) restaurantesDosItens.add(String(itemRestaurante))
-        subtotal += Number(item.preco || item.price || 0) * (Number(item.quantidade) || 1)
+      if (!cardapioId) return res.status(400).json({ erro: 'Há um item inválido no carrinho.' }) as any
+      const cardapioItem = await db.execute({
+        sql: 'SELECT preco, restaurante_id FROM cardapio WHERE id = ? AND COALESCE(disponivel, 1) = 1',
+        args: [cardapioId]
+      })
+      if (!cardapioItem.rows.length) {
+        return res.status(409).json({ erro: 'Um item do carrinho não está mais disponível. Atualize o carrinho e tente novamente.' }) as any
       }
+      const row = cardapioItem.rows[0] as any
+      const quantidade = Number(item.quantidade)
+      if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > 99) {
+        return res.status(400).json({ erro: 'Quantidade inválida em um item do pedido.' }) as any
+      }
+      restaurantesDosItens.add(String(row.restaurante_id))
+      subtotal += Number(row.preco) * quantidade
     }
     if (restaurantesDosItens.size > 1 || (restaurantesDosItens.size === 1 && !restaurantesDosItens.has(String(restauranteId)))) {
       return res.status(400).json({ erro: 'O pedido só pode conter itens de um restaurante.' }) as any
@@ -417,12 +840,41 @@ router.delete('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
   }
 })
 
+// POST /api/pedidos/:id/coletar — registra a retirada sem perder o status de entrega ativa
+router.post('/:id/coletar', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    if (String(req.userRole || '').toLowerCase() !== 'entregador') {
+      return res.status(403).json({ erro: 'Apenas o entregador pode confirmar a retirada' }) as any
+    }
+    const entregador = await entregadorDoUsuario(req)
+    if (!entregador?.id) return res.status(404).json({ erro: 'Entregador não encontrado' }) as any
+
+    const atualizado = await db.execute({
+      sql: `UPDATE pedidos
+            SET coletado_em = COALESCE(coletado_em, CURRENT_TIMESTAMP),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+              AND entregador_id = ?
+              AND status = 'entregando'`,
+      args: [req.params.id, entregador.id]
+    })
+    if (!atualizado.rowsAffected) {
+      return res.status(409).json({ erro: 'Este pedido não está disponível para retirada' }) as any
+    }
+    res.json({ coletado: true })
+  } catch (error) {
+    console.error('Erro ao confirmar retirada:', error)
+    res.status(500).json({ erro: 'Erro ao confirmar retirada' })
+  }
+})
+
 // GET /api/pedidos/:id/rastrear
 router.get('/:id/rastrear', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const result = await db.execute({
       sql: `SELECT p.*,
-              r.nome as restaurante_nome, r.latitude as rest_lat, r.longitude as rest_lng,
+              r.nome as restaurante_nome, r.endereco as restaurante_endereco,
+              r.latitude as rest_lat, r.longitude as rest_lng,
               e.nome as entregador_nome, e.telefone as entregador_telefone, e.latitude as entregador_lat, e.longitude as entregador_lng,
               c.nome as cliente_nome, c.telefone as cliente_telefone
             FROM pedidos p
@@ -446,20 +898,48 @@ router.get('/:id/rastrear', requireAuth, async (req: AuthRequest, res: Response)
       }) as any
     }
 
-    const dist = calcularDistancia(Number(p.entregador_lat), Number(p.entregador_lng), Number(p.latitude_entrega), Number(p.longitude_entrega))
+    const coletado = Boolean(p.coletado_em)
+    const destinoAtual = coletado
+      ? {
+          tipo: 'cliente',
+          endereco: p.endereco_entrega,
+          lat: numeroOuNull(p.latitude_entrega),
+          lng: numeroOuNull(p.longitude_entrega),
+        }
+      : {
+          tipo: 'restaurante',
+          endereco: p.restaurante_endereco || p.restaurante_nome,
+          lat: numeroOuNull(p.rest_lat),
+          lng: numeroOuNull(p.rest_lng),
+        }
+    const dist = calcularDistancia(
+      Number(p.entregador_lat),
+      Number(p.entregador_lng),
+      Number(destinoAtual.lat),
+      Number(destinoAtual.lng)
+    )
     const distanciaValida = Number.isFinite(dist)
+    const distanciaTotal = coletado && Number.isFinite(Number(p.distancia_km))
+      ? Number(p.distancia_km)
+      : null
+    const progresso = coletado && distanciaValida && distanciaTotal && distanciaTotal > 0
+      ? Math.max(0, Math.min(100, Math.round(((distanciaTotal - dist) / distanciaTotal) * 100)))
+      : 0
     res.json({
       pedido_id: p.id,
       status: p.status,
+      etapa: coletado ? 'entregando' : 'coletando',
       avaliacao_restaurante: p.avaliacao_restaurante,
       avaliacao_entregador: p.avaliacao_entregador,
       restaurante: { id: p.restaurante_id, nome: p.restaurante_nome, localizacao: { lat: numeroOuNull(p.rest_lat), lng: numeroOuNull(p.rest_lng) } },
       entregador: { id: p.entregador_id, nome: p.entregador_nome, telefone: p.entregador_telefone, localizacao_atual: { lat: numeroOuNull(p.entregador_lat), lng: numeroOuNull(p.entregador_lng) } },
       destino: { endereco: p.endereco_entrega, localizacao: { lat: numeroOuNull(p.latitude_entrega), lng: numeroOuNull(p.longitude_entrega) } },
       rota: {
+        destino_atual: destinoAtual,
         distancia_atual_km: distanciaValida ? Math.round(dist * 100) / 100 : null,
         tempo_estimado_minutos: distanciaValida ? Math.ceil((dist / 25) * 60) : null,
-        progresso_percentual: distanciaValida && p.distancia_km ? Math.round(((Number(p.distancia_km) - dist) / Number(p.distancia_km)) * 100) : 0
+        distancia_total_km: distanciaTotal,
+        progresso_percentual: progresso
       },
       timeline: { confirmado_em: p.confirmado_em, pronto_em: p.pronto_em, entregue_em: p.entregue_em }
     })
@@ -472,19 +952,17 @@ router.get('/:id/rastrear', requireAuth, async (req: AuthRequest, res: Response)
 router.post('/:id/atribuir-entregador', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
     const { entregadorId } = req.body
-    if (String(req.userRole || '').toLowerCase() !== 'entregador' && !ehOperador(req)) {
-      return res.status(403).json({ erro: 'Apenas entregadores podem aceitar pedidos' }) as any
-    }
-    const ent = await entregadorDoUsuario(req)
-    if (!ehOperador(req) && String(entregadorId) !== String(ent?.id || '')) {
-      return res.status(403).json({ erro: 'Você só pode aceitar pedidos para seu próprio entregador' }) as any
-    }
+    if (!ehOperador(req)) return res.status(403).json({ erro: 'Use a oferta exclusiva para aceitar entregas' }) as any
     const entregador = await db.execute({ sql: "SELECT * FROM entregadores WHERE id = ? AND status = 'disponivel'", args: [entregadorId] })
     if (!entregador.rows.length) return res.status(400).json({ erro: 'Entregador não disponível' }) as any
 
     const atribuido = await db.execute({
       sql: `UPDATE pedidos
-            SET entregador_id = ?, status = 'entregando'
+            SET entregador_id = ?,
+                status = 'entregando',
+                oferta_entregador_id = NULL,
+                oferta_enviada_em = NULL,
+                oferta_expira_em = NULL
             WHERE id = ?
               AND (entregador_id IS NULL OR entregador_id = '')
               AND status IN ('pendente', 'preparando', 'pronto')`,
@@ -495,6 +973,12 @@ router.post('/:id/atribuir-entregador', requireAuth, async (req: AuthRequest, re
     }
 
     await db.execute({ sql: "UPDATE entregadores SET status = 'ocupado' WHERE id = ?", args: [entregadorId] })
+    await db.execute({
+      sql: `UPDATE ofertas_entrega
+            SET status = 'aceita', respondida_em = CURRENT_TIMESTAMP
+            WHERE pedido_id = ? AND entregador_id = ? AND status = 'ofertada'`,
+      args: [req.params.id, entregadorId]
+    })
 
     const pedido = await db.execute({ sql: 'SELECT * FROM pedidos WHERE id = ?', args: [req.params.id] })
     const rest = await db.execute({ sql: 'SELECT latitude, longitude FROM restaurantes WHERE id = ?', args: [(pedido.rows[0] as any).restaurante_id] })
@@ -536,37 +1020,9 @@ router.post('/:id/atribuir-entregador-automatico', requireAuth, async (req: Auth
     }
     if (p.entregador_id) return res.status(400).json({ erro: 'Pedido já tem entregador atribuído' }) as any
 
-    const disponiveis = await db.execute({
-      sql: "SELECT * FROM entregadores WHERE status = 'disponivel' ORDER BY ultima_atualizacao DESC LIMIT 20",
-      args: []
-    })
-    if (!disponiveis.rows.length) return res.status(503).json({ erro: 'Nenhum entregador disponível no momento' }) as any
-
-    function haversine(lat1: number, lng1: number, lat2: number, lng2: number) {
-      const R = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLng = (lng2 - lng1) * Math.PI / 180
-      const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)**2
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-    }
-
-    const comDistancia = (disponiveis.rows as any[]).map(e => ({
-      ...e, distancia: haversine(p.rest_lat, p.rest_lng, e.latitude, e.longitude)
-    })).sort((a, b) => a.distancia - b.distancia)
-
-    const escolhido = comDistancia[0]
-    const tempo_estimado = Math.ceil(escolhido.distancia * 3)
-
-    await db.execute({
-      sql: "UPDATE pedidos SET entregador_id = ?, status = 'entregando', tempo_entrega_estimado = ?, distancia_km = ? WHERE id = ?",
-      args: [escolhido.id, tempo_estimado, escolhido.distancia, req.params.id]
-    })
-    await db.execute({ sql: "UPDATE entregadores SET status = 'ocupado' WHERE id = ?", args: [escolhido.id] })
-
     res.json({
-      mensagem: 'Entregador atribuído automaticamente',
-      entregador_id: escolhido.id,
-      entregador_nome: escolhido.nome,
-      distancia_km: escolhido.distancia.toFixed(2),
-      tempo_estimado_minutos: tempo_estimado
+      mensagem: 'Pedido enviado ao despacho automático. Um entregador receberá a oferta por vez.',
+      aguardando_entregador: true
     })
   } catch (error) {
     console.error(error)

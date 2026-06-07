@@ -39,7 +39,7 @@ const itemVariants = {
 }
 
 export default function CadastroEntregador() {
-  const [passo, setPasso] = useState(1) // 1 = dados, 2 = veiculo, 3 = sucesso
+  const [passo, setPasso] = useState(1) // 1 = dados, 2 = acesso, 3 = veículo, 4 = sucesso
   const [dados, setDados] = useState({
     nome: '', email: '', telefone: '',
     senha: '', confirmarSenha: '', veiculo: 'moto', placa: '', cnh: '',
@@ -64,8 +64,18 @@ export default function CadastroEntregador() {
 
   const handlePasso1 = (e) => {
     e.preventDefault()
-    if (!dados.nome.trim() || !dados.telefone.trim() || !dados.email.trim() || !dados.senha.trim()) {
-      setErro('Preencha nome, telefone, e-mail e senha para continuar.')
+    if (!dados.nome.trim() || !dados.telefone.trim()) {
+      setErro('Preencha nome e telefone para continuar.')
+      return
+    }
+    setErro('')
+    setPasso(2)
+  }
+
+  const handlePasso2 = (e) => {
+    e.preventDefault()
+    if (!dados.email.trim() || !dados.senha.trim()) {
+      setErro('Preencha e-mail e senha para continuar.')
       return
     }
     if (!senhaForteValida(dados.senha, dados.confirmarSenha)) {
@@ -73,7 +83,7 @@ export default function CadastroEntregador() {
       return
     }
     setErro('')
-    setPasso(2)
+    setPasso(3)
   }
 
   const handleCadastrar = async (e) => {
@@ -95,7 +105,7 @@ export default function CadastroEntregador() {
         senha: dados.senha,
         cadastro: true,
       })
-      setPasso(3)
+      setPasso(4)
     } catch (err) {
       console.error(err)
       setErro(err?.message || 'Não foi possível criar sua conta. Tente novamente.')
@@ -159,23 +169,25 @@ export default function CadastroEntregador() {
             <img src={logoSrc} alt="FoodExpress" className="h-11 w-auto" />
           </div>
 
-          <button onClick={() => passo > 1 ? setPasso(p => p - 1) : navigate('/login?entregador=true')}
-            className="flex items-center gap-1.5 text-text-muted text-sm font-bold bg-transparent border-none cursor-pointer mb-6 hover:text-text-primary transition-colors">
-            <ArrowLeft size={15} /> {passo > 1 ? 'Voltar' : 'Voltar para login'}
-          </button>
+          {passo < 4 && (
+            <button onClick={() => passo > 1 ? setPasso(p => p - 1) : navigate('/login?entregador=true')}
+              className="flex items-center gap-1.5 text-text-muted text-sm font-bold bg-transparent border-none cursor-pointer mb-6 hover:text-text-primary transition-colors">
+              <ArrowLeft size={15} /> {passo > 1 ? 'Voltar' : 'Voltar para login'}
+            </button>
+          )}
 
           {/* Progresso */}
-          {passo < 3 && (
+          {passo < 4 && (
             <div className="flex items-center gap-2 mb-6">
-              {[1, 2].map(n => (
+              {[1, 2, 3].map(n => (
                 <div key={n} className="flex items-center gap-2 flex-1">
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 transition-all ${n <= passo ? 'bg-accent text-white' : 'bg-surface-2 border border-border text-text-muted'}`}>
                     {n < passo ? <Check size={13} /> : n}
                   </div>
                   <span className={`text-xs font-bold hidden sm:block ${n <= passo ? 'text-accent' : 'text-text-muted'}`}>
-                    {n === 1 ? 'Dados pessoais' : 'Veículo'}
+                    {n === 1 ? 'Dados' : n === 2 ? 'Acesso' : 'Veículo'}
                   </span>
-                  {n < 2 && <div className={`flex-1 h-0.5 rounded-full ${passo > n ? 'bg-accent' : 'bg-border'}`} />}
+                  {n < 3 && <div className={`flex-1 h-0.5 rounded-full ${passo > n ? 'bg-accent' : 'bg-border'}`} />}
                 </div>
               ))}
             </div>
@@ -186,7 +198,7 @@ export default function CadastroEntregador() {
             <form onSubmit={handlePasso1} className="flex flex-col gap-4">
               <div>
                 <h2 className="font-display text-2xl font-extrabold text-text-primary mb-1 tracking-tight">Seus dados</h2>
-                <p className="text-sm text-text-muted font-semibold">Rápido e fácil, leva menos de 2 minutos</p>
+                <p className="text-sm text-text-muted font-semibold">Comece pelas informações básicas</p>
               </div>
 
               <Motion.div className="flex flex-col gap-1.5" variants={itemVariants} initial="hidden" animate="show">
@@ -207,7 +219,29 @@ export default function CadastroEntregador() {
                 </div>
               </Motion.div>
 
-              <Motion.div className="flex flex-col gap-1.5" variants={itemVariants} initial="hidden" animate="show" transition={{ delay: 0.16 }}>
+              {erro && (
+                <div className="flex items-center gap-2 text-red-500 text-xs font-semibold bg-red-50 border border-red-200 rounded-xl px-3 py-2.5">
+                  <AlertCircle size={14} /> {erro}
+                </div>
+              )}
+
+              <Motion.button type="submit"
+                className="w-full py-4 bg-accent text-white border-none rounded-xl font-display font-bold text-base cursor-pointer flex items-center justify-center gap-2"
+                whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                Continuar <ChevronRight size={17} />
+              </Motion.button>
+            </form>
+          )}
+
+          {/* Passo 2 — Acesso */}
+          {passo === 2 && (
+            <form onSubmit={handlePasso2} className="flex flex-col gap-4">
+              <div>
+                <h2 className="font-display text-2xl font-extrabold text-text-primary mb-1 tracking-tight">Acesso</h2>
+                <p className="text-sm text-text-muted font-semibold">Crie o login para entrar no painel</p>
+              </div>
+
+              <Motion.div className="flex flex-col gap-1.5" variants={itemVariants} initial="hidden" animate="show">
                 <label className={labelClass}>E-mail *</label>
                 <div className="relative">
                   <Mail size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
@@ -216,7 +250,7 @@ export default function CadastroEntregador() {
                 </div>
               </Motion.div>
 
-              <Motion.div variants={itemVariants} initial="hidden" animate="show" transition={{ delay: 0.2 }}>
+              <Motion.div variants={itemVariants} initial="hidden" animate="show" transition={{ delay: 0.08 }}>
                 <CampoSenhaForte
                   senha={dados.senha}
                   confirmarSenha={dados.confirmarSenha}
@@ -241,8 +275,8 @@ export default function CadastroEntregador() {
             </form>
           )}
 
-          {/* Passo 2 — Veículo */}
-          {passo === 2 && (
+          {/* Passo 3 — Veículo */}
+          {passo === 3 && (
             <form onSubmit={handleCadastrar} className="flex flex-col gap-4">
               <div>
                 <h2 className="font-display text-2xl font-extrabold text-text-primary mb-1 tracking-tight">Seu veículo</h2>
@@ -305,8 +339,8 @@ export default function CadastroEntregador() {
             </form>
           )}
 
-          {/* Passo 3 — Sucesso */}
-          {passo === 3 && (
+          {/* Passo 4 — Sucesso */}
+          {passo === 4 && (
             <Motion.div
               className="flex flex-col items-center text-center py-6 gap-5"
               initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
@@ -329,7 +363,7 @@ export default function CadastroEntregador() {
             </Motion.div>
           )}
 
-          {passo < 3 && (
+          {passo < 4 && (
             <p className="text-center text-xs text-text-muted font-semibold mt-5">
               Já tem conta?{' '}
               <button onClick={() => navigate('/login?entregador=true')} className="text-accent font-bold bg-transparent border-none cursor-pointer hover:underline">

@@ -2,6 +2,7 @@
 import { readFileSync } from 'fs'
 import { join } from 'path'
 import { db } from './db'
+import { hashSenha, verificarSenha } from './password'
 
 let schemaPromise: Promise<void> | null = null
 
@@ -149,6 +150,39 @@ async function aplicarSchemaMysql() {
   }
 }
 
+async function garantirAdministradorPrincipal() {
+  const email = normalizarEmail(process.env.ADMIN_EMAIL)
+  const senha = String(process.env.ADMIN_PASSWORD || '')
+  if (!email || !senha) return
+
+  const nome = String(process.env.ADMIN_NAME || 'Administrador FoodExpress').trim()
+  const existente = await db.execute({
+    sql: 'SELECT id, senha_hash FROM operadores WHERE lower(email) = ? LIMIT 1',
+    args: [email],
+  })
+
+  if (existente.rows.length) {
+    const operador = existente.rows[0] as any
+    const senhaHash = verificarSenha(senha, operador.senha_hash) ? operador.senha_hash : hashSenha(senha)
+    await db.execute({
+      sql: `UPDATE operadores
+            SET nome = ?, senha_hash = ?, status = 'ativo'
+            WHERE id = ?`,
+      args: [nome, senhaHash, operador.id],
+    })
+    return
+  }
+
+  const id = `op_admin_${idEstavel(email)}`
+  await db.execute({
+    sql: `INSERT INTO operadores
+          (id, user_id, nome, email, telefone, turno, status, senha_hash)
+          VALUES (?, ?, ?, ?, '', 'integral', 'ativo', ?)`,
+    args: [id, id, nome, email, hashSenha(senha)],
+  })
+  console.log(`✅ Administrador principal configurado: ${email}`)
+}
+
 export async function ensureDatabaseHealth() {
   if (schemaPromise) return schemaPromise
 
@@ -188,9 +222,42 @@ export async function ensureDatabaseHealth() {
       await ensureColumn('pedidos', 'ganho_entregador', 'DOUBLE DEFAULT 0')
       await ensureColumn('pedidos', 'repasse_entregador_status', "VARCHAR(50) DEFAULT 'pendente'")
       await ensureColumn('pedidos', 'repasse_entregador_em', 'DATETIME')
+      await ensureColumn('pedidos', 'oferta_entregador_id', 'VARCHAR(191)')
+      await ensureColumn('pedidos', 'oferta_enviada_em', 'DATETIME')
+      await ensureColumn('pedidos', 'oferta_expira_em', 'DATETIME')
+      await ensureColumn('pedidos', 'coletado_em', 'DATETIME')
       await ensureColumn('tickets', 'resposta', 'TEXT')
       await ensureColumn('tickets', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
+      await ensureColumn('tickets', 'solicitante_id', 'VARCHAR(191)')
+      await ensureColumn('tickets', 'solicitante_tipo', 'VARCHAR(50)')
+      await ensureColumn('tickets', 'solicitante_nome', 'VARCHAR(255)')
+      await ensureColumn('tickets', 'solicitante_email', 'VARCHAR(255)')
+      await db.execute('ALTER TABLE tickets MODIFY cliente_id VARCHAR(191) NULL')
 
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS ofertas_entrega (
+          id VARCHAR(191) NOT NULL,
+          pedido_id VARCHAR(191) NOT NULL,
+          entregador_id VARCHAR(191) NOT NULL,
+          status VARCHAR(32) NOT NULL DEFAULT 'ofertada',
+          expira_em DATETIME NOT NULL,
+          respondida_em DATETIME NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          KEY idx_ofertas_pedido (pedido_id),
+          KEY idx_ofertas_entregador (entregador_id),
+          KEY idx_ofertas_status_expira (status, expira_em),
+          UNIQUE KEY uq_oferta_pedido_entregador (pedido_id, entregador_id),
+          CONSTRAINT fk_ofertas_pedido
+            FOREIGN KEY (pedido_id) REFERENCES pedidos(id)
+            ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT fk_ofertas_entregador
+            FOREIGN KEY (entregador_id) REFERENCES entregadores(id)
+            ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `)
+
+      await garantirAdministradorPrincipal()
       console.log('✅ Estrutura do banco validada sem popular dados')
     } catch (error: any) {
       console.error('⚠️ Falha ao validar schema automaticamente:', error.message)

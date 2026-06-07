@@ -23,6 +23,7 @@ export default function Home() {
   const navigate = useNavigate()
   const [deveAnimar] = useState(() => {
     if (typeof window === 'undefined') return true
+    if (window.innerWidth < 768) return false
     if (window.__homeHeroJaAnimou) return false
     window.__homeHeroJaAnimou = true
     return true

@@ -7,6 +7,17 @@ import api, { getApiBaseUrl } from '../services/api';
 const AuthContext = createContext();
 const GOOGLE_PASSWORD_PENDING_KEY = 'foodexpress.googlePasswordPending';
 
+function lerUsuarioPersistido() {
+  if (typeof window === 'undefined') return null;
+  try {
+    return JSON.parse(localStorage.getItem('usuario') || 'null');
+  } catch {
+    localStorage.removeItem('usuario');
+    localStorage.removeItem('token');
+    return null;
+  }
+}
+
 function normalizarIdentificador(valor) {
   return String(valor || '')
     .trim()
@@ -40,7 +51,7 @@ async function enviarCodigoLoginPorEmail(email, perfil = 'cliente') {
 }
 
 function destinoPorPerfil(perfil) {
-  return { cliente: '/', gerente: '/gerente', entregador: '/entregador', restaurante: '/painel-restaurante', operador: '/gerente/aprovacoes' }[perfil] ?? '/'
+  return { cliente: '/', gerente: '/gerente', entregador: '/entregador', restaurante: '/painel-restaurante', operador: '/admin' }[perfil] ?? '/'
 }
 
 export function AuthProvider({ children }) {
@@ -56,9 +67,7 @@ export function AuthProvider({ children }) {
   } = useAuth0();
 
   const [usuario, setUsuario] = useState(() => {
-    if (typeof window === 'undefined') return null;
-    const usuarioPersistido = localStorage.getItem('usuario');
-    return usuarioPersistido ? JSON.parse(usuarioPersistido) : null;
+    return lerUsuarioPersistido();
   });
   const [carregando] = useState(false);
   const [auth0Sincronizado, setAuth0Sincronizado] = useState(() => !auth0Configurado);
@@ -290,6 +299,7 @@ export function AuthProvider({ children }) {
         ownerName: usuarioPersistivel.nome,
         ownerEmail: usuarioPersistivel.email,
         ownerPhone: usuarioPersistivel.telefone,
+        ownerCpf: dados.cpfDono || dados.ownerCpf || '',
         senha: novoUsuario.senha,
       })
     } catch (error) {
@@ -320,6 +330,24 @@ export function AuthProvider({ children }) {
     navigate('/login');
   };
 
+  const atualizarUsuario = (dados = {}) => {
+    setUsuario(atual => {
+      if (!atual) return atual
+      const atualizado = { ...atual, ...dados }
+      localStorage.setItem('usuario', JSON.stringify(atualizado))
+      return atualizado
+    })
+  }
+
+  useEffect(() => {
+    const encerrarSessaoExpirada = () => {
+      setUsuario(null)
+      navigate('/login?session=expired', { replace: true })
+    }
+    window.addEventListener('foodexpress:sessao-expirada', encerrarSessaoExpirada)
+    return () => window.removeEventListener('foodexpress:sessao-expirada', encerrarSessaoExpirada)
+  }, [navigate])
+
   const valor = useMemo(() => ({
     usuario,
     entrar,
@@ -329,6 +357,7 @@ export function AuthProvider({ children }) {
     entrarComEmail: enviarCodigoLoginPorEmail,
     cadastrarCliente,
     cadastrarGerente,
+    atualizarUsuario,
     sair,
     estaLogado: !!usuario,
     perfil: usuario?.perfil ?? null,

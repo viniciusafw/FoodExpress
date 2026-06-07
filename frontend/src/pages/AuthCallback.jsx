@@ -38,6 +38,7 @@ export default function AuthCallback() {
           cliente: '/',
           gerente: '/gerente',
           entregador: '/entregador',
+          operador: '/admin',
         }
         navigate(destinos[usuario?.perfil || 'cliente'] || '/', { replace: true })
         return

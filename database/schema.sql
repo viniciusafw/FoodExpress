@@ -180,7 +180,11 @@ CREATE TABLE IF NOT EXISTS cardapio (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS pedidos (
   id VARCHAR(191) NOT NULL,
-  cliente_id VARCHAR(191) NOT NULL,
+  cliente_id VARCHAR(191) NULL,
+  solicitante_id VARCHAR(191) NULL,
+  solicitante_tipo VARCHAR(50) NULL,
+  solicitante_nome VARCHAR(255) NULL,
+  solicitante_email VARCHAR(255) NULL,
   restaurante_id VARCHAR(191) NOT NULL,
   entregador_id VARCHAR(191) NULL,
   status VARCHAR(50) NOT NULL,
@@ -204,6 +208,7 @@ CREATE TABLE IF NOT EXISTS pedidos (
   iniciado_em DATETIME NULL,
   confirmado_em DATETIME NULL,
   pronto_em DATETIME NULL,
+  coletado_em DATETIME NULL,
   entregue_em DATETIME NULL,
   cancelado_em DATETIME NULL,
   motivo_cancelamento TEXT NULL,
@@ -213,6 +218,9 @@ CREATE TABLE IF NOT EXISTS pedidos (
   ganho_entregador DOUBLE DEFAULT 0,
   repasse_entregador_status VARCHAR(50) DEFAULT 'pendente',
   repasse_entregador_em DATETIME NULL,
+  oferta_entregador_id VARCHAR(191) NULL,
+  oferta_enviada_em DATETIME NULL,
+  oferta_expira_em DATETIME NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -231,6 +239,30 @@ CREATE TABLE IF NOT EXISTS pedidos (
   CONSTRAINT fk_pedidos_entregador
     FOREIGN KEY (entregador_id) REFERENCES entregadores(id)
     ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+-- Ofertas exclusivas de entrega
+-- ============================================================
+CREATE TABLE IF NOT EXISTS ofertas_entrega (
+  id VARCHAR(191) NOT NULL,
+  pedido_id VARCHAR(191) NOT NULL,
+  entregador_id VARCHAR(191) NOT NULL,
+  status VARCHAR(32) NOT NULL DEFAULT 'ofertada',
+  expira_em DATETIME NOT NULL,
+  respondida_em DATETIME NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_ofertas_pedido (pedido_id),
+  KEY idx_ofertas_entregador (entregador_id),
+  KEY idx_ofertas_status_expira (status, expira_em),
+  UNIQUE KEY uq_oferta_pedido_entregador (pedido_id, entregador_id),
+  CONSTRAINT fk_ofertas_pedido
+    FOREIGN KEY (pedido_id) REFERENCES pedidos(id)
+    ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT fk_ofertas_entregador
+    FOREIGN KEY (entregador_id) REFERENCES entregadores(id)
+    ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
@@ -360,6 +392,7 @@ CREATE TABLE IF NOT EXISTS tickets (
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   KEY idx_tickets_cliente (cliente_id),
+  KEY idx_tickets_solicitante (solicitante_id),
   KEY idx_tickets_pedido (pedido_id),
   KEY idx_tickets_status (status),
   CONSTRAINT fk_tickets_cliente

@@ -1,27 +1,17 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useCart } from '../contexts/CartContext'
 import { useAuth } from '../contexts/AuthContext'
-import { MapPin, CreditCard, CheckCircle, ArrowLeft, Clock, Tag, X, QrCode, Banknote, ReceiptText, Copy, Bike, ShieldCheck } from 'lucide-react'
+import { MapPin, CreditCard, CheckCircle, ArrowLeft, Clock, Tag, X, QrCode, Banknote, Bike, ShieldCheck } from 'lucide-react'
 import api from '../services/api'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
+import { nomeRegiaoAproximada } from '../utils/localizacao'
 
 const formasPagamento = [
-  { id: 'pix',      label: 'Pix',              descricao: 'QR Code gerado na hora', Icon: QrCode },
+  { id: 'pix',      label: 'Pix na entrega',   descricao: 'Pague ao receber o pedido', Icon: QrCode },
   { id: 'cartao',   label: 'Cartão',           descricao: 'Maquininha com o entregador', Icon: CreditCard },
   { id: 'dinheiro', label: 'Dinheiro',         descricao: 'Pague na entrega', Icon: Banknote },
-  { id: 'boleto',   label: 'Boleto',           descricao: 'Linha digitável para pagamento', Icon: ReceiptText },
 ]
-
-function gerarCodigoPix(total) {
-  const valor = Number(total || 0).toFixed(2)
-  return `00020126580014BR.GOV.BCB.PIX0136foodexpress-pix-demo520400005303986540${valor.length}${valor}5802BR5911FoodExpress6009Sao Paulo62170513FOODEXPRESS6304A1B2`
-}
-
-function gerarLinhaBoleto(total) {
-  const centavos = String(Math.round(Number(total || 0) * 100)).padStart(10, '0')
-  return `34191.79001 01043.510047 91020.150008 8 ${centavos}`
-}
 
 function parseMonetario(valor) {
   const texto = String(valor || '')
@@ -32,41 +22,10 @@ function parseMonetario(valor) {
   return Number(texto) || 0
 }
 
-function QrPixVisual({ codigo, imagem }) {
-  const pontos = useMemo(() => {
-    const tamanho = 17
-    return Array.from({ length: tamanho * tamanho }, (_, index) => {
-      const x = index % tamanho
-      const y = Math.floor(index / tamanho)
-      const marcador =
-        (x < 5 && y < 5) ||
-        (x > 11 && y < 5) ||
-        (x < 5 && y > 11)
-      if (marcador) return x === 0 || y === 0 || x === 4 || y === 4 || (x === 2 && y === 2)
-      const charCode = codigo.charCodeAt((index * 7) % codigo.length)
-      return (charCode + x * 3 + y * 5 + index) % 4 !== 0
-    })
-  }, [codigo])
-
-  return imagem ? (
-    <img
-      src={imagem}
-      alt="QR Code Pix"
-      className="w-[142px] h-[142px] rounded-xl border border-border bg-white p-2 object-contain shadow-sm"
-    />
-  ) : (
-    <div className="grid grid-cols-[repeat(17,6px)] gap-1 rounded-xl border border-border bg-white p-3 shadow-sm">
-      {pontos.map((ativo, index) => (
-        <span key={index} className={`w-1.5 h-1.5 rounded-[2px] ${ativo ? 'bg-text-primary' : 'bg-transparent'}`} />
-      ))}
-    </div>
-  )
-}
-
-function TelaPedidoConfirmado({ numero, onVoltar }) {
+function TelaPedidoConfirmado({ pedido, onVoltar, onAcompanhar }) {
   const etapas = [
-    { label: 'Pedido confirmado',   concluido: true,  Icon: CheckCircle },
-    { label: 'Preparando seu pedido', concluido: true, Icon: Clock },
+    { label: 'Pedido enviado à loja', concluido: true, Icon: CheckCircle },
+    { label: 'Aguardando confirmação', concluido: false, Icon: Clock },
     { label: 'Saiu para entrega',   concluido: false, Icon: CheckCircle },
     { label: 'Entregue',            concluido: false, Icon: CheckCircle },
   ]
@@ -80,7 +39,7 @@ function TelaPedidoConfirmado({ numero, onVoltar }) {
           <CheckCircle size={40} className="text-accent" />
         </Motion.div>
         <h1 className="font-display text-2xl font-extrabold text-text-primary mb-1">Pedido realizado!</h1>
-        <p className="text-text-muted font-semibold text-sm mb-1">Pedido <strong className="text-text-primary">{numero}</strong></p>
+        <p className="text-text-muted font-semibold text-sm mb-1">Pedido <strong className="text-text-primary">{pedido.numero}</strong></p>
         <p className="text-text-muted font-semibold text-sm mb-6">
           Tempo estimado: <strong className="text-primary">30-40 min</strong>
         </p>
@@ -103,10 +62,16 @@ function TelaPedidoConfirmado({ numero, onVoltar }) {
             </div>
           ))}
         </div>
-        <button onClick={onVoltar}
-          className="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm cursor-pointer hover:bg-primary/90 transition-all border-none">
-          Voltar ao início
-        </button>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <button onClick={onAcompanhar}
+            className="w-full py-3 bg-primary text-white rounded-xl font-bold text-sm cursor-pointer hover:bg-primary/90 transition-all border-none">
+            Acompanhar pedido
+          </button>
+          <button onClick={onVoltar}
+            className="w-full py-3 bg-white text-text-secondary border border-border rounded-xl font-bold text-sm cursor-pointer hover:bg-surface-2 transition-all">
+            Voltar ao início
+          </button>
+        </div>
       </Motion.div>
     </Motion.div>
   )
@@ -119,7 +84,7 @@ export default function Checkout() {
 
   const [enderecoPrincipal, setEnderecoPrincipal] = useState('')
   const [enderecoCustom, setEnderecoCustom] = useState('')
-  const [pagamentoSelecionado, setPagamentoSelecionado] = useState('pix')
+  const [pagamentoSelecionado, setPagamentoSelecionado] = useState('cartao')
   const [troco, setTroco] = useState('')
   const [cupom, setCupom] = useState('')
   const [cupomAplicado, setCupomAplicado] = useState(null)
@@ -130,7 +95,6 @@ export default function Checkout() {
   const [carregando, setCarregando] = useState(false)
   const [pedidoConfirmado, setPedidoConfirmado] = useState(null)
   const [erro, setErro] = useState('')
-  const [codigoCopiado, setCodigoCopiado] = useState('')
 
   useEffect(() => {
     api.clientes.meuPerfil()
@@ -178,9 +142,6 @@ export default function Checkout() {
   })() : 0
   const total = Math.max(0, totalCarrinho + taxaEntrega - desconto)
   const valorTotalFormatado = `R$ ${total.toFixed(2).replace('.', ',')}`
-  const imagemQrPix = import.meta.env.VITE_PIX_QR_CODE_URL || '/pix-qr.png'
-  const codigoPix = useMemo(() => gerarCodigoPix(total), [total])
-  const linhaBoleto = useMemo(() => gerarLinhaBoleto(total), [total])
   const cupomDescricao = cupomAplicado
     ? cupomFreteGratis
       ? 'Frete grátis aplicado'
@@ -189,17 +150,7 @@ export default function Checkout() {
         : `${Number(cupomAplicado.desconto_percentual ?? cupomAplicado.desconto ?? 0)}% de desconto — economizando R$ ${desconto.toFixed(2).replace('.', ',')}`
     : ''
 
-  const copiarCodigoPagamento = async (tipo, codigo) => {
-    try {
-      await navigator.clipboard.writeText(codigo)
-      setCodigoCopiado(tipo)
-      setTimeout(() => setCodigoCopiado(''), 1800)
-    } catch {
-      setCodigoCopiado('')
-    }
-  }
-
-  const enderecoFinal = enderecoCustom.trim() || enderecoPrincipal || (localizacao ? 'Minha localização atual' : 'Endereço não informado')
+  const enderecoFinal = enderecoCustom.trim() || enderecoPrincipal || (localizacao ? 'Minha localização atual' : '')
 
   const validarCupom = async (codigoInformado) => {
     const codigoNormalizado = String(codigoInformado || '').trim().toUpperCase()
@@ -227,13 +178,6 @@ export default function Checkout() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalCarrinho])
 
-  const getRegionName = (lat, lng) => {
-    if (lat >= -23.70 && lat <= -23.45 && lng >= -46.70 && lng <= -46.45) return 'São Paulo'
-    if (lat >= -23.65 && lat <= -23.55 && lng >= -46.75 && lng <= -46.60) return 'Zona Sul'
-    if (lat >= -23.58 && lat <= -23.53 && lng >= -46.64 && lng <= -46.62) return 'Tauape'
-    return 'Minha região'
-  }
-
   const usarLocalizacaoAtual = () => {
     if (!navigator.geolocation) {
       setLocalizacaoStatus('Seu navegador não suporta geolocalização.')
@@ -248,7 +192,7 @@ export default function Checkout() {
         const latitude = position.coords.latitude
         const longitude = position.coords.longitude
         const textoLocalizacao = `Minha localização atual (${latitude.toFixed(5)}, ${longitude.toFixed(5)})`
-        const novaRegiao = getRegionName(latitude, longitude)
+        const novaRegiao = nomeRegiaoAproximada(latitude, longitude)
 
         setLocalizacao({ latitude, longitude })
         setEnderecoCustom(textoLocalizacao)
@@ -273,6 +217,10 @@ export default function Checkout() {
   const handleConfirmar = async () => {
     if (!estaLogado) { navigate('/login'); return }
     if (itens.length === 0) return
+    if (!enderecoFinal) {
+      setErro('Informe um endereço de entrega antes de confirmar o pedido.')
+      return
+    }
 
     const restaurantes = Array.from(new Set(itens
       .map(i => i.restauranteId || i.restaurante_id || i.loja?.id || i.restaurantId)
@@ -286,6 +234,10 @@ export default function Checkout() {
     }
 
     const restauranteId = restaurantes[0] || null
+    if (!restauranteId) {
+      setErro('Não foi possível identificar a loja deste carrinho. Remova os itens e adicione-os novamente pela página da loja.')
+      return
+    }
 
     const trocoValor = parseMonetario(troco)
     if (pagamentoSelecionado === 'dinheiro' && trocoValor > 0 && trocoValor < total) {
@@ -306,14 +258,6 @@ export default function Checkout() {
         restauranteId: i.restauranteId || i.restaurante_id || i.loja?.id || restauranteId,
       }))
 
-      if (!restauranteId) {
-        // Sem restauranteId — pedido local sem backend (modo offline)
-        limparCarrinho()
-        const numFake = `#${Math.floor(1000 + Math.random() * 9000)}`
-        setPedidoConfirmado(numFake)
-        return
-      }
-
       const resultado = await api.pedidos.criar({
         clienteId,
         restauranteId,
@@ -330,7 +274,10 @@ export default function Checkout() {
 
       localStorage.removeItem('cupomPromocional')
       limparCarrinho()
-      setPedidoConfirmado(`#${String(resultado.id || '').slice(-6) || Math.floor(1000 + Math.random() * 9000)}`)
+      setPedidoConfirmado({
+        id: resultado.id,
+        numero: `#${String(resultado.id || '').slice(-6) || Math.floor(1000 + Math.random() * 9000)}`,
+      })
     } catch (e) {
       setErro('Não foi possível criar o pedido: ' + (e.message || 'Tente novamente'))
     } finally {
@@ -339,7 +286,13 @@ export default function Checkout() {
   }
 
   if (pedidoConfirmado) {
-    return <TelaPedidoConfirmado numero={pedidoConfirmado} onVoltar={() => navigate('/')} />
+    return (
+      <TelaPedidoConfirmado
+        pedido={pedidoConfirmado}
+        onVoltar={() => navigate('/')}
+        onAcompanhar={() => navigate(`/rastrear/${pedidoConfirmado.id}`)}
+      />
+    )
   }
 
   if (itens.length === 0) {
@@ -406,7 +359,11 @@ export default function Checkout() {
                 type="text"
                 placeholder="Ex: Rua das Flores, 123 - Apto 4, Bairro"
                 value={enderecoCustom}
-                onChange={e => setEnderecoCustom(e.target.value)}
+                onChange={e => {
+                  setEnderecoCustom(e.target.value)
+                  setLocalizacao(null)
+                  setLocalizacaoStatus('')
+                }}
                 className="w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all"
               />
               {localizacaoStatus && (
@@ -453,24 +410,15 @@ export default function Checkout() {
                   exit={{ opacity: 0, height: 0 }}
                   className="px-3 pb-3 overflow-hidden"
                 >
-                  <div className="mt-2 rounded-2xl border border-primary/20 bg-primary-light p-4 flex flex-col sm:flex-row gap-4 sm:items-center">
-                    <QrPixVisual codigo={codigoPix} imagem={imagemQrPix} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-extrabold text-text-primary">Pix copia e cola</p>
-                      <p className="text-xs text-text-muted font-semibold mt-1">Pague {valorTotalFormatado} pelo QR Code. O restaurante recebe a confirmação junto com o pedido.</p>
-                      <div className="mt-3 flex items-center gap-2">
-                        <code className="flex-1 min-w-0 truncate rounded-xl bg-white border border-border px-3 py-2 text-xs font-bold text-text-secondary">
-                          {codigoPix}
-                        </code>
-                        <button
-                          type="button"
-                          onClick={() => copiarCodigoPagamento('pix', codigoPix)}
-                          className="w-10 h-10 rounded-xl bg-primary text-white border-none flex items-center justify-center cursor-pointer hover:bg-primary/90 transition-all"
-                          title="Copiar código Pix"
-                        >
-                          {codigoCopiado === 'pix' ? <CheckCircle size={17} /> : <Copy size={17} />}
-                        </button>
-                      </div>
+                  <div className="mt-2 rounded-2xl border border-primary/20 bg-primary-light p-4 flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-white text-primary flex items-center justify-center shrink-0">
+                      <QrCode size={19} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-extrabold text-text-primary">Pix no recebimento</p>
+                      <p className="text-xs text-text-muted font-semibold mt-1">
+                        Pague {valorTotalFormatado} usando o QR Code apresentado pelo entregador. O app não gera cobrança antecipada.
+                      </p>
                     </div>
                   </div>
                 </Motion.div>
@@ -504,39 +452,6 @@ export default function Checkout() {
                   <label className="block text-xs font-bold text-text-muted mb-1.5 mt-2">Troco para quanto? (opcional)</label>
                   <input type="text" placeholder="Ex: R$ 100,00" value={troco} onChange={e => setTroco(e.target.value)}
                     className="w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary outline-none focus:border-primary transition-all" />
-                </Motion.div>
-              )}
-              {pagamentoSelecionado === 'boleto' && (
-                <Motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  className="px-3 pb-3 overflow-hidden"
-                >
-                  <div className="mt-2 rounded-2xl border border-border bg-surface-2 p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-white text-primary flex items-center justify-center shrink-0">
-                        <ReceiptText size={19} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-extrabold text-text-primary">Boleto do pedido</p>
-                        <p className="text-xs text-text-muted font-semibold mt-1">Use a linha digitável para pagar {valorTotalFormatado}. A confirmação pode levar até 1 dia útil.</p>
-                      </div>
-                    </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      <code className="flex-1 min-w-0 truncate rounded-xl bg-white border border-border px-3 py-2 text-xs font-bold text-text-secondary">
-                        {linhaBoleto}
-                      </code>
-                      <button
-                        type="button"
-                        onClick={() => copiarCodigoPagamento('boleto', linhaBoleto)}
-                        className="w-10 h-10 rounded-xl bg-primary text-white border-none flex items-center justify-center cursor-pointer hover:bg-primary/90 transition-all"
-                        title="Copiar linha digitável"
-                      >
-                        {codigoCopiado === 'boleto' ? <CheckCircle size={17} /> : <Copy size={17} />}
-                      </button>
-                    </div>
-                  </div>
                 </Motion.div>
               )}
             </AnimatePresence>

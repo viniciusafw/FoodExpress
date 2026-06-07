@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { motion as Motion } from 'framer-motion'
 import { useAuth } from '../contexts/AuthContext'
 import { useDarkMode } from '../contexts/DarkModeContext'
-import { Link, useLocation, useNavigate, Routes, Route } from 'react-router-dom'
+import { Link, Navigate, useLocation, useNavigate, Routes, Route } from 'react-router-dom'
 import api from '../services/api'
 import { formatarHoraBanco, dataISOHojeLocal } from '../utils/datas'
 
@@ -21,7 +21,10 @@ import AprovacoesGerente from './gerente/AprovacoesGerente'
 import DenunciasProdutosGerente from './gerente/DenunciasProdutosGerente'
 
 const statusConfig = {
+  'Pendente':   { cor: 'text-text-muted bg-surface-2', icon: Clock },
+  'Confirmado': { cor: 'text-primary bg-primary-light', icon: CheckCircle },
   'Preparando': { cor: 'text-primary bg-primary-light', icon: Clock },
+  'Pronto':     { cor: 'text-accent bg-accent/10', icon: CheckCircle },
   'Entregando': { cor: 'text-secondary bg-secondary/8', icon: Truck },
   'Entregue':   { cor: 'text-accent bg-accent/10', icon: CheckCircle },
   'Cancelado':  { cor: 'text-red-500 bg-red-50', icon: XCircle },
@@ -45,14 +48,14 @@ function formatarItensPedido(itens) {
 }
 
 // ── Navbar ────────────────────────────────────────────────────────────────────
-function NavbarGerente({ usuario }) {
+function NavbarGerente({ usuario, restaurante }) {
   const location = useLocation()
   const navigate = useNavigate()
   const { sair } = useAuth()
   const { dark, toggle } = useDarkMode()
   const [menuOpen, setMenuOpen] = useState(false)
   const [pendentes, setPendentes] = useState(0)
-  const nomeLoja = usuario?.loja?.nome || 'Minha Loja'
+  const nomeLoja = restaurante?.nome || usuario?.loja?.nome || 'Minha Loja'
 
   useEffect(() => {
     api.pedidos.listar({ status: 'pendente' })
@@ -60,17 +63,21 @@ function NavbarGerente({ usuario }) {
       .catch(() => {})
   }, [])
 
-  const links = [
+  const linksGerente = [
     { to: '/gerente', label: 'Painel', Icon: LayoutDashboard, exato: true },
-    ...(usuario?.perfil === 'operador'
-      ? [{ to: '/gerente/aprovacoes', label: 'Aprovações', Icon: ShieldCheck }]
-      : []),
     { to: '/gerente/pedidos', label: 'Pedidos', Icon: ShoppingBag },
     { to: '/gerente/cardapio', label: 'Cardápio', Icon: UtensilsCrossed },
     { to: '/gerente/denuncias', label: 'Denúncias', Icon: Flag },
     { to: '/gerente/relatorios', label: 'Relatórios', Icon: BarChart3 },
     { to: '/gerente/configuracoes', label: 'Configurações', Icon: Settings },
   ]
+  const linksOperador = [
+    { to: '/gerente/aprovacoes', label: 'Aprovações', Icon: ShieldCheck },
+    { to: '/gerente/pedidos', label: 'Pedidos', Icon: ShoppingBag },
+    { to: '/gerente/denuncias', label: 'Denúncias', Icon: Flag },
+    { to: '/gerente/relatorios', label: 'Relatórios', Icon: BarChart3 },
+  ]
+  const links = usuario?.perfil === 'operador' ? linksOperador : linksGerente
 
   const ativo = (to, exato) => exato ? location.pathname === to : location.pathname.startsWith(to)
 
@@ -136,14 +143,19 @@ function NavbarGerente({ usuario }) {
             )}
           </button>
 
-          <div className="flex items-center gap-2 bg-surface-2 border border-border px-3 py-1.5 rounded-full cursor-pointer hover:border-primary hover:bg-primary-light transition-all">
+          <button
+            type="button"
+            onClick={() => navigate(usuario?.perfil === 'operador' ? '/gerente/aprovacoes' : '/gerente/configuracoes')}
+            className="flex items-center gap-2 bg-surface-2 border border-border px-3 py-1.5 rounded-full cursor-pointer hover:border-primary hover:bg-primary-light transition-all"
+            title={usuario?.perfil === 'operador' ? 'Abrir aprovações' : 'Abrir perfil e configurações'}
+          >
             <div className="w-7 h-7 bg-secondary rounded-full flex items-center justify-center text-white text-sm font-bold">
               {(usuario?.nome || 'G').charAt(0).toUpperCase()}
             </div>
             <span className="hidden sm:block text-xs font-bold text-text-primary">
               {(usuario?.nome || 'Gerente').split(' ')[0]}
             </span>
-          </div>
+          </button>
 
           <button onClick={sair}
             className="w-9 h-9 bg-transparent border border-border rounded-full flex items-center justify-center text-text-secondary cursor-pointer hover:border-red-400 hover:text-red-500 hover:bg-red-50 transition-all">
@@ -178,12 +190,14 @@ function NavbarGerente({ usuario }) {
 }
 
 // ── Painel principal ──────────────────────────────────────────────────────────
-function PainelPrincipal({ usuario }) {
+function PainelPrincipal({ usuario, restaurante }) {
+  const navigate = useNavigate()
   const [stats, setStats] = useState([])
   const [pedidosRecentes, setPedidosRecentes] = useState([])
   const [grafico, setGrafico] = useState([])
   const [statusLoja, setStatusLoja] = useState({
     aberta: true,
+    situacao: 'ativo',
     entregadoresOnline: 0,
     filaPedidos: 0,
     tempoMedio: 0,
@@ -209,9 +223,13 @@ function PainelPrincipal({ usuario }) {
     api.pedidos.listar().then(lista => {
       const recentes = lista.slice(0, 5).map(p => ({
         id: numeroPedido(p.id),
+        idOriginal: p.id,
         cliente: p.cliente_nome || p.cliente_id,
         valor: Number(p.total),
-        status: ['pendente','confirmado','preparando'].includes(p.status) ? 'Preparando'
+        status: p.status === 'pendente' ? 'Pendente'
+              : p.status === 'confirmado' ? 'Confirmado'
+              : p.status === 'preparando' ? 'Preparando'
+              : p.status === 'pronto' ? 'Pronto'
               : p.status === 'entregando' ? 'Entregando'
               : p.status === 'entregue'   ? 'Entregue'
               : 'Cancelado',
@@ -221,21 +239,33 @@ function PainelPrincipal({ usuario }) {
       setPedidosRecentes(recentes)
 
       // Status dinâmico da loja baseado nos pedidos
-      const ativos = lista.filter(p => ['pendente','confirmado','preparando','entregando'].includes(p.status))
+      const ativos = lista.filter(p => ['pendente','confirmado','preparando','pronto','entregando'].includes(p.status))
       const entregando = lista.filter(p => p.status === 'entregando').length
-      setStatusLoja({
-        aberta: true,
+      setStatusLoja(atual => ({
+        ...atual,
         entregadoresOnline: entregando > 0 ? entregando : 0,
         filaPedidos: ativos.length,
-        tempoMedio: 28,
-      })
+      }))
     }).catch(console.error)
+
+    if (usuario?.perfil !== 'operador') {
+      api.restaurantes.meuRestaurante()
+        .then(restaurante => {
+          setStatusLoja(atual => ({
+            ...atual,
+            aberta: restaurante.status === 'ativo',
+            situacao: restaurante.status || 'ativo',
+            tempoMedio: Number(restaurante.tempo_medio_preparo || 0),
+          }))
+        })
+        .catch(() => {})
+    }
 
     // Gráfico por hora
     api.relatorios.buscar('mapa-calor').then(r => {
-      setGrafico(((r.dados?.series?.por_hora || r.dados || [])).map(d => ({ hora: `${d.hora}h`, valor: (d.quantidade ?? 0) * 50 })))
+      setGrafico(((r.dados?.series?.por_hora || r.dados || [])).map(d => ({ hora: `${d.hora}h`, valor: Number(d.quantidade ?? 0) })))
     }).catch(console.error)
-  }, [])
+  }, [usuario?.perfil])
 
   const maxGrafico = Math.max(...grafico.map(g => g.valor), 1)
 
@@ -246,7 +276,7 @@ function PainelPrincipal({ usuario }) {
           Olá, {(usuario?.nome || 'Gerente').split(' ')[0]}! 👋
         </h1>
         <p className="text-sm text-text-muted font-semibold mt-1">
-          Aqui está o resumo de hoje na <strong className="text-text-primary">{usuario?.loja?.nome || 'sua loja'}</strong>
+          Aqui está o resumo de hoje na <strong className="text-text-primary">{restaurante?.nome || usuario?.loja?.nome || 'sua loja'}</strong>
         </p>
       </Motion.div>
 
@@ -258,9 +288,6 @@ function PainelPrincipal({ usuario }) {
             <div className="flex items-start justify-between mb-3">
               <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center`}>
                 {s.icon && (() => { const SI = s.icon; return <SI size={17} className={s.cor} /> })()}
-              </div>
-              <div className="flex items-center gap-1 text-xs font-bold text-accent">
-                <TrendingUp size={12} />0%
               </div>
             </div>
             <div className="font-display text-2xl font-extrabold text-text-primary leading-tight">{s.valor}</div>
@@ -275,7 +302,7 @@ function PainelPrincipal({ usuario }) {
           initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h3 className="font-display text-base font-bold text-text-primary">Faturamento por hora</h3>
+              <h3 className="font-display text-base font-bold text-text-primary">Pedidos por hora</h3>
               <p className="text-xs text-text-muted font-semibold">Hoje, {new Date().toLocaleDateString('pt-BR')}</p>
             </div>
             <span className="text-xs font-bold text-accent bg-accent/10 px-3 py-1 rounded-full">Ao vivo</span>
@@ -292,7 +319,7 @@ function PainelPrincipal({ usuario }) {
                   <div
                     className="w-full rounded-t-md bg-primary/80 hover:bg-primary transition-colors cursor-pointer"
                     style={{ height: `${(g.valor / maxGrafico) * 100}%`, minHeight: 4 }}
-                    title={`${g.hora}: R$ ${g.valor}`}
+                    title={`${g.hora}: ${g.valor} pedido${g.valor === 1 ? '' : 's'}`}
                   />
                   <span className="text-[0.6rem] text-text-muted font-semibold hidden sm:block">{g.hora}</span>
                 </Motion.div>
@@ -309,13 +336,21 @@ function PainelPrincipal({ usuario }) {
             {[
               {
                 label: 'Loja',
-                valor: statusLoja.aberta ? 'Aberta' : 'Fechada',
-                cor: statusLoja.aberta ? 'text-accent' : 'text-red-500',
-                dot: statusLoja.aberta ? 'bg-accent' : 'bg-red-500',
+                valor: statusLoja.situacao === 'pendente'
+                  ? 'Aguardando aprovação'
+                  : statusLoja.situacao === 'rejeitado'
+                    ? 'Revisão necessária'
+                    : statusLoja.aberta ? 'Aberta' : 'Fechada',
+                cor: statusLoja.situacao === 'pendente'
+                  ? 'text-yellow-600'
+                  : statusLoja.aberta ? 'text-accent' : 'text-red-500',
+                dot: statusLoja.situacao === 'pendente'
+                  ? 'bg-yellow-500'
+                  : statusLoja.aberta ? 'bg-accent' : 'bg-red-500',
               },
               {
-                label: 'Entregadores',
-                valor: statusLoja.entregadoresOnline > 0 ? `${statusLoja.entregadoresOnline} online` : 'Nenhum ativo',
+                label: 'Entregas em andamento',
+                valor: statusLoja.entregadoresOnline > 0 ? String(statusLoja.entregadoresOnline) : 'Nenhuma',
                 cor: 'text-secondary',
                 dot: 'bg-secondary',
               },
@@ -327,7 +362,7 @@ function PainelPrincipal({ usuario }) {
               },
               {
                 label: 'Tempo médio',
-                valor: `${statusLoja.tempoMedio} min`,
+                valor: statusLoja.tempoMedio > 0 ? `${statusLoja.tempoMedio} min` : 'Não informado',
                 cor: 'text-text-primary',
                 dot: 'bg-border',
               },
@@ -357,7 +392,36 @@ function PainelPrincipal({ usuario }) {
         {pedidosRecentes.length === 0 ? (
           <div className="p-8 text-center text-text-muted font-semibold text-sm">Nenhum pedido encontrado</div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="divide-y divide-border md:hidden">
+            {pedidosRecentes.map((p) => {
+              const cfg = statusConfig[p.status] || statusConfig.Cancelado
+              const StatusIcon = cfg.icon
+              return (
+                <button
+                  key={p.id}
+                  type="button"
+                  onClick={() => navigate(`/pedido/${p.idOriginal}`)}
+                  className="block w-full px-4 py-4 text-left active:bg-surface-2"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-display text-sm font-bold text-text-primary">{p.id}</span>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${cfg.cor}`}>
+                          <StatusIcon size={10} /> {p.status}
+                        </span>
+                      </div>
+                      <p className="mt-1 truncate text-xs font-semibold text-text-secondary">{p.cliente} · {p.itens}</p>
+                      <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-text-muted"><Clock size={10} /> {p.horario}</p>
+                    </div>
+                    <span className="shrink-0 font-display text-sm font-extrabold text-accent">R$ {p.valor.toFixed(2).replace('.', ',')}</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border bg-surface-2">
@@ -373,6 +437,7 @@ function PainelPrincipal({ usuario }) {
                   return (
                     <Motion.tr key={p.id}
                       className="border-b border-border last:border-none hover:bg-surface-2 transition-colors cursor-pointer"
+                      onClick={() => navigate(`/pedido/${p.idOriginal}`)}
                       initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 + i * 0.06 }}>
                       <td className="px-5 py-3.5 font-display font-bold text-text-primary whitespace-nowrap">{p.id}</td>
                       <td className="px-5 py-3.5 font-semibold text-text-secondary whitespace-nowrap">{p.cliente}</td>
@@ -392,6 +457,7 @@ function PainelPrincipal({ usuario }) {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </Motion.div>
     </div>
@@ -400,18 +466,28 @@ function PainelPrincipal({ usuario }) {
 
 export default function DashboardGerente() {
   const { usuario } = useAuth()
+  const [restaurante, setRestaurante] = useState(null)
+
+  useEffect(() => {
+    if (usuario?.perfil === 'operador') return
+    api.restaurantes.meuRestaurante()
+      .then(setRestaurante)
+      .catch(() => setRestaurante(null))
+  }, [usuario?.perfil])
+
   return (
     <div className="min-h-screen bg-background pb-8">
-      <NavbarGerente usuario={usuario} />
+      <NavbarGerente usuario={usuario} restaurante={restaurante} />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6">
         <Routes>
-          <Route index element={<PainelPrincipal usuario={usuario} />} />
-          <Route path="aprovacoes" element={usuario?.perfil === 'operador' ? <AprovacoesGerente /> : <PainelPrincipal usuario={usuario} />} />
+          <Route index element={usuario?.perfil === 'operador' ? <Navigate to="aprovacoes" replace /> : <PainelPrincipal usuario={usuario} restaurante={restaurante} />} />
+          <Route path="aprovacoes" element={usuario?.perfil === 'operador' ? <AprovacoesGerente /> : <PainelPrincipal usuario={usuario} restaurante={restaurante} />} />
           <Route path="pedidos" element={<PedidosGerente />} />
-          <Route path="cardapio" element={<CardapioGerente />} />
+          <Route path="cardapio" element={usuario?.perfil === 'operador' ? <Navigate to="/gerente/aprovacoes" replace /> : <CardapioGerente />} />
           <Route path="denuncias" element={<DenunciasProdutosGerente />} />
           <Route path="relatorios" element={<RelatoriosGerente />} />
-          <Route path="configuracoes" element={<ConfiguracoesGerente />} />
+          <Route path="configuracoes" element={usuario?.perfil === 'operador' ? <Navigate to="/gerente/aprovacoes" replace /> : <ConfiguracoesGerente />} />
+          <Route path="*" element={<Navigate to={usuario?.perfil === 'operador' ? '/gerente/aprovacoes' : '/gerente'} replace />} />
         </Routes>
       </main>
     </div>

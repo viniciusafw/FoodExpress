@@ -86,7 +86,7 @@ function getConfig(arg1, arg2) {
   const eOperador = Boolean(flags.eOperador)
   if (eOperador) return {
     tipo: 'operador',
-    titulo: 'Aprove parceiros,',
+    titulo: 'Administre a plataforma,',
     destaque: 'com controle.',
     frases: [
       'Solicitações aguardando revisão. 📋',
@@ -103,11 +103,11 @@ function getConfig(arg1, arg2) {
     accentColor: '#1B998B',
     corDestaque: 'text-emerald-400',
     badgeIcone: <ShieldCheck size={13} className="text-emerald-400" />,
-    badgeTexto: 'Gerente master',
+    badgeTexto: 'Administração FoodExpress',
     badgeCor: 'border-emerald-400/30 bg-emerald-400/10',
     badgeTextoCor: 'text-emerald-400',
-    subtitulo: 'Acesse a aprovação de restaurantes',
-    ctaTexto: 'Entrar como operador',
+    subtitulo: 'Acesse a operação completa da plataforma',
+    ctaTexto: 'Entrar na administração',
     ctaCls: 'bg-emerald-600 hover:bg-emerald-700',
     mostrarCadastro: false,
     mostrarAlternativas: false,
@@ -228,10 +228,15 @@ export default function Login() {
 
   useEffect(() => {
     const authError = sessionStorage.getItem('authError')
-    if (!authError) return
-    sessionStorage.removeItem('authError')
-    setErro(authError)
-  }, [])
+    if (authError) {
+      sessionStorage.removeItem('authError')
+      setErro(authError)
+      return
+    }
+    if (params.get('session') === 'expired') {
+      setErro('Sua sessão expirou. Entre novamente para continuar.')
+    }
+  }, [params])
 
   useEffect(() => {
     const raw = sessionStorage.getItem(GOOGLE_PASSWORD_PENDING_KEY)

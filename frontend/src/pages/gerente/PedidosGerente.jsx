@@ -5,20 +5,27 @@ import api from '../../services/api'
 import { formatarHoraBanco } from '../../utils/datas'
 
 const statusConfig = {
+  Pendente:   { cor: 'text-text-muted bg-surface-2 border-border', icon: Clock, texto: 'Pendente' },
+  Confirmado: { cor: 'text-primary bg-primary-light border-primary/20', icon: CheckCircle, texto: 'Confirmado' },
   Preparando: { cor: 'text-primary bg-primary-light border-primary/20', icon: Clock, texto: 'Preparando' },
+  Pronto:     { cor: 'text-accent bg-accent/10 border-accent/20', icon: CheckCircle, texto: 'Pronto' },
   Entregando: { cor: 'text-secondary bg-secondary/8 border-secondary/20', icon: Truck, texto: 'Entregando' },
   Entregue:   { cor: 'text-accent bg-accent/10 border-accent/20', icon: CheckCircle, texto: 'Entregue' },
   Cancelado:  { cor: 'text-red-500 bg-red-50 border-red-200', icon: XCircle, texto: 'Cancelado' },
 }
 
-const statusOrdem = ['Preparando', 'Entregando', 'Entregue', 'Cancelado']
+const statusOrdem = ['Pendente', 'Confirmado', 'Preparando', 'Pronto', 'Entregando', 'Entregue', 'Cancelado']
 
-// Mapeia status da UI → status do banco
 const statusParaBanco = {
-  Preparando: 'confirmado',
-  Entregando: 'entregando',
-  Entregue:   'entregue',
-  Cancelado:  'cancelado',
+  Confirmado: 'confirmado',
+  Preparando: 'preparando',
+  Pronto: 'pronto',
+}
+
+const proximoStatus = {
+  Pendente: 'Confirmado',
+  Confirmado: 'Preparando',
+  Preparando: 'Pronto',
 }
 
 function numeroPedido(id) {
@@ -42,7 +49,10 @@ function normalizarPedido(p) {
   return {
     ...p,
     numero: numeroPedido(p.id),
-    status: ['pendente', 'confirmado', 'preparando'].includes(p.status) ? 'Preparando'
+    status: p.status === 'pendente'   ? 'Pendente'
+          : p.status === 'confirmado' ? 'Confirmado'
+          : p.status === 'preparando' ? 'Preparando'
+          : p.status === 'pronto'     ? 'Pronto'
           : p.status === 'entregando' ? 'Entregando'
           : p.status === 'entregue'   ? 'Entregue'
           : p.status === 'cancelado'  ? 'Cancelado'
@@ -62,13 +72,29 @@ export default function PedidosGerente() {
   const [pedidos, setPedidos] = useState([])
   const [expandido, setExpandido] = useState(null)
   const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
 
   useEffect(() => {
-    setCarregando(true)
-    api.pedidos.listar()
-      .then(dados => setPedidos(dados.map(normalizarPedido)))
-      .catch(console.error)
-      .finally(() => setCarregando(false))
+    let ativo = true
+    const carregar = async (silencioso = false) => {
+      if (!silencioso) setCarregando(true)
+      try {
+        const dados = await api.pedidos.listar()
+        if (!ativo) return
+        setPedidos(dados.map(normalizarPedido))
+        setErro('')
+      } catch (error) {
+        if (ativo) setErro(error.message || 'Não foi possível carregar os pedidos.')
+      } finally {
+        if (ativo && !silencioso) setCarregando(false)
+      }
+    }
+    carregar()
+    const intervalo = setInterval(() => carregar(true), 10000)
+    return () => {
+      ativo = false
+      clearInterval(intervalo)
+    }
   }, [])
 
   const pedidosFiltrados = pedidos.filter(p => {
@@ -80,9 +106,8 @@ export default function PedidosGerente() {
   const avancarStatus = async (id) => {
     const pedido = pedidos.find(p => p.id === id)
     if (!pedido) return
-    const idx = statusOrdem.indexOf(pedido.status)
-    if (idx >= 2) return
-    const novoStatusUI = statusOrdem[idx + 1]
+    const novoStatusUI = proximoStatus[pedido.status]
+    if (!novoStatusUI) return
     const novoStatusBanco = statusParaBanco[novoStatusUI]
     try {
       await api.pedidos.atualizarStatus(id, novoStatusBanco)
@@ -120,7 +145,7 @@ export default function PedidosGerente() {
             className="w-full pl-9 pr-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all"
           />
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 scrollbar-none sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
           {['Todos', ...statusOrdem].map(s => (
             <button
               key={s}
@@ -136,6 +161,11 @@ export default function PedidosGerente() {
           ))}
         </div>
       </div>
+      {erro && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+          {erro}
+        </div>
+      )}
 
       {/* Lista de pedidos */}
       <div className="flex flex-col gap-3">
@@ -151,8 +181,9 @@ export default function PedidosGerente() {
             </Motion.div>
           )}
           {pedidosFiltrados.map((p, i) => {
-            const { cor, icon: Icone } = statusConfig[p.status]
+            const { cor, icon: Icone } = statusConfig[p.status] || statusConfig.Pendente
             const aberto = expandido === p.id
+            const proximo = proximoStatus[p.status]
             return (
               <Motion.div
                 key={p.id}
@@ -163,9 +194,9 @@ export default function PedidosGerente() {
               >
                 <button
                   onClick={() => setExpandido(aberto ? null : p.id)}
-                  className="w-full flex items-center gap-4 px-5 py-4 cursor-pointer hover:bg-surface-2 transition-colors text-left"
+                  className="w-full flex items-center gap-2 px-4 py-4 cursor-pointer hover:bg-surface-2 transition-colors text-left sm:gap-4 sm:px-5"
                 >
-                  <div className="w-10 h-10 bg-primary-light rounded-xl flex items-center justify-center shrink-0">
+                  <div className="hidden w-10 h-10 bg-primary-light rounded-xl items-center justify-center shrink-0 sm:flex">
                     <ShoppingBag size={16} className="text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -179,7 +210,7 @@ export default function PedidosGerente() {
                   </div>
                   <div className="text-right shrink-0 flex flex-col items-end gap-1">
                     <span className="font-display font-extrabold text-accent">R$ {p.valorNum.toFixed(2).replace('.', ',')}</span>
-                    <span className="text-xs text-text-muted font-semibold flex items-center gap-1"><Clock size={11} />{p.horario}</span>
+                    <span className="hidden text-xs text-text-muted font-semibold items-center gap-1 sm:flex"><Clock size={11} />{p.horario}</span>
                   </div>
                   <ChevronDown size={16} className={`text-text-muted shrink-0 transition-transform ${aberto ? 'rotate-180' : ''}`} />
                 </button>
@@ -209,15 +240,15 @@ export default function PedidosGerente() {
                           <p className="text-sm text-text-secondary font-semibold">{p.horario}</p>
                         </div>
                         <div className="flex flex-col gap-2 sm:w-48 justify-end">
-                          {p.status !== 'Entregue' && p.status !== 'Cancelado' && (
+                          {proximo && (
                             <button
                               onClick={() => avancarStatus(p.id)}
                               className="w-full py-2.5 bg-primary text-white rounded-xl text-sm font-bold cursor-pointer hover:bg-primary/90 transition-all"
                             >
-                              {p.status === 'Preparando' ? 'Marcar como Saiu para Entrega' : 'Marcar como Entregue'}
+                              Avançar para {proximo}
                             </button>
                           )}
-                          {p.status === 'Preparando' && (
+                          {!['Entregando', 'Entregue', 'Cancelado'].includes(p.status) && (
                             <button
                               onClick={() => cancelarPedido(p.id)}
                               className="w-full py-2.5 bg-red-50 text-red-500 border border-red-200 rounded-xl text-sm font-bold cursor-pointer hover:bg-red-100 transition-all"

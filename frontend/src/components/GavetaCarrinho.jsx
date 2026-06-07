@@ -142,11 +142,11 @@ export default function CartDrawer({ isOpen, onClose }) {
               </div>
               <div className="flex justify-between items-center mb-3 text-sm font-semibold text-text-secondary">
                 <span>Taxa de entrega</span>
-                <span className="text-accent font-bold">Grátis</span>
+                <span className="text-text-muted font-bold">Calculada no checkout</span>
               </div>
               <div className="h-px bg-border mb-3" />
               <div className="flex justify-between items-center mb-4">
-                <span className="font-display text-base font-bold text-text-primary">Total</span>
+                <span className="font-display text-base font-bold text-text-primary">Subtotal</span>
                 <span className="font-display text-xl font-extrabold text-primary">
                   R$ {(totalCarrinho || 0).toFixed(2)}
                 </span>

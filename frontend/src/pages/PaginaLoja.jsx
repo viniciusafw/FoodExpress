@@ -9,6 +9,53 @@ import { useAuth } from '../contexts/AuthContext'
 import api from '../services/api'
 import { imagemRestaurante, imagemProduto, emojiRestaurante, emojiProduto } from '../utils/imagens'
 
+function normalizarTexto(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+function lerLista(valor, padrao = []) {
+  if (Array.isArray(valor)) return valor
+  if (!valor) return padrao
+  try {
+    const lista = JSON.parse(valor)
+    return Array.isArray(lista) ? lista : padrao
+  } catch {
+    return String(valor).split(',').map(item => item.trim()).filter(Boolean)
+  }
+}
+
+function lojaEstaAberta(loja) {
+  if (['fechado', 'inativo'].includes(String(loja?.status || '').toLowerCase())) return false
+  if (!loja?.horario_abertura || !loja?.horario_fechamento) return true
+
+  const partes = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Fortaleza',
+    weekday: 'long',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(new Date())
+  const valorParte = tipo => partes.find(parte => parte.type === tipo)?.value || ''
+  const diaAtual = normalizarTexto(valorParte('weekday'))
+  const diasAbertos = lerLista(loja.dias_aberto).map(normalizarTexto)
+  if (diasAbertos.length && !diasAbertos.some(dia => dia.startsWith(diaAtual) || diaAtual.startsWith(dia))) return false
+
+  const paraMinutos = horario => {
+    const [hora, minuto] = String(horario).split(':').map(Number)
+    return hora * 60 + minuto
+  }
+  const minutosAgora = Number(valorParte('hour')) * 60 + Number(valorParte('minute'))
+  const abertura = paraMinutos(loja.horario_abertura)
+  const fechamento = paraMinutos(loja.horario_fechamento)
+  if (![minutosAgora, abertura, fechamento].every(Number.isFinite)) return true
+  if (fechamento < abertura) return minutosAgora >= abertura || minutosAgora <= fechamento
+  return minutosAgora >= abertura && minutosAgora <= fechamento
+}
+
 
 // ─── Modal produto ────────────────────────────────────────────────────────────
 function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
@@ -554,7 +601,7 @@ export default function StorePage() {
         sobre: rest.descricao || `${rest.nome} — ${rest.categoria || 'Restaurante'} em ${rest.endereco || 'sua cidade'}`,
         pedidoMinimo: 'R$ 15,00',
         status: rest.status || 'ativo',
-        fechado: rest.status === 'fechado' || rest.status === 'inativo',
+        fechado: !lojaEstaAberta(rest),
         superRestaurante: (rest.avaliacao_media || 0) >= 4.8,
         horarios: (() => {
           if (rest.status === 'fechado' || rest.status === 'inativo') {

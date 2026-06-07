@@ -268,14 +268,43 @@ router.post('/:id/disponibilidade', requireAuth, async (req: AuthRequest, res: R
     const { disponivel } = req.body
     if (typeof disponivel !== 'boolean') return res.status(400).json({ erro: 'Campo disponivel deve ser booleano' }) as any
 
-    const entregador = await db.execute({ sql: 'SELECT id FROM entregadores WHERE id = ?', args: [req.params.id] })
-    if (!entregador.rows.length) return res.status(404).json({ erro: 'Entregador não encontrado' }) as any
     if (!(await podeGerenciarEntregador(req, String(req.params.id)))) {
       return res.status(403).json({ erro: 'Você não pode alterar este entregador' }) as any
     }
 
     const novo_status = disponivel ? 'disponivel' : 'ausente'
-    await db.execute({ sql: 'UPDATE entregadores SET status = ?, ultima_atualizacao = CURRENT_TIMESTAMP WHERE id = ?', args: [novo_status, req.params.id] })
+    const atualizado = await db.transaction(async (tx: any) => {
+      const entregador = await tx.execute({
+        sql: 'SELECT id FROM entregadores WHERE id = ? FOR UPDATE',
+        args: [req.params.id]
+      })
+      if (!entregador.rows.length) return false
+
+      if (!disponivel) {
+        await tx.execute({
+          sql: `UPDATE ofertas_entrega
+                SET status = 'cancelada', respondida_em = CURRENT_TIMESTAMP
+                WHERE entregador_id = ? AND status = 'ofertada'`,
+          args: [req.params.id]
+        })
+        await tx.execute({
+          sql: `UPDATE pedidos
+                SET oferta_entregador_id = NULL,
+                    oferta_enviada_em = NULL,
+                    oferta_expira_em = NULL
+                WHERE oferta_entregador_id = ?
+                  AND (entregador_id IS NULL OR entregador_id = '')`,
+          args: [req.params.id]
+        })
+      }
+
+      await tx.execute({
+        sql: 'UPDATE entregadores SET status = ?, ultima_atualizacao = CURRENT_TIMESTAMP WHERE id = ?',
+        args: [novo_status, req.params.id]
+      })
+      return true
+    })
+    if (!atualizado) return res.status(404).json({ erro: 'Entregador não encontrado' }) as any
     res.json({ mensagem: `Entregador marcado como ${novo_status}`, disponivel, status: novo_status })
   } catch (error) {
     res.status(500).json({ erro: 'Erro ao atualizar disponibilidade' })

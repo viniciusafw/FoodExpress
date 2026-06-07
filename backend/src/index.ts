@@ -30,6 +30,7 @@ import webhooksRouter      from './routes/webhooks'
 import documentosRouter    from './routes/documentos'
 import cnpjRouter           from './routes/cnpj'
 import authRouter          from './routes/auth'
+import adminRouter         from './routes/admin'
 import { ensureDatabaseHealth } from './lib/schema'
 
 const app = express()
@@ -73,7 +74,7 @@ app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('X-Frame-Options', 'DENY')
   res.setHeader('Referrer-Policy', 'no-referrer')
-  res.setHeader('Permissions-Policy', 'geolocation=(), camera=(), microphone=()')
+  res.setHeader('Permissions-Policy', 'geolocation=(self), camera=(), microphone=()')
   next()
 })
 app.use(express.json({ limit: '5mb' }))
@@ -96,6 +97,7 @@ app.use('/api/rotas',         rotasRouter)
 app.use('/api/documentos',   documentosRouter)
 app.use('/api/cnpj',          cnpjRouter)
 app.use('/api/auth',          authLimiter, authRouter)
+app.use('/api/admin',         adminRouter)
 
 // ── Health check ──────────────────────────────────────────────────────────
 app.get('/health', (_req, res) => {

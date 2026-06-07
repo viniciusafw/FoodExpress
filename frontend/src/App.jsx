@@ -11,6 +11,7 @@ import PaginaLoja from './pages/PaginaLoja'
 import PaginaBusca from './pages/PaginaBusca'
 import PerfilCliente from './pages/PerfilCliente'
 import DashboardGerente from './pages/DashboardGerente'
+import AdminDashboard from './pages/AdminDashboard'
 import PaginaEntregador from './pages/PaginaEntregador'
 import FinalizarCompra from './pages/FinalizarCompra'
 import SelecionarPerfil from './pages/SelecionarPerfil'
@@ -40,7 +41,9 @@ const PageWrapper = ({ children }) => (
 
 function RotaProtegida({ children, perfil }) {
   const { estaLogado, usuario, carregando } = useAuth()
-  if (carregando) return null
+  if (carregando) {
+    return <div className="min-h-screen flex items-center justify-center text-text-muted font-semibold">Carregando sessão...</div>
+  }
   if (!estaLogado) return <Navigate to="/login" replace />
   if (perfil) {
     const perfis = Array.isArray(perfil) ? perfil : [perfil]
@@ -54,7 +57,7 @@ function HomeOuPainel() {
   const { usuario, carregando } = useAuth()
   if (carregando) return null
   if (usuario?.perfil === 'gerente') return <Navigate to="/gerente" replace />
-  if (usuario?.perfil === 'operador') return <Navigate to="/gerente/aprovacoes" replace />
+  if (usuario?.perfil === 'operador') return <Navigate to="/admin" replace />
   if (usuario?.perfil === 'entregador') return <Navigate to="/entregador" replace />
   if (usuario?.perfil === 'restaurante') return <Navigate to="/painel-restaurante" replace />
   return <Home />
@@ -67,6 +70,7 @@ function AnimatedRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<PageWrapper><HomeOuPainel /></PageWrapper>} />
         <Route path="/login" element={<PageWrapper><Login /></PageWrapper>} />
+        <Route path="/admin/login" element={<Navigate to="/login?operador=true" replace />} />
         <Route path="/register/user" element={<PageWrapper><CadastroUsuario /></PageWrapper>} />
         <Route path="/register/store" element={<PageWrapper><CadastroEstabelecimento /></PageWrapper>} />
         <Route path="/register/entregador" element={<PageWrapper><CadastroEntregador /></PageWrapper>} />
@@ -82,7 +86,11 @@ function AnimatedRoutes() {
 
         {/* Páginas novas */}
         <Route path="/selecionar-perfil" element={<PageWrapper><SelecionarPerfil /></PageWrapper>} />
-        <Route path="/suporte" element={<PageWrapper><Suporte /></PageWrapper>} />
+        <Route path="/suporte" element={
+          <RotaProtegida perfil={['cliente', 'gerente', 'restaurante', 'entregador', 'operador']}>
+            <PageWrapper><Suporte /></PageWrapper>
+          </RotaProtegida>
+        } />
         <Route path="/termos-uso" element={<PageWrapper><TermosUso /></PageWrapper>} />
         <Route path="/politica-privacidade" element={<PageWrapper><PoliticaPrivacidade /></PageWrapper>} />
         <Route path="/termos-parceiros" element={<PageWrapper><TermosParceiros /></PageWrapper>} />
@@ -114,8 +122,14 @@ function AnimatedRoutes() {
 
         {/* Dashboard e rotas do gerente */}
         <Route path="/gerente/*" element={
-          <RotaProtegida perfil={['gerente', 'operador']}>
+          <RotaProtegida perfil="gerente">
             <PageWrapper><DashboardGerente /></PageWrapper>
+          </RotaProtegida>
+        } />
+
+        <Route path="/admin/*" element={
+          <RotaProtegida perfil="operador">
+            <PageWrapper><AdminDashboard /></PageWrapper>
           </RotaProtegida>
         } />
 
@@ -125,6 +139,7 @@ function AnimatedRoutes() {
             <PageWrapper><PaginaEntregador /></PageWrapper>
           </RotaProtegida>
         } />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AnimatePresence>
   )

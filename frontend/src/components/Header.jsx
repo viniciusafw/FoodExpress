@@ -7,6 +7,7 @@ import { Search, MapPin, ChevronDown, LogIn, ShoppingBag, User, LogOut, Menu, X,
 import { useDarkMode } from '../contexts/DarkModeContext'
 import logoSrc from '../imgs/Logo-site.png'
 import { motion as Motion, AnimatePresence, useScroll, useMotionValueEvent } from 'framer-motion'
+import { nomeRegiaoAproximada } from '../utils/localizacao'
 
 export default function Header() {
   const { estaLogado, usuario, sair } = useAuth()
@@ -60,8 +61,10 @@ export default function Header() {
 
   const logado = estaLogado
   const perfil = usuario?.perfil || null
-  const rotaPerfil = perfil === 'gerente' || perfil === 'operador'
-    ? '/gerente'
+  const rotaPerfil = perfil === 'operador'
+    ? '/admin'
+    : perfil === 'gerente'
+      ? '/gerente'
     : perfil === 'entregador'
       ? '/entregador'
       : perfil === 'restaurante'
@@ -70,13 +73,6 @@ export default function Header() {
   const total = totalCarrinho || 0
   const qtd = quantidadeTotal || 0
   const ativo = (path) => location.pathname === path
-
-  const getRegionName = (lat, lng) => {
-    if (lat >= -23.57 && lat <= -23.53 && lng >= -46.64 && lng <= -46.62) return 'Tauape'
-    if (lat >= -23.7 && lat <= -23.45 && lng >= -46.7 && lng <= -46.45) return 'São Paulo'
-    if (lat >= -23.65 && lat <= -23.55 && lng >= -46.75 && lng <= -46.6) return 'Zona Sul'
-    return 'Sua região'
-  }
 
   const formatarCep = (valor) => {
     const digitos = String(valor || '').replace(/\D/g, '').slice(0, 8)
@@ -88,6 +84,13 @@ export default function Header() {
     setModoCep(true)
     setPopupLocalizacao(true)
     setStatusLocalizacao(mensagem)
+  }
+
+  const fecharLocalizacao = ({ adiar = false } = {}) => {
+    if (adiar && typeof window !== 'undefined') {
+      window.__foodexpressLocalizacaoAdiada = true
+    }
+    setPopupLocalizacao(false)
   }
 
   const montarNomeEndereco = (dadosCep, cepFormatado) => {
@@ -187,7 +190,7 @@ export default function Header() {
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords
-        const novaRegiao = getRegionName(latitude, longitude)
+        const novaRegiao = nomeRegiaoAproximada(latitude, longitude)
         setRegiao(novaRegiao)
         localStorage.setItem('regiao', novaRegiao)
         localStorage.setItem('localizacao', JSON.stringify({ latitude, longitude }))
@@ -217,7 +220,11 @@ export default function Header() {
     const savedRegion = localStorage.getItem('regiao')
     if (savedRegion) {
       setRegiao(savedRegion)
-    } else if (navigator.geolocation) {
+    } else if (
+      ['/', '/Restaurantes', '/Mercados', '/busca'].includes(location.pathname) &&
+      navigator.geolocation &&
+      !window.__foodexpressLocalizacaoAdiada
+    ) {
       setPopupLocalizacao(true)
     }
 
@@ -228,7 +235,7 @@ export default function Header() {
 
     window.addEventListener('localizacao-atualizada', handleLocationUpdated)
     return () => window.removeEventListener('localizacao-atualizada', handleLocationUpdated)
-  }, [])
+  }, [location.pathname])
 
   useEffect(() => {
     const pulse = () => setCartPulse(v => v + 1)
@@ -262,8 +269,11 @@ export default function Header() {
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[72px] flex items-center gap-3 sm:gap-6">
 
-          <Link to="/" className="shrink-0 rounded-xl p-1.5 hover:bg-surface-2 transition-colors">
+          <Link to="/" className="flex min-w-0 shrink-0 items-center gap-2 rounded-xl p-1.5 hover:bg-surface-2 transition-colors">
             <img src={logoSrc} alt="FoodExpress" className="h-10 sm:h-11 w-auto object-contain" />
+            <span className="max-w-[9rem] truncate font-display text-lg font-extrabold tracking-tight text-text-primary sm:hidden">
+              FoodExpress
+            </span>
           </Link>
 
           <nav className="hidden lg:flex items-center">
@@ -326,7 +336,7 @@ export default function Header() {
                 <Motion.button
                   data-cart-target="main-cart"
                   onClick={() => setCarrinhoAberto(true)}
-                  className="flex items-center gap-2 bg-transparent border border-border rounded-full py-2 pr-3 pl-2.5 cursor-pointer transition-all hover:border-primary hover:bg-primary-light"
+                  className="hidden md:flex items-center gap-2 bg-transparent border border-border rounded-full py-2 pr-3 pl-2.5 cursor-pointer transition-all hover:border-primary hover:bg-primary-light"
                   animate={cartPulse ? { scale: [1, 1.08, 1] } : { scale: 1 }}
                   transition={{ duration: 0.28, ease: 'easeOut' }}
                 >
@@ -353,7 +363,7 @@ export default function Header() {
                 <Motion.button
                   data-cart-target="main-cart"
                   onClick={() => setCarrinhoAberto(true)}
-                  className="flex items-center gap-2 bg-transparent border border-border rounded-full py-2 pr-3 pl-2.5 cursor-pointer transition-all hover:border-primary hover:bg-primary-light"
+                  className="hidden md:flex items-center gap-2 bg-transparent border border-border rounded-full py-2 pr-3 pl-2.5 cursor-pointer transition-all hover:border-primary hover:bg-primary-light"
                   animate={cartPulse ? { scale: [1, 1.08, 1] } : { scale: 1 }}
                   transition={{ duration: 0.28, ease: 'easeOut' }}
                 >
@@ -379,11 +389,20 @@ export default function Header() {
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             >
               <Motion.div
-                className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-border"
+                className="relative w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-border"
                 initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
               >
+                <button
+                  type="button"
+                  onClick={() => fecharLocalizacao({ adiar: true })}
+                  aria-label="Fechar localização"
+                  title="Fechar"
+                  className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-border bg-white text-text-secondary transition-colors hover:bg-surface-2 hover:text-text-primary"
+                >
+                  <X size={18} />
+                </button>
                 <div className="flex flex-col gap-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 pr-11">
                     <MapPin size={22} className="text-primary" />
                     <div>
                       <h2 className="font-display text-lg font-bold text-text-primary">
@@ -480,7 +499,7 @@ export default function Header() {
                         Informar CEP
                       </button>
                       <button
-                        onClick={() => setPopupLocalizacao(false)}
+                        onClick={() => fecharLocalizacao({ adiar: true })}
                         className="w-full py-3 bg-white text-text-muted rounded-2xl font-semibold transition-all hover:bg-surface-2"
                       >
                         Não agora

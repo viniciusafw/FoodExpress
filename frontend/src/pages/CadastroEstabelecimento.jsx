@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useNavigate, Link } from 'react-router-dom'
 import { Store, MapPin, Phone, User, Mail, ArrowLeft, ChevronRight, CheckCircle, Building2 } from 'lucide-react'
 import { motion as Motion } from 'framer-motion'
-import { mascaraTelefone, mascaraCNPJ, mascaraCPF } from '../utils/mascaras'
+import { mascaraTelefone, mascaraCNPJ, mascaraCPF, validarCPF } from '../utils/mascaras'
 import CampoSenhaForte from '../components/CampoSenhaForte'
 import { senhaForteValida } from '../utils/senha'
 
@@ -62,6 +62,8 @@ export default function CadastroLoja() {
   const [aceitouTermos, setAceitouTermos] = useState(false)
   const [cnpjStatus, setCnpjStatus] = useState(null) // null | 'buscando' | 'ok' | 'erro'
   const [cnpjErro, setCnpjErro] = useState('')
+  const [cpfStatus, setCpfStatus] = useState(null) // null | 'ok' | 'erro'
+  const [cpfErro, setCpfErro] = useState('')
   const [erro, setErro] = useState('')
   const { cadastrarGerente } = useAuth()
   const navigate = useNavigate()
@@ -100,6 +102,16 @@ export default function CadastroLoja() {
   const handleEnviar = async (e) => {
     e.preventDefault()
     if (!aceitouTermos) return
+    if (!dados.tipoLoja) {
+      setErro('Selecione o tipo da sua loja antes de continuar.')
+      return
+    }
+    if (!validarCPF(dados.cpfDono)) {
+      setCpfStatus('erro')
+      setCpfErro('CPF inválido. Confira os números digitados.')
+      setErro('CPF inválido. Confira os números do responsável.')
+      return
+    }
     if (!senhaForteValida(dados.senha, dados.confirmarSenha)) {
       setErro('Confira os requisitos da senha antes de continuar.')
       return
@@ -138,9 +150,29 @@ export default function CadastroLoja() {
       if (digits.length === 14) buscarCNPJ(valor)
       else if (cnpjStatus === 'ok') setCnpjStatus(null)
     }
-    if (name === 'cpfDono') valor = mascaraCPF(value)
+    if (name === 'cpfDono') {
+      valor = mascaraCPF(value)
+      const digits = valor.replace(/[^\d]/g, '')
+      if (!digits) {
+        setCpfStatus(null)
+        setCpfErro('')
+      } else if (digits.length === 11) {
+        const valido = validarCPF(valor)
+        setCpfStatus(valido ? 'ok' : 'erro')
+        setCpfErro(valido ? '' : 'CPF inválido. Confira os números digitados.')
+      } else {
+        setCpfStatus(null)
+        setCpfErro('')
+      }
+    }
     setDados({ ...dados, [name]: valor })
   }
+
+  const podeEnviar = aceitouTermos
+    && senhaForteValida(dados.senha, dados.confirmarSenha)
+    && Boolean(dados.tipoLoja)
+    && validarCPF(dados.cpfDono)
+    && cnpjStatus !== 'buscando'
 
   return (
     <div className="min-h-screen bg-background">
@@ -248,12 +280,12 @@ export default function CadastroLoja() {
               />
 
               <div>
-                <label className="block text-xs font-extrabold text-text-secondary uppercase tracking-wide mb-1.5">Tipo *</label>
+                <label className="block text-xs font-extrabold text-text-secondary uppercase tracking-wide mb-1.5">Tipo da loja *</label>
                 <div className="relative">
                   <Store size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none z-10" />
                   <select name="tipoLoja" value={dados.tipoLoja} onChange={handleChange} required
                     className={inputBase + ' appearance-none cursor-pointer'}>
-                    <option value="">Selecione o tipo</option>
+                    <option value="">Selecione sua loja</option>
                     {tiposCadastroEstabelecimento.map(tipo => (
                       <option key={tipo.value} value={tipo.value}>{tipo.label}</option>
                     ))}
@@ -334,7 +366,30 @@ export default function CadastroLoja() {
               <Campo label="Nome completo" name="nomeDono" placeholder="Seu nome completo" Icon={User} span value={dados.nomeDono} onChange={handleChange} />
               <Campo label="E-mail" name="emailDono" type="email" placeholder="seu@email.com" Icon={Mail} value={dados.emailDono} onChange={handleChange} />
               <Campo label="Telefone" name="telefoneDono" type="tel" placeholder="(11) 99999-9999" Icon={Phone} value={dados.telefoneDono} onChange={handleChange} />
-              <Campo label="CPF" name="cpfDono" placeholder="000.000.000-00" Icon={User} value={dados.cpfDono} onChange={handleChange} />
+              <div>
+                <label className="block text-xs font-extrabold text-text-secondary uppercase tracking-wide mb-1.5">
+                  CPF *
+                  {cpfStatus === 'ok' && (
+                    <span className="ml-2 text-accent font-semibold normal-case">✓ CPF válido</span>
+                  )}
+                </label>
+                <div className="relative">
+                  <User size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+                  <input
+                    name="cpfDono"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="000.000.000-00"
+                    value={dados.cpfDono}
+                    onChange={handleChange}
+                    required
+                    className={inputBase + (cpfStatus === 'ok' ? ' border-accent focus:border-accent' : cpfStatus === 'erro' ? ' border-red-400 focus:border-red-400' : '')}
+                  />
+                </div>
+                {cpfStatus === 'erro' && (
+                  <p className="text-xs text-red-500 font-semibold mt-1">{cpfErro}</p>
+                )}
+              </div>
 
               <div className="sm:col-span-2">
                 <CampoSenhaForte
@@ -362,10 +417,10 @@ export default function CadastroLoja() {
 
             <Motion.button
               type="submit"
-              disabled={carregando || !aceitouTermos || !senhaForteValida(dados.senha, dados.confirmarSenha)}
+              disabled={carregando || !podeEnviar}
               className="mt-6 w-full py-4 bg-secondary text-white border-none rounded-xl font-display font-bold text-base cursor-pointer flex items-center justify-center gap-2 disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed"
-              whileHover={!carregando && aceitouTermos ? { scale: 1.02, boxShadow: '0 8px 24px rgba(46,41,78,0.35)' } : {}}
-              whileTap={!carregando && aceitouTermos ? { scale: 0.97 } : {}}
+              whileHover={!carregando && podeEnviar ? { scale: 1.02, boxShadow: '0 8px 24px rgba(46,41,78,0.35)' } : {}}
+              whileTap={!carregando && podeEnviar ? { scale: 0.97 } : {}}
               transition={{ type: 'spring', stiffness: 400, damping: 20 }}
             >
               {carregando ? (

@@ -45,6 +45,7 @@ export default function ConfiguracoesGerente() {
   const [erro, setErro] = useState(null)
   const [carregando, setCarregando] = useState(true)
   const [buscandoLocalizacao, setBuscandoLocalizacao] = useState(false)
+  const [alterandoStatus, setAlterandoStatus] = useState(false)
 
   useEffect(() => {
     const usr = usuario || JSON.parse(localStorage.getItem('usuario') || '{}')
@@ -143,7 +144,6 @@ export default function ConfiguracoesGerente() {
         horario_fechamento: horarioFechamento,
         dias_aberto: diasAberto,
         formas_pagamento: pagamentos,
-        status: statusLoja,
       })
       setSalvo(true)
       setTimeout(() => setSalvo(false), 3000)
@@ -154,8 +154,33 @@ export default function ConfiguracoesGerente() {
     }
   }
 
+  const alternarStatusLoja = async () => {
+    if (!restauranteId || alterandoStatus) return
+    if (!['ativo', 'fechado'].includes(statusLoja)) {
+      setErro('A loja precisa ser aprovada pela administração antes de abrir.')
+      return
+    }
+    const anterior = statusLoja
+    const proximo = anterior === 'ativo' ? 'fechado' : 'ativo'
+    setStatusLoja(proximo)
+    setErro(null)
+    setAlterandoStatus(true)
+    try {
+      await api.restaurantes.atualizar(restauranteId, { status: proximo })
+      setSalvo(true)
+      setTimeout(() => setSalvo(false), 2500)
+    } catch (error) {
+      setStatusLoja(anterior)
+      setErro('Não foi possível alterar o status da loja: ' + (error.message || 'tente novamente'))
+    } finally {
+      setAlterandoStatus(false)
+    }
+  }
+
   const inputCls = 'w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all'
   const labelCls = 'block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5'
+  const lojaAguardandoAprovacao = statusLoja === 'pendente'
+  const lojaRejeitada = statusLoja === 'rejeitado'
 
   if (carregando) {
     return (
@@ -173,8 +198,8 @@ export default function ConfiguracoesGerente() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="font-display text-2xl font-extrabold text-text-primary">Configurações</h1>
-        <p className="text-sm text-text-muted font-semibold mt-1">Gerencie as informações da sua loja</p>
+        <h1 className="font-display text-2xl font-extrabold text-text-primary">Perfil e configurações</h1>
+        <p className="text-sm text-text-muted font-semibold mt-1">Gerencie seu acesso e as informações da loja</p>
       </div>
 
       <div className="flex flex-col gap-4 max-w-2xl">
@@ -211,22 +236,41 @@ export default function ConfiguracoesGerente() {
           <div className="p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <p className="text-sm font-bold text-text-primary">
-                {statusLoja === 'ativo' ? 'Loja aberta para pedidos' : 'Loja fechada para pedidos'}
+                {lojaAguardandoAprovacao
+                  ? 'Loja aguardando aprovação'
+                  : lojaRejeitada
+                    ? 'Cadastro da loja rejeitado'
+                    : statusLoja === 'ativo'
+                      ? 'Loja aberta para pedidos'
+                      : 'Loja fechada para pedidos'}
               </p>
               <p className="text-xs text-text-muted font-semibold mt-0.5">
-                Quando estiver fechada, a loja aparece como fechada e o cliente não consegue adicionar itens ao carrinho.
+                {lojaAguardandoAprovacao
+                  ? 'Cadastre pelo menos um produto. Depois, a administração poderá revisar e publicar sua loja.'
+                  : lojaRejeitada
+                    ? 'Revise os dados da loja e procure o suporte para solicitar uma nova análise.'
+                    : 'Quando estiver fechada, a loja aparece como fechada e o cliente não consegue adicionar itens ao carrinho.'}
               </p>
             </div>
             <button
               type="button"
-              onClick={() => setStatusLoja(s => s === 'ativo' ? 'fechado' : 'ativo')}
+              onClick={alternarStatusLoja}
+              disabled={alterandoStatus || !restauranteId || !['ativo', 'fechado'].includes(statusLoja)}
               className={`px-5 py-2.5 rounded-xl text-sm font-extrabold border transition-all cursor-pointer ${
                 statusLoja === 'ativo'
                   ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
                   : 'bg-accent text-white border-accent hover:opacity-90'
-              }`}
+              } disabled:opacity-60 disabled:cursor-not-allowed`}
             >
-              {statusLoja === 'ativo' ? 'Fechar loja' : 'Abrir loja'}
+              {lojaAguardandoAprovacao
+                ? 'Aguardando aprovação'
+                : lojaRejeitada
+                  ? 'Revisão necessária'
+                  : alterandoStatus
+                    ? 'Atualizando...'
+                    : statusLoja === 'ativo'
+                      ? 'Fechar loja'
+                      : 'Abrir loja'}
             </button>
           </div>
         </Motion.div>

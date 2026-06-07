@@ -39,6 +39,7 @@ export default function DetalhesPedido() {
   const navigate = useNavigate()
   const [pedido, setPedido] = useState(null)
   const [carregando, setCarregando] = useState(true)
+  const [erroCarregamento, setErroCarregamento] = useState('')
 
   useEffect(() => {
     let ativo = true
@@ -49,6 +50,7 @@ export default function DetalhesPedido() {
       try {
         const p = await api.pedidos.buscarPorId(id)
         if (!ativo) return
+        setErroCarregamento('')
         p.itens = formatarItensPedido(p.itens)
         setPedido(p)
         if (['entregue', 'cancelado'].includes(String(p.status))) {
@@ -58,7 +60,7 @@ export default function DetalhesPedido() {
           }
         }
       } catch (error) {
-        console.error(error)
+        if (ativo) setErroCarregamento(error.message || 'Não foi possível carregar o pedido.')
       } finally {
         if (ativo && !silencioso) setCarregando(false)
       }
@@ -139,7 +141,14 @@ export default function DetalhesPedido() {
   }
 
   if (carregando) return <div className="min-h-screen flex items-center justify-center text-text-muted">Carregando pedido...</div>
-  if (!pedido) return <div className="min-h-screen flex items-center justify-center text-text-muted">Pedido não encontrado</div>
+  if (!pedido) return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-3 px-4 text-center text-text-muted">
+      <p>{erroCarregamento || 'Pedido não encontrado'}</p>
+      <button type="button" onClick={() => navigate('/perfil')} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white border-none">
+        Voltar aos pedidos
+      </button>
+    </div>
+  )
 
   const currentIndex = pedido.status === 'cancelado' ? -1 : stepOrder.indexOf(pedido.status)
 
@@ -149,10 +158,10 @@ export default function DetalhesPedido() {
 
       <main className="max-w-4xl mx-auto px-4 py-8">
         {/* Voltar */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between gap-3 mb-6">
           <Link to="/perfil"
-            className="inline-flex items-center gap-1.5 text-sm font-bold text-primary hover:text-primary/80 transition-colors">
-            <ArrowLeft size={16} /> Voltar para Pedidos
+            className="inline-flex min-h-10 shrink-0 items-center gap-1.5 text-sm font-bold text-primary hover:text-primary/80 transition-colors">
+            <ArrowLeft size={16} /> <span className="hidden sm:inline">Voltar para Pedidos</span><span className="sm:hidden">Pedidos</span>
           </Link>
           {pedido.status === 'entregue' && (
             <button
@@ -160,9 +169,18 @@ export default function DetalhesPedido() {
                 // Navega para a loja para repetir o pedido
                 navigate(`/loja/${pedido.restaurante_id}`)
               }}
-              className="flex items-center gap-1.5 text-xs font-bold text-primary border border-primary/20 bg-primary-light px-4 py-2 rounded-xl cursor-pointer hover:bg-primary hover:text-white transition-all border-solid"
+              className="flex min-h-10 items-center gap-1.5 text-xs font-bold text-primary border border-primary/20 bg-primary-light px-3 sm:px-4 py-2 rounded-xl cursor-pointer hover:bg-primary hover:text-white transition-all border-solid"
             >
-              🔁 Repetir pedido
+              Pedir novamente
+            </button>
+          )}
+          {['pronto', 'entregando'].includes(pedido.status) && (
+            <button
+              type="button"
+              onClick={() => navigate(`/rastrear/${pedido.id}`)}
+              className="flex min-h-10 items-center gap-1.5 text-xs font-bold text-white bg-primary px-3 sm:px-4 py-2 rounded-xl cursor-pointer hover:bg-primary/90 transition-all border-none"
+            >
+              <Truck size={14} /> <span className="hidden sm:inline">Acompanhar pedido</span><span className="sm:hidden">Acompanhar</span>
             </button>
           )}
         </div>
@@ -204,6 +222,12 @@ export default function DetalhesPedido() {
             })}
           </div>
         </Motion.div>
+        {pedido.status === 'cancelado' && (
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-red-600">
+            <XCircle size={20} />
+            <p className="text-sm font-bold">Este pedido foi cancelado.</p>
+          </div>
+        )}
 
         {/* Endereço + Resumo */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
@@ -360,7 +384,7 @@ export default function DetalhesPedido() {
           </Motion.div>
         )}
 
-        {pedido.status !== 'entregue' && (
+        {!['entregue', 'cancelado'].includes(pedido.status) && (
           <div className="bg-surface-2 border border-border rounded-2xl p-5 text-center text-sm text-text-secondary font-semibold">
             Você poderá avaliar este pedido após a entrega.
           </div>

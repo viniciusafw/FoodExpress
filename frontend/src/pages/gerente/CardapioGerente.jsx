@@ -59,12 +59,12 @@ function ModalProduto({ produto, categoriaId, categorias, restauranteId, onFecha
 
   return (
     <Motion.div
-      className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/50 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-4"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={onFechar}
     >
       <Motion.div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
+        className="max-h-[95dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl sm:p-6"
         initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
         onClick={e => e.stopPropagation()}
       >
@@ -268,12 +268,12 @@ function ModalPromocao({ categorias, restauranteId, onFechar, onSalvo }) {
 
   return (
     <Motion.div
-      className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/50 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-4"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={onFechar}
     >
       <Motion.div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-3xl p-5 sm:p-6 max-h-[90vh] overflow-hidden flex flex-col"
+        className="flex max-h-[95dvh] w-full max-w-3xl flex-col overflow-hidden rounded-t-2xl bg-white p-4 shadow-xl sm:max-h-[90vh] sm:rounded-2xl sm:p-6"
         initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
         onClick={e => e.stopPropagation()}
       >
@@ -462,12 +462,12 @@ function ModalNovaCategoria({ restauranteId, onFechar, onSalvo }) {
 
   return (
     <Motion.div
-      className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4"
+      className="fixed inset-0 bg-black/50 z-[200] flex items-end justify-center p-0 sm:items-center sm:p-4"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       onClick={onFechar}
     >
       <Motion.div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
+        className="max-h-[95dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl sm:p-6"
         initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
         onClick={e => e.stopPropagation()}
       >
@@ -523,7 +523,7 @@ export default function CardapioGerente() {
   const [carregando, setCarregando] = useState(true)
 
   const carregarCardapio = useCallback((restId) => {
-    return api.cardapio.listar(restId).then(itens => {
+    return api.cardapio.listarGerenciamento(restId).then(itens => {
       const cats = {}
       itens.forEach(item => {
         const cat = item.categoria || 'Geral'

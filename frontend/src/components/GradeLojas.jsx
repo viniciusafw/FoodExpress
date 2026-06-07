@@ -8,6 +8,7 @@ export default function StoreGrid({ tipo, limite = 50, somenteLinha = false }) {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [versaoLocalizacao, setVersaoLocalizacao] = useState(0)
+  const [tentativa, setTentativa] = useState(0)
 
   useEffect(() => {
     const atualizar = () => setVersaoLocalizacao(v => v + 1)
@@ -39,7 +40,7 @@ export default function StoreGrid({ tipo, limite = 50, somenteLinha = false }) {
         }
       })
       .finally(() => setCarregando(false))
-  }, [tipo, limite, versaoLocalizacao])
+  }, [tipo, limite, versaoLocalizacao, tentativa])
 
   if (carregando) {
     return (
@@ -55,8 +56,15 @@ export default function StoreGrid({ tipo, limite = 50, somenteLinha = false }) {
     return (
       <div className="text-center py-16 text-text-muted bg-surface-2 rounded-2xl border border-border">
         <p className="text-4xl mb-3">🔌</p>
-        <p className="font-bold text-text-primary mb-1">Backend offline</p>
-        <p className="text-sm font-semibold">Inicie o servidor: <code className="bg-white px-2 py-0.5 rounded text-xs font-mono border border-border">cd backend && npm run dev</code></p>
+        <p className="font-bold text-text-primary mb-1">Não foi possível carregar as lojas</p>
+        <p className="text-sm font-semibold mb-4">Verifique sua conexão e tente novamente.</p>
+        <button
+          type="button"
+          onClick={() => setTentativa(valor => valor + 1)}
+          className="rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white border-none"
+        >
+          Tentar novamente
+        </button>
       </div>
     )
   }

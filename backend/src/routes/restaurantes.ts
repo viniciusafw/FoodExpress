@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { Router, Response } from 'express'
 import { db } from '../lib/db'
-import { validarCNPJ } from '../lib/validacoes'
+import { validarCNPJ, validarCPF } from '../lib/validacoes'
 import { requireAuth, AuthRequest } from '../middleware/auth'
 import { buscarRestauranteDoUsuario, vincularRestauranteAoUsuario } from '../lib/schema'
 import { hashSenha } from '../lib/password'
@@ -175,9 +175,13 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
       ownerName,
       ownerEmail,
       ownerPhone,
+      ownerCpf,
       senha,
       password,
     } = req.body
+    if (ownerCpf && !validarCPF(String(ownerCpf))) {
+      return res.status(400).json({ erro: 'CPF do responsável inválido' }) as any
+    }
     const senhaInformada = String(senha || password || '')
     if (senhaInformada) {
       const erroSenha = validarSenhaForte(senhaInformada)
@@ -205,7 +209,7 @@ router.post('/cadastro', requireAuth, async (req: AuthRequest, res: Response) =>
       sql: `INSERT INTO restaurantes
             (id, user_id, nome, cnpj, email, telefone, endereco, categoria, descricao, latitude, longitude,
              taxa_comissao, avaliacao_media, status, horario_abertura, horario_fechamento, dias_aberto, formas_pagamento, senha_hash)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 15, 0, 'ativo', '18:00', '23:00', ?, ?, ?)`,
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 15, 0, 'pendente', '18:00', '23:00', ?, ?, ?)`,
       args: [
         id,
         userId,
@@ -382,8 +386,15 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (status !== undefined) {
       const statusPermitidos = ['pendente', 'ativo', 'fechado', 'rejeitado', 'inativo']
       if (!statusPermitidos.includes(String(status))) return res.status(400).json({ erro: 'Status inválido' }) as any
-      if (!ehOperador(req) && !['ativo', 'fechado'].includes(String(status))) {
-        return res.status(403).json({ erro: 'Gerentes só podem abrir ou fechar a própria loja' }) as any
+      if (!ehOperador(req)) {
+        if (!['ativo', 'fechado'].includes(String(status))) {
+          return res.status(403).json({ erro: 'Gerentes só podem abrir ou fechar a própria loja' }) as any
+        }
+        const atual = await db.execute({ sql: 'SELECT status FROM restaurantes WHERE id = ? LIMIT 1', args: [id] })
+        const statusAtual = String((atual.rows[0] as any)?.status || '')
+        if (!['ativo', 'fechado'].includes(statusAtual)) {
+          return res.status(403).json({ erro: 'A loja precisa ser aprovada pela administração antes de abrir.' }) as any
+        }
       }
       sets.push('status = ?'); args.push(status)
     }

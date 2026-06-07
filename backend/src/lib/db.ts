@@ -65,6 +65,35 @@ export const db = {
       lastInsertRowid: (result as any)?.insertId,
       insertId: (result as any)?.insertId,
     }
+  },
+  transaction: async (callback: (tx: any) => Promise<any>) => {
+    const connection = await pool.getConnection()
+    const tx = {
+      execute: async (query: { sql: string; args?: any[] } | string) => {
+        const sql = typeof query === 'string' ? query : query.sql
+        const args = typeof query === 'string' ? [] : (query.args ?? [])
+        const [result] = await connection.execute(sql, args)
+        const rows = Array.isArray(result) ? result : []
+        return {
+          rows,
+          rowsAffected: Number((result as any)?.affectedRows || 0),
+          lastInsertRowid: (result as any)?.insertId,
+          insertId: (result as any)?.insertId,
+        }
+      }
+    }
+
+    try {
+      await connection.beginTransaction()
+      const result = await callback(tx)
+      await connection.commit()
+      return result
+    } catch (error) {
+      await connection.rollback()
+      throw error
+    } finally {
+      connection.release()
+    }
   }
 }
 

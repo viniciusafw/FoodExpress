@@ -412,7 +412,7 @@ function EditarEndereco({ end, clienteId, emailUsuario, onSalvo }) {
 }
 
 export default function PerfilCliente() {
-  const { usuario, sair } = useAuth()
+  const { usuario, sair, atualizarUsuario } = useAuth()
   const navigate = useNavigate()
   const [editando, setEditando] = useState(false)
   const [nome, setNome] = useState(usuario?.nome || 'Usuário')
@@ -421,6 +421,10 @@ export default function PerfilCliente() {
   const [enderecos, setEnderecos] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [clienteId, setClienteId] = useState(null)
+  const [salvandoNome, setSalvandoNome] = useState(false)
+  const [erroNome, setErroNome] = useState('')
+  const [erroPerfil, setErroPerfil] = useState('')
+  const [tentativaPerfil, setTentativaPerfil] = useState(0)
   const [favoritos, setFavoritos] = useState([])
   const [pedidoParaAvaliar, setPedidoParaAvaliar] = useState(null)
   const [avaliacoesDispensadas, setAvaliacoesDispensadas] = useState(() => {
@@ -463,20 +467,27 @@ export default function PerfilCliente() {
         setCarregando(true)
       }
       try {
-        const [listaPedidos, cliente] = await Promise.all([
-          api.pedidos.listar({ clienteId: usuario.id }).catch(() => []),
+        const [pedidosResultado, clienteResultado] = await Promise.allSettled([
+          api.pedidos.listar({ clienteId: usuario.id }),
           api.clientes.meuPerfil().catch(async () => {
             try {
               return await api.clientes.cadastrarInicial()
             } catch {
-              return null
+              throw new Error('Não foi possível carregar os dados pessoais.')
             }
           }),
         ])
 
         if (!ativo) return
 
+        const listaPedidos = pedidosResultado.status === 'fulfilled' ? pedidosResultado.value : []
+        const cliente = clienteResultado.status === 'fulfilled' ? clienteResultado.value : null
         setPedidos(Array.isArray(listaPedidos) ? listaPedidos : [])
+        setErroPerfil(
+          pedidosResultado.status === 'rejected' || clienteResultado.status === 'rejected'
+            ? 'Parte do perfil não pôde ser carregada. Tente novamente.'
+            : ''
+        )
 
         if (cliente?.id) setClienteId(cliente.id)
         if (cliente?.nome) {
@@ -500,6 +511,7 @@ export default function PerfilCliente() {
         }
       } catch (err) {
         console.warn('Erro ao carregar perfil:', err)
+        if (ativo) setErroPerfil(err.message || 'Não foi possível carregar seu perfil.')
       } finally {
         if (ativo && !silencioso) setCarregando(false)
       }
@@ -518,7 +530,7 @@ export default function PerfilCliente() {
       if (intervalo) clearInterval(intervalo)
       document.removeEventListener('visibilitychange', atualizarAoVoltar)
     }
-  }, [usuario?.id, usuario?.email])
+  }, [usuario?.id, usuario?.email, tentativaPerfil])
 
   useEffect(() => {
     const pendente = pedidos.find((pedido) => {
@@ -535,6 +547,30 @@ export default function PerfilCliente() {
     setAvaliacoesDispensadas(proximas)
     sessionStorage.setItem('avaliacoesDispensadas', JSON.stringify(proximas))
     setPedidoParaAvaliar(null)
+  }
+
+  const salvarNome = async () => {
+    const nomeFinal = formatarNome(nomeTemp)
+    if (!nomeFinal) {
+      setErroNome('Informe um nome válido.')
+      return
+    }
+    if (!clienteId) {
+      setErroNome('Seu perfil ainda está carregando. Tente novamente.')
+      return
+    }
+    setSalvandoNome(true)
+    setErroNome('')
+    try {
+      await api.clientes.atualizar(clienteId, { nome: nomeFinal })
+      setNome(nomeFinal)
+      atualizarUsuario({ nome: nomeFinal })
+      setEditando(false)
+    } catch (error) {
+      setErroNome(error.message || 'Não foi possível salvar seu nome.')
+    } finally {
+      setSalvandoNome(false)
+    }
   }
 
   const pedidosFormatados = pedidos.map((pedido) => {
@@ -613,6 +649,18 @@ export default function PerfilCliente() {
       )}
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 pt-12 pb-6">
+        {erroPerfil && (
+          <div className="mb-5 flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-sm font-semibold text-red-600">{erroPerfil}</p>
+            <button
+              type="button"
+              onClick={() => setTentativaPerfil(valor => valor + 1)}
+              className="rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white border-none"
+            >
+              Tentar novamente
+            </button>
+          </div>
+        )}
         <div className="flex flex-col lg:flex-row gap-6 items-start">
 
           {/* ── Coluna esquerda — Info do usuário ── */}
@@ -646,8 +694,8 @@ export default function PerfilCliente() {
                     className="border border-border rounded-lg px-2 py-1 text-sm font-bold text-center outline-none focus:border-primary w-36"
                     autoFocus
                   />
-                  <button onClick={() => { setNome(formatarNome(nomeTemp)); setEditando(false) }}
-                    className="w-7 h-7 bg-accent rounded-full flex items-center justify-center border-none cursor-pointer">
+                  <button onClick={salvarNome} disabled={salvandoNome}
+                    className="w-7 h-7 bg-accent rounded-full flex items-center justify-center border-none cursor-pointer disabled:opacity-60">
                     <Check size={13} className="text-white" />
                   </button>
                   <button onClick={() => { setNomeTemp(nome); setEditando(false) }}
@@ -664,6 +712,7 @@ export default function PerfilCliente() {
                   </button>
                 </div>
               )}
+              {erroNome && <p className="mb-2 text-xs font-bold text-red-500">{erroNome}</p>}
 
               <p className="text-sm text-text-muted font-semibold mb-4">{usuario?.email || 'Sem e-mail'}</p>
 
@@ -761,7 +810,7 @@ export default function PerfilCliente() {
                 )}
                 {pedidosFormatados.map((pedido, i) => (
                   <Motion.div key={pedido.id}
-                    className="flex items-center gap-4 px-5 py-4 hover:bg-surface-2 transition-colors cursor-pointer"
+                    className="flex items-center gap-3 px-4 py-4 hover:bg-surface-2 transition-colors cursor-pointer sm:gap-4 sm:px-5"
                     onClick={() => navigate(`/pedido/${pedido.id}`)}
                     initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: 0.25 + i * 0.07 }}
@@ -770,8 +819,8 @@ export default function PerfilCliente() {
                       {pedido.emoji}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="font-display text-sm font-bold text-text-primary">{pedido.loja}</span>
+                      <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
+                        <span className="max-w-full truncate font-display text-sm font-bold text-text-primary">{pedido.loja}</span>
                         <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${statusColor[pedido.statusOriginal] || statusColor[pedido.status] || 'text-text-secondary bg-surface-2'}`}>{pedido.status}</span>
                       </div>
                       <p className="text-xs text-text-muted font-semibold truncate">{pedido.itens}</p>
@@ -781,7 +830,7 @@ export default function PerfilCliente() {
                       </div>
                     </div>
                     {pedido.avaliacao ? (
-                      <div className="flex items-center gap-0.5 shrink-0">
+                      <div className="hidden items-center gap-0.5 shrink-0 sm:flex">
                         {Array.from({ length: 5 }).map((_, j) => (
                           <Star key={j} size={12} fill={j < pedido.avaliacao ? '#FFBA08' : 'none'} stroke={j < pedido.avaliacao ? '#FFBA08' : '#ccc'} />
                         ))}
@@ -790,7 +839,7 @@ export default function PerfilCliente() {
                       <button
                         type="button"
                         onClick={(event) => { event.stopPropagation(); navigate(`/pedido/${pedido.id}`) }}
-                        className="text-xs font-bold text-primary border border-primary rounded-full px-3 py-1 hover:bg-primary-light transition-all cursor-pointer bg-transparent shrink-0"
+                        className="shrink-0 rounded-lg border border-primary bg-transparent px-2.5 py-2 text-xs font-bold text-primary transition-all hover:bg-primary-light"
                       >
                         {String(pedido.statusOriginal).toLowerCase() === 'entregue' ? 'Avaliar' : 'Ver pedido'}
                       </button>
@@ -836,13 +885,15 @@ export default function PerfilCliente() {
                     />
                   </div>
                 ))}
-                <div className="px-5 py-4">
-                  <AdicionarEndereco
-                    clienteId={clienteId}
-                    emailUsuario={usuario?.email}
-                    onSalvo={(end) => setEnderecos([{ ...end, id: 'principal', principal: true }])}
-                  />
-                </div>
+                {enderecos.length === 0 && (
+                  <div className="px-5 py-4">
+                    <AdicionarEndereco
+                      clienteId={clienteId}
+                      emailUsuario={usuario?.email}
+                      onSalvo={(end) => setEnderecos([{ ...end, id: 'principal', principal: true }])}
+                    />
+                  </div>
+                )}
               </div>
             </SecaoCard>
 

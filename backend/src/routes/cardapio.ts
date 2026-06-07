@@ -44,6 +44,24 @@ router.get('/', async (req, res: Response) => {
   }
 })
 
+// GET /api/cardapio/gerenciar — inclui itens indisponíveis para o dono da loja
+router.get('/gerenciar', requireAuth, async (req: AuthRequest, res: Response) => {
+  try {
+    const restauranteId = String(req.query.restauranteId || '')
+    if (!restauranteId) return res.status(400).json({ erro: 'Restaurante obrigatório' }) as any
+    if (!(await podeGerenciarRestaurante(req, restauranteId))) {
+      return res.status(403).json({ erro: 'Você não pode acessar este cardápio' }) as any
+    }
+    const result = await db.execute({
+      sql: 'SELECT * FROM cardapio WHERE restaurante_id = ? ORDER BY destaque DESC, categoria ASC, nome ASC',
+      args: [restauranteId]
+    })
+    res.json(result.rows)
+  } catch (error) {
+    res.status(500).json({ erro: 'Erro ao listar cardápio para gerenciamento' })
+  }
+})
+
 // GET /api/cardapio/:id
 router.get('/:id', async (req, res: Response) => {
   try {

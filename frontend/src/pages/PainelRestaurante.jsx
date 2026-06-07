@@ -72,17 +72,32 @@ function NavbarRestaurante({ restaurante }) {
 function AbaPedidos({ restauranteId, avaliacao }) {
   const [pedidos, setPedidos] = useState([])
   const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
 
-  const carregar = useCallback(() => {
+  const carregar = useCallback(({ silencioso = false } = {}) => {
     if (!restauranteId) return
-    setCarregando(true)
+    if (!silencioso) setCarregando(true)
+    setErro('')
     api.pedidos.listar({ restauranteId })
       .then(dados => setPedidos(Array.isArray(dados) ? dados : []))
-      .catch(console.error)
-      .finally(() => setCarregando(false))
+      .catch(error => setErro(error.message || 'Não foi possível carregar os pedidos.'))
+      .finally(() => {
+        if (!silencioso) setCarregando(false)
+      })
   }, [restauranteId])
 
-  useEffect(() => { carregar() }, [carregar])
+  useEffect(() => {
+    carregar()
+    const intervalo = setInterval(() => carregar({ silencioso: true }), 10000)
+    const atualizarAoVoltar = () => {
+      if (document.visibilityState === 'visible') carregar({ silencioso: true })
+    }
+    document.addEventListener('visibilitychange', atualizarAoVoltar)
+    return () => {
+      clearInterval(intervalo)
+      document.removeEventListener('visibilitychange', atualizarAoVoltar)
+    }
+  }, [carregar])
 
   const ativos = pedidos.filter(p => !['entregue', 'cancelado'].includes(p.status))
   const faturamentoHoje = pedidos
@@ -102,6 +117,11 @@ function AbaPedidos({ restauranteId, avaliacao }) {
 
   return (
     <div>
+      {erro && (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+          {erro}
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
         {[
           { label: 'Pedidos ativos',   valor: ativos.length,                      Icon: Package,   cor: 'text-primary' },
@@ -179,7 +199,7 @@ function AbaCardapio({ restauranteId }) {
   const carregar = useCallback(() => {
     if (!restauranteId) return
     setCarregando(true)
-    api.cardapio.listar(restauranteId)
+    api.cardapio.listarGerenciamento(restauranteId)
       .then(dados => setCardapio(Array.isArray(dados) ? dados : []))
       .catch(console.error)
       .finally(() => setCarregando(false))
@@ -380,7 +400,13 @@ export default function PainelRestaurante() {
   const [carregando, setCarregando] = useState(true)
 
   useEffect(() => {
-    const email = usuario?.email || JSON.parse(localStorage.getItem('usuario') || '{}')?.email
+    let usuarioSalvo = {}
+    try {
+      usuarioSalvo = JSON.parse(localStorage.getItem('usuario') || '{}')
+    } catch {
+      usuarioSalvo = {}
+    }
+    const email = usuario?.email || usuarioSalvo?.email
     if (!email) { setCarregando(false); return }
 
     api.restaurantes.meuRestaurante()
@@ -388,8 +414,6 @@ export default function PainelRestaurante() {
       .catch(console.error)
       .finally(() => setCarregando(false))
   }, [usuario])
-
-  const pedidosAtivosCount = 0 // contagem local — AbaPedidos gerencia seu próprio estado
 
   const abas = [
     { id: 'pedidos',  label: 'Pedidos',  Icon: ShoppingBag },

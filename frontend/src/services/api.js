@@ -49,6 +49,12 @@ async function request(path, options = {}) {
       if (!res.ok) {
         const erro = await res.json().catch(() => ({ erro: res.statusText }))
         const message = erro.erro || `Erro ${res.status}`
+        if (res.status === 401 && token) {
+          localStorage.removeItem('token')
+          localStorage.removeItem('usuario')
+          localStorage.removeItem('preferLocalAuth')
+          window.dispatchEvent(new Event('foodexpress:sessao-expirada'))
+        }
         const e = new Error(message)
         e.status = res.status
         e.baseUrl = baseUrl
@@ -83,6 +89,10 @@ export const api = {
     loginConfirmar: (dados) => request('/api/auth/login/confirmar', { method: 'POST', body: JSON.stringify(dados) }),
     registrar: (dados) => request('/api/auth/registrar', { method: 'POST', body: JSON.stringify(dados) }),
     emailConfirmar: (dados) => request('/api/auth/email/confirmar', { method: 'POST', body: JSON.stringify(dados) }),
+  },
+
+  admin: {
+    resumo: () => request('/api/admin/resumo'),
   },
 
   restaurantes: {
@@ -123,6 +133,7 @@ export const api = {
       const qs = new URLSearchParams({ restauranteId, ...params }).toString()
       return request(`/api/cardapio?${qs}`)
     },
+    listarGerenciamento: (restauranteId) => request(`/api/cardapio/gerenciar?restauranteId=${encodeURIComponent(restauranteId)}`),
     buscarPorId: (id) => request(`/api/cardapio/${id}`),
     criar: (dados) => request('/api/cardapio', { method: 'POST', body: JSON.stringify(dados) }),
     atualizar: (id, dados) => request(`/api/cardapio/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
@@ -140,6 +151,10 @@ export const api = {
     atualizarStatus: (id, status) => request(`/api/pedidos/${id}`, { method: 'PUT', body: JSON.stringify({ status }) }),
     cancelar: (id) => request(`/api/pedidos/${id}`, { method: 'DELETE' }),
     rastrear: (id) => request(`/api/pedidos/${id}/rastrear`),
+    solicitarOferta: () => request('/api/pedidos/oferta/solicitar', { method: 'POST' }),
+    aceitarOferta: (id) => request(`/api/pedidos/oferta/${id}/aceitar`, { method: 'POST' }),
+    recusarOferta: (id) => request(`/api/pedidos/oferta/${id}/recusar`, { method: 'POST' }),
+    confirmarColeta: (id) => request(`/api/pedidos/${id}/coletar`, { method: 'POST' }),
     listarDisponiveis: () => request('/api/pedidos/disponiveis'),
     atribuirEntregador: (id, entregadorId) => request(`/api/pedidos/${id}/atribuir-entregador`, { method: 'POST', body: JSON.stringify({ entregadorId }) }),
     atribuirAutomatico: (id) => request(`/api/pedidos/${id}/atribuir-entregador-automatico`, { method: 'POST' }),
@@ -198,6 +213,7 @@ export const api = {
       return request(`/api/tickets${qs ? '?' + qs : ''}`)
     },
     criar: (dados) => request('/api/tickets', { method: 'POST', body: JSON.stringify(dados) }),
+    atualizar: (id, dados) => request(`/api/tickets/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
   },
 
   // ── Denúncias ─────────────────────────────────────────────────────────────

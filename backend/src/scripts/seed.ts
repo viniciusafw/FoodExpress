@@ -490,6 +490,7 @@ async function resetFakeData(action: 'reset' | 'clear' = 'reset') {
     ['denuncias_produtos', "id LIKE 'fake_%'"],
     ['avaliacoes', "id LIKE 'fake_%'"],
     ['rotas', "id LIKE 'fake_%'"],
+    ['ofertas_entrega', "pedido_id LIKE 'fake_%' OR entregador_id LIKE 'fake_%'"],
     ['disputas', "id LIKE 'fake_%'"],
     ['tickets', "id LIKE 'fake_%'"],
     ['pedidos', "id LIKE 'fake_%'"],
