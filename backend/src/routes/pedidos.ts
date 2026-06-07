@@ -10,13 +10,16 @@ const router = Router()
 
 type TipoCupom = 'percentual' | 'fixo' | 'frete_gratis'
 
-const CUPONS_ESTATICOS: Record<string, { desconto: number; tipo: TipoCupom; minimo: number; data_expiracao?: string | null }> = {
-  DESC10: { desconto: 10, tipo: 'percentual', minimo: 30 },
-  DESC20: { desconto: 20, tipo: 'percentual', minimo: 50 },
-  DESC5REAIS: { desconto: 5, tipo: 'fixo', minimo: 25 },
-  PRIMEIRA_VEZ: { desconto: 15, tipo: 'percentual', minimo: 0 },
-  FRETEGRATIS: { desconto: 0, tipo: 'frete_gratis', minimo: 0 },
-  OFERTA30: { desconto: 30, tipo: 'percentual', minimo: 0 },
+const CUPONS_ESTATICOS: Record<string, { desconto: number; tipo: TipoCupom; minimo: number; data_expiracao?: string | null; uso_unico?: boolean }> = {
+  BEMVINDO10: { desconto: 10, tipo: 'percentual', minimo: 35, uso_unico: true },
+  PRIMEIRA_VEZ: { desconto: 15, tipo: 'percentual', minimo: 45, uso_unico: true },
+}
+
+function normalizarTipoCupom(tipo: any): TipoCupom {
+  const valor = String(tipo || 'percentual').toLowerCase()
+  if (valor === 'valor') return 'fixo'
+  if (valor === 'fixo' || valor === 'frete_gratis') return valor
+  return 'percentual'
 }
 
 function calcularDistancia(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -223,7 +226,7 @@ async function calcularDescontoDoCupom(codigoInformado: any, subtotal: number, t
   const cupom = cupomDb
     ? {
         desconto: Number(cupomDb.desconto || 0),
-        tipo: String(cupomDb.tipo || 'percentual') as TipoCupom,
+        tipo: normalizarTipoCupom(cupomDb.tipo),
         minimo: Number(cupomDb.minimo || 0),
         data_expiracao: cupomDb.data_expiracao || null,
       }
@@ -238,6 +241,33 @@ async function calcularDescontoDoCupom(codigoInformado: any, subtotal: number, t
   if (cupom.tipo === 'fixo') desconto = Number(cupom.desconto || 0)
   if (cupom.tipo === 'frete_gratis') desconto = Number(taxaEntrega || 0)
   return Number(Math.max(0, Math.min(desconto, subtotal + taxaEntrega)).toFixed(2))
+}
+
+async function validarCupomNaoUsado(clienteId: any, codigoInformado: any) {
+  const codigo = String(codigoInformado || '').trim().toUpperCase()
+  const id = String(clienteId || '').trim()
+  if (!codigo || !id) return
+
+  const uso = await db.execute({
+    sql: 'SELECT id FROM cupom_usos WHERE cliente_id = ? AND cupom_codigo = ? LIMIT 1',
+    args: [id, codigo],
+  }).catch(() => null)
+  if (uso?.rows?.length) throw new Error('Você já usou este cupom.')
+}
+
+async function registrarUsoCupom(clienteId: any, codigoInformado: any, pedidoId: string) {
+  const codigo = String(codigoInformado || '').trim().toUpperCase()
+  const idCliente = String(clienteId || '').trim()
+  if (!codigo || !idCliente || !pedidoId) return
+
+  await db.execute({
+    sql: `INSERT INTO cupom_usos (id, cupom_codigo, cliente_id, pedido_id)
+          VALUES (?, ?, ?, ?)`,
+    args: [`cupom_uso_${crypto.randomUUID().slice(0, 16)}`, codigo, idCliente, pedidoId],
+  }).catch((error) => {
+    if (String(error?.message || '').toLowerCase().includes('duplicate')) throw new Error('Você já usou este cupom.')
+    throw error
+  })
 }
 
 // GET /api/pedidos
@@ -702,6 +732,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     const descontoSolicitado = Number(descontoInformado || 0)
     let desconto = 0
     try {
+      await validarCupomNaoUsado(clienteFinal, cupom_codigo)
       desconto = await calcularDescontoDoCupom(cupom_codigo, subtotal, taxa_entrega)
     } catch (cupomErro: any) {
       return res.status(400).json({ erro: cupomErro.message || 'Cupom inválido' }) as any
@@ -746,6 +777,9 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       args: [pedidoId, clienteFinal, restauranteId, JSON.stringify(itens), endereco_entrega || '', latitude || 0, longitude || 0,
              subtotal, taxa_entrega, desconto, troco, total, forma_pagamento, pagamento_id, ganho_entregador]
     })
+    if (cupom_codigo && desconto > 0) {
+      await registrarUsoCupom(clienteFinal, cupom_codigo, pedidoId)
+    }
 
     res.status(201).json({ mensagem: 'Pedido criado com sucesso', id: pedidoId, clientSecret, subtotal, taxa_entrega, desconto, total, ganho_entregador })
   } catch (error) {

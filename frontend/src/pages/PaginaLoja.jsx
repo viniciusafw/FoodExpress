@@ -56,6 +56,116 @@ function lojaEstaAberta(loja) {
   return minutosAgora >= abertura && minutosAgora <= fechamento
 }
 
+function criarComplementosPadrao(item) {
+  const texto = normalizarTexto(`${item.nome} ${item.categoria} ${item.descricao}`)
+  const mercado = ['mercado', 'conveniencia', 'bebida', 'bebidas'].some(termo => texto.includes(termo))
+  const oriental = ['sushi', 'temaki', 'yakisoba', 'japonesa', 'japones', 'hot'].some(termo => texto.includes(termo))
+  const lanche = ['burger', 'hamburguer', 'x-', 'sanduiche', 'batata'].some(termo => texto.includes(termo))
+  const pizza = texto.includes('pizza')
+
+  if (mercado) {
+    return [
+      {
+        titulo: 'Adicionar ao carrinho',
+        max: 4,
+        obrigatorio: false,
+        opcoes: [
+          { id: 'sacola-reforcada', nome: 'Sacola reforçada', preco: 0.5 },
+          { id: 'bebida-gelada', nome: 'Separar bebida gelada', preco: 0 },
+          { id: 'embalagem-presente', nome: 'Embalagem para presente', preco: 3 },
+          { id: 'item-extra', nome: 'Adicionar mais uma unidade', preco: Number(item.preco) || 0 },
+        ],
+      },
+    ]
+  }
+
+  const complementos = oriental
+    ? [
+        { id: 'wasabi', nome: 'Wasabi', preco: 2 },
+        { id: 'gengibre', nome: 'Gengibre', preco: 2 },
+        { id: 'shoyu-extra', nome: 'Shoyu extra', preco: 1.5 },
+        { id: 'tare', nome: 'Molho tarê', preco: 2.5 },
+        { id: 'cream-cheese-extra', nome: 'Cream cheese extra', preco: 4 },
+        { id: 'hashi-extra', nome: 'Hashi extra', preco: 0.5 },
+      ]
+    : lanche
+      ? [
+          { id: 'queijo-extra', nome: 'Queijo extra', preco: 4 },
+          { id: 'bacon-extra', nome: 'Bacon extra', preco: 5 },
+          { id: 'molho-casa', nome: 'Molho da casa', preco: 2 },
+          { id: 'batata-pequena', nome: 'Batata pequena', preco: 8 },
+          { id: 'maionese-extra', nome: 'Maionese extra', preco: 2 },
+          { id: 'cebola-crispy', nome: 'Cebola crispy', preco: 3 },
+        ]
+      : pizza
+        ? [
+            { id: 'borda-catupiry', nome: 'Borda de catupiry', preco: 8 },
+            { id: 'queijo-extra', nome: 'Queijo extra', preco: 6 },
+            { id: 'molho-tomate', nome: 'Molho de tomate extra', preco: 2 },
+            { id: 'azeitona-extra', nome: 'Azeitona extra', preco: 2.5 },
+            { id: 'oregano-extra', nome: 'Orégano extra', preco: 0 },
+            { id: 'embalagem-reforcada', nome: 'Embalagem reforçada', preco: 2 },
+          ]
+        : [
+            { id: 'porcao-arroz', nome: 'Porção de arroz', preco: 6 },
+            { id: 'porcao-feijao', nome: 'Porção de feijão', preco: 6 },
+            { id: 'salada-extra', nome: 'Salada extra', preco: 5 },
+            { id: 'molho-extra', nome: 'Molho extra', preco: 2 },
+            { id: 'batata-extra', nome: 'Batata extra', preco: 7 },
+            { id: 'embalagem-reforcada', nome: 'Embalagem reforçada', preco: 2 },
+          ]
+
+  return [
+    {
+      titulo: 'Adicione complementos',
+      max: 6,
+      obrigatorio: false,
+      opcoes: complementos,
+    },
+    {
+      titulo: 'Bebidas',
+      max: 2,
+      obrigatorio: false,
+      opcoes: [
+        { id: 'coca-lata', nome: 'Coca-Cola lata', preco: 6 },
+        { id: 'guarana-lata', nome: 'Guaraná lata', preco: 6 },
+        { id: 'agua-mineral', nome: 'Água mineral', preco: 4 },
+        { id: 'suco-natural', nome: 'Suco natural', preco: 8 },
+      ],
+    },
+  ]
+}
+
+function normalizarOpcionais(item) {
+  const bruto = item.opcionais || item.complementos
+  if (Array.isArray(bruto) && bruto.length) return bruto
+  if (bruto) {
+    try {
+      const lista = JSON.parse(bruto)
+      if (Array.isArray(lista) && lista.length) return lista
+    } catch {
+      return criarComplementosPadrao(item)
+    }
+  }
+  return criarComplementosPadrao(item)
+}
+
+function detalhesSelecionados(produto, selecionados) {
+  return (produto.opcionais || []).flatMap(op => {
+    const ids = selecionados[op.titulo] || []
+    return ids.map(id => {
+      const opcao = op.opcoes.find(o => o.id === id)
+      if (!opcao) return null
+      return {
+        grupo: op.titulo,
+        id: opcao.id,
+        nome: opcao.nome,
+        preco: Number(opcao.preco || 0),
+      }
+    }).filter(Boolean)
+  })
+}
+
 
 // ─── Modal produto ────────────────────────────────────────────────────────────
 function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
@@ -100,11 +210,12 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
     const ids = selecionados[op.titulo] || []
     return acc + ids.reduce((s, id) => {
       const opc = op.opcoes.find(o => o.id === id)
-      return s + (opc?.preco || 0)
+      return s + Number(opc?.preco || 0)
     }, 0)
   }, 0) || 0
 
   const precoFinal = (produto.preco + extraTotal) * quantidade
+  const complementosSelecionados = detalhesSelecionados(produto, selecionados)
 
   const lojaFechada = loja?.fechado || loja?.status === 'fechado' || loja?.status === 'inativo'
 
@@ -114,7 +225,7 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
       return
     }
     const item = {
-      id: `${produto.id}-${JSON.stringify(selecionados)}`,
+      id: `${produto.id}-${JSON.stringify(selecionados)}-${comentario.trim()}`,
       cardapioId: produto.id,
       produtoId: produto.id,
       name: produto.nome,
@@ -122,6 +233,7 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
       emoji: produto.emoji,
       quantidade,
       comentario,
+      complementos: complementosSelecionados,
       restauranteId: produto.restauranteId,
       imagem: produto.imagem,
     }
@@ -168,7 +280,7 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
       onClick={onClose}
     >
       <Motion.div
-        className="bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-3xl overflow-hidden flex flex-col max-h-[95dvh] sm:max-h-[90vh]"
+        className="bg-white w-full sm:max-w-6xl sm:rounded-lg rounded-t-3xl overflow-hidden flex flex-col max-h-[95dvh] sm:max-h-[90vh]"
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
         onClick={e => e.stopPropagation()}
@@ -179,10 +291,10 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
         </div>
 
         {/* Layout desktop: lado a lado | mobile: empilhado */}
-        <div className="flex flex-col sm:flex-row overflow-hidden flex-1 min-h-0">
+        <div className="flex flex-col md:flex-row overflow-hidden flex-1 min-h-0">
 
           {/* Imagem — desktop fica na esquerda */}
-          <div ref={imagemRef} className="relative sm:w-72 h-52 sm:h-auto bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-8xl shrink-0 overflow-hidden">
+          <div ref={imagemRef} className="relative md:w-[52%] h-52 md:h-auto md:min-h-[32rem] bg-gradient-to-br from-orange-50 to-orange-100 flex items-center justify-center text-8xl shrink-0 overflow-hidden md:m-6 md:rounded-sm">
             {produto.imagem ? <img src={produto.imagem} alt={produto.nome} className="absolute inset-0 w-full h-full object-cover" /> : produto.emoji}
             <button onClick={onClose}
               className="absolute top-3 right-3 w-9 h-9 bg-white rounded-full border border-border flex items-center justify-center cursor-pointer hover:bg-surface-2 transition-all shadow-sm">
@@ -193,10 +305,10 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
           {/* Conteúdo scrollável */}
           <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
             <div className="flex-1 overflow-y-auto overscroll-contain">
-              <div className="p-5">
+              <div className="p-5 md:px-6">
                 {/* Nome e info básica */}
-                <p className="text-xs font-bold text-text-muted uppercase tracking-widest mb-1">{produto.nome}</p>
-                <h2 className="font-display text-xl font-extrabold text-text-primary mb-1 leading-tight hidden sm:block">{produto.nome}</h2>
+                <p className="text-xs font-extrabold text-text-primary uppercase tracking-wide mb-3">{produto.nome}</p>
+                <h2 className="font-display text-xl font-extrabold text-text-primary mb-1 leading-tight md:hidden">{produto.nome}</h2>
 
                 {produto.serve && (
                   <div className="flex items-center gap-1.5 text-xs font-semibold text-text-muted mb-2">
@@ -223,7 +335,7 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
                 </div>
 
                 {/* Info da loja */}
-                <div className="flex items-center justify-between p-3 bg-surface-2 rounded-xl mb-5 border border-border">
+                <div className="flex items-center justify-between p-3 bg-white rounded-md mb-3 border border-border">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{loja.emoji}</span>
                     <span className="text-sm font-bold text-text-primary">{loja.nome}</span>
@@ -247,36 +359,42 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
                 {/* Opcionais */}
                 {produto.opcionais?.map(op => (
                   <div key={op.titulo} className="mb-5">
-                    <div className="flex items-center justify-between bg-surface-2 px-4 py-3 rounded-xl mb-3 border border-border">
+                    <div className="flex items-center justify-between -mx-5 md:-mx-6 bg-surface-2 px-5 md:px-6 py-3 mb-3 border-y border-border">
                       <div>
-                        <p className="font-display font-bold text-sm text-text-primary">{op.titulo}</p>
+                        <p className="font-display font-bold text-base text-text-primary">{op.titulo}</p>
                         <p className="text-xs text-text-muted font-semibold">Escolha {op.max === 1 ? '1 opção' : `até ${op.max} opções`}.</p>
                       </div>
                       {op.obrigatorio && (
                         <span className="text-xs font-extrabold bg-secondary text-white px-2 py-0.5 rounded-md tracking-wide">OBRIGATÓRIO</span>
                       )}
                     </div>
-                    <div className="flex flex-col gap-1 px-1">
+                    <div className="flex flex-col divide-y divide-border">
                       {op.opcoes.map(opcao => {
                         const selecionado = (selecionados[op.titulo] || []).includes(opcao.id)
                         return (
                           <button key={opcao.id}
                             onClick={() => handleOpcao(op.titulo, opcao.id, op.max)}
-                            className={`flex items-center justify-between px-4 py-3 rounded-xl border transition-all cursor-pointer text-left w-full ${
-                              selecionado ? 'border-primary bg-primary-light' : 'border-border bg-white hover:border-border hover:bg-surface-2'
+                            className={`flex items-center justify-between gap-4 px-0 py-4 transition-all cursor-pointer text-left w-full bg-white ${
+                              selecionado ? 'text-primary' : 'text-text-primary hover:text-primary'
                             }`}
                           >
-                            <div className="flex items-center gap-3">
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
-                                selecionado ? 'border-primary bg-primary' : 'border-border'
-                              }`}>
-                                {selecionado && <div className="w-2 h-2 bg-white rounded-full" />}
-                              </div>
-                              <span className="text-sm font-semibold text-text-primary">{opcao.nome}</span>
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-text-primary">{opcao.nome}</p>
+                              {opcao.preco > 0 && (
+                                <p className="mt-0.5 text-sm font-bold text-text-secondary">
+                                  + R$ {Number(opcao.preco).toFixed(2).replace('.', ',')}
+                                </p>
+                              )}
                             </div>
-                            {opcao.preco > 0 && (
-                              <span className="text-sm font-bold text-accent">+ R$ {opcao.preco.toFixed(2).replace('.', ',')}</span>
-                            )}
+                            <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition-colors ${
+                              selecionado ? 'border-primary bg-primary text-white' : 'border-transparent bg-white text-primary'
+                            }`}>
+                              {selecionado ? (
+                                <CheckCircle size={17} />
+                              ) : (
+                                <Plus size={17} />
+                              )}
+                            </div>
                           </button>
                         )
                       })}
@@ -586,7 +704,7 @@ export default function StorePage() {
           emoji: emojiProduto(item),
           imagem: imagemProduto(item),
           serve: 1,
-          opcionais: [],
+          opcionais: normalizarOpcionais(item),
           restauranteId: id,
         })
       })

@@ -226,6 +226,19 @@ export async function ensureDatabaseHealth() {
       await ensureColumn('pedidos', 'oferta_enviada_em', 'DATETIME')
       await ensureColumn('pedidos', 'oferta_expira_em', 'DATETIME')
       await ensureColumn('pedidos', 'coletado_em', 'DATETIME')
+      await db.execute(`
+        CREATE TABLE IF NOT EXISTS cupom_usos (
+          id VARCHAR(191) NOT NULL,
+          cupom_codigo VARCHAR(100) NOT NULL,
+          cliente_id VARCHAR(191) NOT NULL,
+          pedido_id VARCHAR(191) NOT NULL,
+          usado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (id),
+          UNIQUE KEY uq_cupom_usos_cliente_codigo (cliente_id, cupom_codigo),
+          KEY idx_cupom_usos_codigo (cupom_codigo),
+          KEY idx_cupom_usos_pedido (pedido_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+      `)
       await ensureColumn('tickets', 'resposta', 'TEXT')
       await ensureColumn('tickets', 'updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP')
       await ensureColumn('tickets', 'solicitante_id', 'VARCHAR(191)')

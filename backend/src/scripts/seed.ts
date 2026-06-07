@@ -325,10 +325,9 @@ function nomeRestaurante(categoria: string, index: number, bairro: string) {
 }
 
 function promoRestaurante(index: number) {
-  if (index % 5 === 0) return '20% OFF'
-  if (index % 8 === 0) return 'Frete grátis'
-  if (index % 13 === 0) return 'Cupom FAKE'
-  if (index % 21 === 0) return 'Combo em oferta'
+  if (index % 23 === 0) return '20% OFF'
+  if (index % 37 === 0) return 'Frete grátis'
+  if (index % 41 === 0) return 'Combo em oferta'
   return null
 }
 
@@ -715,8 +714,8 @@ function cardapioRow(restaurante: Row, restIndex: number, itemIndex: number, pro
 }
 
 function createCupons() {
-  const nomesCupom = ['FAKEBEMVINDO', 'FAKEFORTAL', 'FAKEPIX', 'FAKEALMOCO', 'FAKEJANTAR', 'FAKEFRETE']
-  return Array.from({ length: 18 }, (_, index) => {
+  const nomesCupom = ['BEMVINDO', 'FORTAL', 'PIX', 'ALMOCO', 'JANTAR', 'FRETE']
+  return Array.from({ length: 12 }, (_, index) => {
     const i = index + 1
     const expiracao = new Date()
     expiracao.setDate(expiracao.getDate() + int(20, 120))
@@ -724,7 +723,7 @@ function createCupons() {
       id: `fake_cup_${pad(i, 3)}`,
       codigo: `${nomesCupom[index % nomesCupom.length]}${pad(Math.floor(index / nomesCupom.length) + 1, 2)}`,
       desconto: index % 3 === 0 ? 8 : index % 3 === 1 ? 12 : 15,
-      tipo: index % 2 === 0 ? 'percentual' : 'valor',
+      tipo: index % 2 === 0 ? 'percentual' : 'fixo',
       minimo: [25, 35, 50, 70][index % 4],
       data_expiracao: sqlDate(expiracao),
       ativo: index % 7 === 0 ? 0 : 1,

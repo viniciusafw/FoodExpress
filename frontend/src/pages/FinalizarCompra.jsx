@@ -170,13 +170,8 @@ export default function Checkout() {
   const aplicarCupom = () => validarCupom(cupom)
 
   useEffect(() => {
-    if (totalCarrinho <= 0 || cupomAplicado) return
-    const cupomPromocional = localStorage.getItem('cupomPromocional')
-    if (!cupomPromocional) return
     localStorage.removeItem('cupomPromocional')
-    validarCupom(cupomPromocional)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [totalCarrinho])
+  }, [])
 
   const usarLocalizacaoAtual = () => {
     if (!navigator.geolocation) {

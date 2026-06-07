@@ -118,7 +118,11 @@ export default function CartDrawer({ isOpen, onClose }) {
                         className="w-12 h-12 bg-surface-2 rounded-xl flex items-center justify-center text-2xl shrink-0 border border-border cursor-pointer hover:border-primary hover:bg-primary-light transition-colors"
                         title="Abrir loja"
                       >
-                        {item.emoji || '🍕'}
+                        {item.imagem ? (
+                          <img src={item.imagem} alt={item.name || item.nome} className="h-full w-full rounded-xl object-cover" />
+                        ) : (
+                          item.emoji || '🍕'
+                        )}
                       </button>
                       <button
                         type="button"
@@ -132,6 +136,16 @@ export default function CartDrawer({ isOpen, onClose }) {
                         <span className="font-display text-sm font-bold text-primary">
                           R$ {Number(item.price || item.preco || 0).toFixed(2)}
                         </span>
+                        {Array.isArray(item.complementos) && item.complementos.length > 0 && (
+                          <p className="mt-1 line-clamp-2 text-[11px] font-semibold text-text-muted">
+                            {item.complementos.map(complemento => complemento.nome).join(', ')}
+                          </p>
+                        )}
+                        {item.comentario && (
+                          <p className="mt-1 line-clamp-1 text-[11px] font-semibold text-text-muted">
+                            Obs: {item.comentario}
+                          </p>
+                        )}
                         <p className="mt-0.5 text-[11px] font-semibold text-text-muted group-hover:text-primary">
                           Abrir loja
                         </p>

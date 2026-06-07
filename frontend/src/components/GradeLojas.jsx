@@ -3,6 +3,24 @@ import StoreCard from './CartaoLoja'
 import api from '../services/api'
 import { paramsComLocalizacao } from '../utils/localizacao'
 
+function normalizarTexto(valor) {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
+function normalizarPromocaoLoja(loja) {
+  const promocao = String(loja?.promo || '').trim()
+  const texto = normalizarTexto(promocao)
+  if (!promocao || texto.includes('fake') || texto.includes('cupom')) return null
+  const id = String(loja?.id || '')
+  if (!id.startsWith('fake_')) return promocao
+  const numero = Number(id.match(/(\d+)/)?.[1] || 0)
+  return numero > 0 && numero % 11 === 0 ? promocao : null
+}
+
 export default function StoreGrid({ tipo, limite = 50, somenteLinha = false }) {
   const [lista, setLista] = useState([])
   const [carregando, setCarregando] = useState(true)
@@ -24,6 +42,7 @@ export default function StoreGrid({ tipo, limite = 50, somenteLinha = false }) {
       .then(dados => {
         const normalizados = dados.map(r => ({
           ...r,
+          promo: normalizarPromocaoLoja(r),
           emoji: r.emoji || '🍽️',
           avaliacao: r.avaliacao_media ?? 0,
           tempoEntrega: r.tempo_medio_preparo ? `${r.tempo_medio_preparo}-${r.tempo_medio_preparo + 10} min` : '30-40 min',

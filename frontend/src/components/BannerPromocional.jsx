@@ -4,21 +4,19 @@ import { useNavigate } from 'react-router-dom'
 
 const banners = [
   {
-    eyebrow: 'Promoção',
-    titulo: 'Frete Grátis',
-    desc: 'Use o cupom FRETEGRATIS no checkout',
-    emoji: '🚀',
+    eyebrow: 'Perto de você',
+    titulo: 'Entrega rápida',
+    desc: 'Veja lojas abertas com menor tempo de preparo',
+    emoji: '⏱️',
     bg: 'linear-gradient(135deg,#FF6B35,#e55a2b)',
-    cupom: 'FRETEGRATIS',
     rota: '/Restaurantes',
   },
   {
-    eyebrow: 'Oferta do dia',
-    titulo: '30% OFF',
-    desc: 'Use o cupom OFERTA30 em restaurantes selecionados',
-    emoji: '🎉',
+    eyebrow: 'Cardápios',
+    titulo: 'Pratos em destaque',
+    desc: 'Compare restaurantes, distância e formas de pagamento',
+    emoji: '🍽️',
     bg: 'linear-gradient(135deg,#1B998B,#14756a)',
-    cupom: 'OFERTA30',
     rota: '/Restaurantes',
   },
   {
@@ -35,10 +33,6 @@ export default function PromotionalBanner() {
   const navigate = useNavigate()
 
   const abrirOferta = (banner) => {
-    if (banner.cupom) {
-      localStorage.setItem('cupomPromocional', banner.cupom)
-      window.dispatchEvent(new CustomEvent('cupom-promocional', { detail: banner.cupom }))
-    }
     navigate(banner.rota || '/Restaurantes')
   }
 
@@ -76,7 +70,7 @@ export default function PromotionalBanner() {
               </h3>
               <p className="text-xs sm:text-sm opacity-85 font-semibold mb-3">{b.desc}</p>
               <span className="inline-flex items-center gap-1.5 bg-white/20 border border-white/25 text-white px-3 py-1.5 rounded-full text-xs font-bold">
-                {b.cupom ? 'Usar cupom' : 'Ver mercados'} <ArrowRight size={12} />
+                Ver opções <ArrowRight size={12} />
               </span>
             </div>
             <Motion.div

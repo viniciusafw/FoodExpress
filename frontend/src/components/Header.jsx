@@ -72,7 +72,11 @@ export default function Header() {
         : '/perfil'
   const total = totalCarrinho || 0
   const qtd = quantidadeTotal || 0
-  const ativo = (path) => location.pathname === path
+  const ativo = (to) => {
+    const [path, query = ''] = String(to).split('?')
+    if (query) return location.pathname === path && location.search === `?${query}`
+    return location.pathname === path
+  }
 
   const formatarCep = (valor) => {
     const digitos = String(valor || '').replace(/\D/g, '').slice(0, 8)
@@ -263,6 +267,10 @@ export default function Header() {
     { to: '/', label: 'Início' },
     { to: '/Restaurantes', label: 'Restaurantes' },
     { to: '/Mercados', label: 'Mercados' },
+    { to: '/busca?q=Bebidas', label: 'Bebidas' },
+    { to: '/busca?q=Farmacias', label: 'Farmácias' },
+    { to: '/busca?q=Pets', label: 'Pets' },
+    { to: '/busca?q=Shopping', label: 'Shopping' },
   ]
 
   return (
@@ -273,22 +281,22 @@ export default function Header() {
         animate={{ y: oculto ? '-100%' : '0%' }}
         transition={{ duration: 0.3, ease: 'easeInOut' }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[72px] flex items-center gap-3 sm:gap-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[72px] flex items-center gap-3 lg:gap-5">
 
-          <Link to="/" className="flex min-w-0 shrink-0 items-center gap-2 rounded-xl p-1.5 hover:bg-surface-2 transition-colors">
-            <img src={logoSrc} alt="FoodExpress" className="h-10 sm:h-11 w-auto object-contain" />
+          <Link to="/" className="flex min-w-0 shrink-0 items-center gap-2 rounded-lg p-1 hover:bg-surface-2 transition-colors">
+            <img src={logoSrc} alt="FoodExpress" className="h-10 w-auto object-contain" />
             <span className="max-w-[9rem] truncate font-display text-lg font-extrabold tracking-tight text-text-primary sm:hidden">
               FoodExpress
             </span>
           </Link>
 
-          <nav className="hidden lg:flex items-center">
+          <nav className="hidden lg:flex h-full items-center gap-1">
             {navLinks.map(({ to, label }) => {
               const eAtivo = ativo(to)
               return (
                 <Link key={label} to={to}
-                  className={`px-3 h-[72px] flex items-center text-sm font-bold transition-all whitespace-nowrap border-b-2 ${
-                    eAtivo ? 'text-primary border-primary' : 'text-text-secondary border-transparent hover:text-primary hover:border-primary'
+                  className={`h-full flex items-center border-b-2 px-2.5 text-sm font-semibold transition-all whitespace-nowrap ${
+                    eAtivo ? 'text-primary border-primary' : 'text-text-secondary border-transparent hover:text-primary'
                   }`}
                 >{label}</Link>
               )
@@ -296,7 +304,7 @@ export default function Header() {
           </nav>
 
           <form onSubmit={handleBusca}
-            className="flex-1 hidden md:flex items-center bg-surface-2 border border-border rounded-full px-4 h-11 gap-2 transition-all focus-within:border-primary focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(255,107,53,0.08)]"
+            className="flex-1 hidden xl:flex items-center bg-surface-2 border border-transparent rounded-full px-4 h-11 gap-2 transition-all focus-within:border-primary focus-within:bg-white focus-within:shadow-[0_0_0_3px_rgba(255,107,53,0.08)]"
           >
             <Search size={16} className="text-text-muted shrink-0" />
             <input type="text" placeholder="Busque por item ou loja" value={busca}

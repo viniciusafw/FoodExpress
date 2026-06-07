@@ -1,21 +1,34 @@
 // @ts-nocheck
 import { Router, Response } from 'express'
 import { db } from '../lib/db'
-import { requireAuth, AuthRequest } from '../middleware/auth'
+import { optionalAuth, requireAuth, AuthRequest } from '../middleware/auth'
 import crypto from 'crypto'
 
 const router = Router()
 
 type TipoCupom = 'percentual' | 'fixo' | 'frete_gratis'
-type CupomConfig = { desconto: number; tipo: TipoCupom; minimo: number; data_expiracao?: string | null }
+type CupomConfig = { desconto: number; tipo: TipoCupom; minimo: number; data_expiracao?: string | null; uso_unico?: boolean }
 
 const CUPONS_ESTATICOS: Record<string, CupomConfig> = {
-  DESC10: { desconto: 10, tipo: 'percentual', minimo: 30 },
-  DESC20: { desconto: 20, tipo: 'percentual', minimo: 50 },
-  DESC5REAIS: { desconto: 5, tipo: 'fixo', minimo: 25 },
-  PRIMEIRA_VEZ: { desconto: 15, tipo: 'percentual', minimo: 0 },
-  FRETEGRATIS: { desconto: 0, tipo: 'frete_gratis', minimo: 0 },
-  OFERTA30: { desconto: 30, tipo: 'percentual', minimo: 0 },
+  BEMVINDO10: { desconto: 10, tipo: 'percentual', minimo: 35, uso_unico: true },
+  PRIMEIRA_VEZ: { desconto: 15, tipo: 'percentual', minimo: 45, uso_unico: true },
+}
+
+async function cupomJaUsado(clienteId: any, codigo: string) {
+  const id = String(clienteId || '').trim()
+  if (!id || !codigo) return false
+  const uso = await db.execute({
+    sql: 'SELECT id FROM cupom_usos WHERE cliente_id = ? AND cupom_codigo = ? LIMIT 1',
+    args: [id, codigo],
+  }).catch(() => null)
+  return Boolean(uso?.rows?.length)
+}
+
+function normalizarTipoCupom(tipo: any): TipoCupom {
+  const valor = String(tipo || 'percentual').toLowerCase()
+  if (valor === 'valor') return 'fixo'
+  if (valor === 'fixo' || valor === 'frete_gratis') return valor
+  return 'percentual'
 }
 
 function calcularCupom(codigo: string, cupom: CupomConfig, subtotal: number, taxaEntrega: number) {
@@ -56,7 +69,7 @@ function calcularCupom(codigo: string, cupom: CupomConfig, subtotal: number, tax
 }
 
 // GET /api/cupons — validar cupom
-router.get('/', async (req, res: Response) => {
+router.get('/', optionalAuth, async (req: AuthRequest, res: Response) => {
   try {
     const codigo = String(req.query.codigo || '').trim().toUpperCase()
     const subtotal = parseFloat(String(req.query.total || req.query.subtotal || '0'))
@@ -72,13 +85,17 @@ router.get('/', async (req, res: Response) => {
     const cupom: CupomConfig | undefined = cupomDb
       ? {
           desconto: Number(cupomDb.desconto || 0),
-          tipo: String(cupomDb.tipo || 'percentual') as TipoCupom,
+          tipo: normalizarTipoCupom(cupomDb.tipo),
           minimo: Number(cupomDb.minimo || 0),
           data_expiracao: cupomDb.data_expiracao || null,
+          uso_unico: true,
         }
       : CUPONS_ESTATICOS[codigo]
 
     if (!cupom) return res.status(400).json({ valido: false, erro: 'Cupom inválido' }) as any
+    if (cupom.uso_unico !== false && await cupomJaUsado(req.userId, codigo)) {
+      return res.status(409).json({ valido: false, erro: 'Você já usou este cupom.' }) as any
+    }
 
     const resultado = calcularCupom(codigo, cupom, subtotal, Number.isFinite(taxaEntrega) ? taxaEntrega : 0)
     if (!resultado.valido) return res.status(400).json(resultado) as any

@@ -77,8 +77,23 @@ function lojaEstaAberta(loja) {
   return minutosAgora >= abertura && minutosAgora <= fechamento
 }
 
+function deveMostrarPromoFake(loja) {
+  const id = String(loja?.id || '')
+  if (!id.startsWith('fake_')) return true
+  const numero = Number(id.match(/(\d+)/)?.[1] || 0)
+  return numero > 0 && numero % 11 === 0
+}
+
+function normalizarPromocaoLoja(loja) {
+  const promocao = String(loja?.promo || '').trim()
+  const texto = normalizarTexto(promocao)
+  if (!promocao || texto.includes('fake') || texto.includes('cupom')) return null
+  if (!deveMostrarPromoFake(loja)) return null
+  return promocao
+}
+
 function normalizarLoja(loja) {
-  const promocao = String(loja.promo || '')
+  const promocao = normalizarPromocaoLoja(loja)
   const freteGratis = normalizarTexto(promocao).includes('frete gratis')
   const tempo = Number(loja.tempo_medio_preparo)
   const distanciaKm = loja.distancia_km == null ? null : Number(loja.distancia_km)
@@ -86,6 +101,7 @@ function normalizarLoja(loja) {
 
   return {
     ...loja,
+    promo: promocao,
     categoriaNormalizada,
     avaliacao: Number(loja.avaliacao_media || 0),
     tempoMin: Number.isFinite(tempo) ? tempo : 40,
