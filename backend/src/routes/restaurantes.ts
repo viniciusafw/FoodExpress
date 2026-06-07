@@ -71,7 +71,7 @@ router.get('/', async (req, res: Response) => {
     const clienteLat = Number(latitude)
     const clienteLng = Number(longitude)
     const temLocalizacao = Number.isFinite(clienteLat) && Number.isFinite(clienteLng) && !(clienteLat === 0 && clienteLng === 0)
-    const limiteFinal = Math.max(1, Math.min(parseInt(limite as string) || 50, 200))
+    const limiteFinal = Math.max(1, Math.min(parseInt(limite as string) || 50, 1000))
     let sql = `SELECT * FROM restaurantes
       WHERE COALESCE(status, 'ativo') IN ('ativo', 'fechado')
         AND EXISTS (
@@ -104,7 +104,7 @@ router.get('/', async (req, res: Response) => {
       const col = ordenar === 'avaliacao' ? 'avaliacao_media' : 'created_at'
       sql += ` ORDER BY ${col} DESC LIMIT ${limiteFinal}`
     } else {
-      sql += ` ORDER BY created_at DESC LIMIT ${Math.max(limiteFinal, 200)}`
+      sql += ` ORDER BY created_at DESC LIMIT ${Math.max(limiteFinal, 1000)}`
     }
 
     const result = await db.execute({ sql, args })

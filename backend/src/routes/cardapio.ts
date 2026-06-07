@@ -31,12 +31,27 @@ async function restauranteDoItem(itemId: string) {
 // GET /api/cardapio
 router.get('/', async (req, res: Response) => {
   try {
-    const { restauranteId, categoria } = req.query
-    let sql = 'SELECT * FROM cardapio WHERE disponivel = 1'
+    const { restauranteId, categoria, busca, q, limite = '120' } = req.query
+    const termo = String(busca || q || '').trim().toLowerCase()
+    const limiteFinal = Math.max(1, Math.min(parseInt(String(limite)) || 120, 300))
+    let sql = `SELECT c.*, r.nome AS restaurante_nome
+               FROM cardapio c
+               LEFT JOIN restaurantes r ON r.id = c.restaurante_id
+               WHERE COALESCE(c.disponivel, 1) = 1`
     const args: any[] = []
-    if (restauranteId) { sql += ' AND restaurante_id = ?'; args.push(restauranteId) }
-    if (categoria) { sql += ' AND categoria = ?'; args.push(categoria) }
-    sql += ' ORDER BY destaque DESC, nome ASC'
+    if (restauranteId) { sql += ' AND c.restaurante_id = ?'; args.push(restauranteId) }
+    if (categoria) { sql += ' AND c.categoria = ?'; args.push(categoria) }
+    if (termo) {
+      sql += ` AND (
+        lower(c.nome) LIKE ?
+        OR lower(c.descricao) LIKE ?
+        OR lower(c.categoria) LIKE ?
+        OR lower(r.nome) LIKE ?
+      )`
+      const like = `%${termo}%`
+      args.push(like, like, like, like)
+    }
+    sql += ` ORDER BY c.destaque DESC, c.nome ASC LIMIT ${limiteFinal}`
     const result = await db.execute({ sql, args })
     res.json(result.rows)
   } catch (error) {

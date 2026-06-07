@@ -133,6 +133,10 @@ export const api = {
       const qs = new URLSearchParams({ restauranteId, ...params }).toString()
       return request(`/api/cardapio?${qs}`)
     },
+    buscar: (params = {}) => {
+      const qs = new URLSearchParams(params).toString()
+      return request(`/api/cardapio${qs ? '?' + qs : ''}`)
+    },
     listarGerenciamento: (restauranteId) => request(`/api/cardapio/gerenciar?restauranteId=${encodeURIComponent(restauranteId)}`),
     buscarPorId: (id) => request(`/api/cardapio/${id}`),
     criar: (dados) => request('/api/cardapio', { method: 'POST', body: JSON.stringify(dados) }),

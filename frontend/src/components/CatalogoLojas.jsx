@@ -19,6 +19,7 @@ import { paramsComLocalizacao } from '../utils/localizacao'
 
 const CATEGORIAS_MERCADO = new Set(['mercado', 'conveniencia'])
 const DIAS_SEMANA = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
+const ITENS_POR_PAGINA = 24
 
 const opcoesOrdenacao = [
   { value: 'recomendados', label: 'Recomendados' },
@@ -277,7 +278,7 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
   const [distanciaMax, setDistanciaMax] = useState(0)
   const [pagamento, setPagamento] = useState('')
   const [filtrosMobileAbertos, setFiltrosMobileAbertos] = useState(false)
-  const [limiteVisivel, setLimiteVisivel] = useState(24)
+  const [paginaAtual, setPaginaAtual] = useState(1)
 
   const ehMercado = tipo === 'mercado'
   const titulo = ehMercado ? 'Mercados e conveniência' : 'Restaurantes'
@@ -294,7 +295,7 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
   useEffect(() => {
     setCarregando(true)
     setErro('')
-    api.restaurantes.listar(paramsComLocalizacao({ limite: 200 }))
+    api.restaurantes.listar(paramsComLocalizacao({ limite: 1000 }))
       .then(dados => {
         const normalizadas = (Array.isArray(dados) ? dados : [])
           .map(normalizarLoja)
@@ -384,8 +385,19 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
   ])
 
   useEffect(() => {
-    setLimiteVisivel(24)
-  }, [busca, categoria, somenteAbertos, somentePromocoes, freteGratis, avaliacaoMin, tempoMax, distanciaMax, pagamento, ordenacao])
+    setPaginaAtual(1)
+  }, [busca, categoria, somenteAbertos, somentePromocoes, freteGratis, avaliacaoMin, tempoMax, distanciaMax, pagamento, ordenacao, tipo])
+
+  const totalPaginas = Math.max(1, Math.ceil(lojasFiltradas.length / ITENS_POR_PAGINA))
+  const paginaSegura = Math.min(paginaAtual, totalPaginas)
+  const inicioPagina = (paginaSegura - 1) * ITENS_POR_PAGINA
+  const lojasPagina = lojasFiltradas.slice(inicioPagina, inicioPagina + ITENS_POR_PAGINA)
+  const paginasVisiveis = Array.from({ length: totalPaginas }, (_, index) => index + 1)
+    .filter(pagina => (
+      pagina === 1 ||
+      pagina === totalPaginas ||
+      Math.abs(pagina - paginaSegura) <= 1
+    ))
 
   const quantidadeFiltros = [
     categoria !== 'todas',
@@ -512,7 +524,7 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
 
       <div className="grid gap-7 pt-6 lg:grid-cols-[230px_minmax(0,1fr)]">
         <aside className="hidden border-r border-border pr-5 lg:block">
-          <div className="sticky top-24">
+          <div className="sticky top-24 max-h-[calc(100dvh-7rem)] overflow-y-auto pr-2 pb-5">
             <PainelFiltros {...propriedadesPainel} />
           </div>
         </aside>
@@ -522,6 +534,11 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
             <p className="text-sm font-semibold text-text-secondary">
               <strong className="text-text-primary">{lojasFiltradas.length}</strong>{' '}
               {lojasFiltradas.length === 1 ? 'resultado' : 'resultados'}
+              {lojasFiltradas.length > ITENS_POR_PAGINA && (
+                <span className="ml-1 text-text-muted">
+                  · exibindo {inicioPagina + 1}-{Math.min(inicioPagina + ITENS_POR_PAGINA, lojasFiltradas.length)}
+                </span>
+              )}
             </p>
             {quantidadeFiltros > 0 && (
               <button
@@ -572,20 +589,53 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
           ) : (
             <>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {lojasFiltradas.slice(0, limiteVisivel).map((loja, index) => (
+                {lojasPagina.map((loja, index) => (
                   <StoreCard key={loja.id} loja={loja} index={index} />
                 ))}
               </div>
-              {limiteVisivel < lojasFiltradas.length && (
-                <div className="mt-8 flex justify-center">
+
+              {totalPaginas > 1 && (
+                <nav className="mt-8 flex flex-wrap items-center justify-center gap-2" aria-label="Paginação de lojas">
                   <button
                     type="button"
-                    onClick={() => setLimiteVisivel(limite => limite + 24)}
-                    className="h-11 rounded-lg border border-border bg-white px-5 text-sm font-extrabold text-text-primary hover:border-primary hover:text-primary"
+                    onClick={() => setPaginaAtual(pagina => Math.max(1, pagina - 1))}
+                    disabled={paginaSegura === 1}
+                    className="h-10 rounded-lg border border-border bg-white px-4 text-sm font-extrabold text-text-primary transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
                   >
-                    Mostrar mais
+                    Anterior
                   </button>
-                </div>
+
+                  {paginasVisiveis.map((pagina, index) => {
+                    const anterior = paginasVisiveis[index - 1]
+                    const temIntervalo = anterior && pagina - anterior > 1
+                    return (
+                      <span key={pagina} className="inline-flex items-center gap-2">
+                        {temIntervalo && <span className="text-sm font-bold text-text-muted">...</span>}
+                        <button
+                          type="button"
+                          onClick={() => setPaginaAtual(pagina)}
+                          className={`h-10 min-w-10 rounded-lg border px-3 text-sm font-extrabold transition-colors ${
+                            pagina === paginaSegura
+                              ? 'border-primary bg-primary text-white'
+                              : 'border-border bg-white text-text-primary hover:border-primary hover:text-primary'
+                          }`}
+                          aria-current={pagina === paginaSegura ? 'page' : undefined}
+                        >
+                          {pagina}
+                        </button>
+                      </span>
+                    )
+                  })}
+
+                  <button
+                    type="button"
+                    onClick={() => setPaginaAtual(pagina => Math.min(totalPaginas, pagina + 1))}
+                    disabled={paginaSegura === totalPaginas}
+                    className="h-10 rounded-lg border border-border bg-white px-4 text-sm font-extrabold text-text-primary transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-45"
+                  >
+                    Próxima
+                  </button>
+                </nav>
               )}
             </>
           )}

@@ -89,7 +89,6 @@ export default function SearchPage() {
   const [filtrosAtivos, setFiltrosAtivos] = useState([])
   const [todasLojas, setTodasLojas] = useState([])
   const [todosProdutos, setTodosProdutos] = useState([])
-  const [categoriasPorLoja, setCategoriasPorLoja] = useState({})
   const [versaoLocalizacao, setVersaoLocalizacao] = useState(0)
 
   useEffect(() => {
@@ -99,7 +98,7 @@ export default function SearchPage() {
   }, [])
 
   useEffect(() => {
-    api.restaurantes.listar(paramsComLocalizacao({ limite: 200 })).then(dados => {
+    api.restaurantes.listar(paramsComLocalizacao({ limite: 1000 })).then(dados => {
       const lojas = dados.map(r => ({
         ...r,
         emoji: emojiRestaurante(r),
@@ -109,9 +108,21 @@ export default function SearchPage() {
         taxaEntrega: 'Grátis',
       }))
       setTodasLojas(lojas)
-      // Busca cardápio de todos os restaurantes em paralelo
-      Promise.allSettled(lojas.map(l => api.cardapio.listar(l.id).then(itens =>
-        itens.map(item => ({
+    }).catch(console.error)
+  }, [versaoLocalizacao])
+
+  useEffect(() => {
+    const termo = termoAtivo.trim()
+    if (termo.length < 2) {
+      setTodosProdutos([])
+      return
+    }
+
+    let ativo = true
+    api.cardapio.buscar({ busca: termo, limite: 120 })
+      .then(itens => {
+        if (!ativo) return
+        setTodosProdutos((Array.isArray(itens) ? itens : []).map(item => ({
           id: item.id,
           nome: item.nome,
           desc: item.descricao || '',
@@ -119,32 +130,25 @@ export default function SearchPage() {
           emoji: emojiProduto(item),
           imagem: imagemProduto(item),
           categoria: item.categoria || '',
-          loja: { id: l.id, nome: l.nome },
-        }))
-      ))).then(results => {
-        const todos = results.flatMap(r => r.status === 'fulfilled' ? r.value : [])
-        setTodosProdutos(todos)
-        const mapa = {}
-        todos.forEach(item => {
-          const lojaId = item.loja.id
-          if (!mapa[lojaId]) mapa[lojaId] = new Set()
-          if (item.categoria) mapa[lojaId].add(String(item.categoria).toLowerCase())
-          if (item.nome) mapa[lojaId].add(String(item.nome).toLowerCase())
-        })
-        setCategoriasPorLoja(Object.fromEntries(Object.entries(mapa).map(([id, set]) => [id, Array.from(set)])))
+          loja: { id: item.restaurante_id, nome: item.restaurante_nome || 'Loja' },
+        })))
       })
-    }).catch(console.error)
-  }, [versaoLocalizacao])
+      .catch(() => {
+        if (ativo) setTodosProdutos([])
+      })
+
+    return () => {
+      ativo = false
+    }
+  }, [termoAtivo])
 
   const lojasResultado = useMemo(() => {
     const termo = termoAtivo.trim().toLowerCase()
     const filtradasPorTermo = termo
       ? todasLojas.filter(l => {
-          const categoriasItens = categoriasPorLoja[l.id] || []
           return String(l.nome || '').toLowerCase().includes(termo) ||
             String(l.categoria || '').toLowerCase().includes(termo) ||
-            String(l.descricao || '').toLowerCase().includes(termo) ||
-            categoriasItens.some(c => c.includes(termo))
+            String(l.descricao || '').toLowerCase().includes(termo)
         })
       : todasLojas
 
@@ -161,7 +165,7 @@ export default function SearchPage() {
       }
       return 0
     })
-  }, [termoAtivo, filtrosAtivos, todasLojas, categoriasPorLoja])
+  }, [termoAtivo, filtrosAtivos, todasLojas])
 
   const produtosResultado = useMemo(() => {
     const termo = termoAtivo.trim().toLowerCase()
