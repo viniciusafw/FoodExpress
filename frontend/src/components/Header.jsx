@@ -7,7 +7,7 @@ import { Search, MapPin, ChevronDown, LogIn, ShoppingBag, User, LogOut, Menu, X,
 import { useDarkMode } from '../contexts/DarkModeContext'
 import logoSrc from '../imgs/Logo-site.png'
 import { motion as Motion, AnimatePresence, useScroll, useMotionValueEvent } from 'framer-motion'
-import { nomeRegiaoAproximada } from '../utils/localizacao'
+import { geocodificarEnderecoCep, nomeRegiaoAproximada } from '../utils/localizacao'
 
 export default function Header() {
   const { estaLogado, usuario, sair } = useAuth()
@@ -143,6 +143,8 @@ export default function Header() {
         numeroEndereco.trim(),
         complementoEndereco.trim()
       )
+      setStatusLocalizacao('Calculando distância para as lojas...')
+      const coordenadas = await geocodificarEnderecoCep(dadosCep, cepFormatado, numeroEndereco.trim())
 
       setRegiao(novaRegiao)
       localStorage.setItem('cep', cepFormatado)
@@ -151,7 +153,11 @@ export default function Header() {
       localStorage.setItem('enderecoNumero', numeroEndereco.trim())
       localStorage.setItem('enderecoComplemento', complementoEndereco.trim())
       localStorage.setItem('enderecoEntrega', enderecoCompleto)
-      localStorage.removeItem('localizacao')
+      if (coordenadas) {
+        localStorage.setItem('localizacao', JSON.stringify(coordenadas))
+      } else {
+        localStorage.removeItem('localizacao')
+      }
       window.dispatchEvent(new Event('localizacao-atualizada'))
       setStatusLocalizacao('Endereço definido.')
       setPopupLocalizacao(false)

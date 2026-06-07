@@ -6,6 +6,7 @@ import Header from '../components/Header'
 import MobileNavBar from '../components/MobileNavBar'
 import api from '../services/api'
 import { formatarDataBanco } from '../utils/datas'
+import { geocodificarEnderecoCep } from '../utils/localizacao'
 import {
   User, Mail, Phone, MapPin, ShoppingBag, Heart,
   ChevronRight, LogOut, Star, Clock, Edit3, Check, X
@@ -195,8 +196,32 @@ function EnderecoCepForm({ clienteId, emailUsuario, enderecoAtual = '', labelAtu
     setSalvando(true)
     setStatus('')
     try {
-      await api.clientes.atualizar(clienteId, { endereco_principal: enderecoFinal, endereco_label: labelFinal })
+      const coordenadas = dadosCep
+        ? await geocodificarEnderecoCep(dadosCep, formatarCep(cep), numero.trim())
+        : null
+      const payload = {
+        endereco_principal: enderecoFinal,
+        endereco_label: labelFinal,
+        ...(coordenadas ? { latitude: coordenadas.latitude, longitude: coordenadas.longitude } : {}),
+      }
+
+      await api.clientes.atualizar(clienteId, payload)
       salvarLabelEndereco(emailUsuario, labelFinal)
+      if (dadosCep) {
+        const regiao = montarNomeEndereco(dadosCep, formatarCep(cep))
+        localStorage.setItem('cep', formatarCep(cep))
+        localStorage.setItem('regiao', regiao)
+        localStorage.setItem('enderecoCep', JSON.stringify(dadosCep))
+        localStorage.setItem('enderecoNumero', numero.trim())
+        localStorage.setItem('enderecoComplemento', complemento.trim())
+        localStorage.setItem('enderecoEntrega', enderecoFinal)
+        if (coordenadas) {
+          localStorage.setItem('localizacao', JSON.stringify(coordenadas))
+        } else {
+          localStorage.removeItem('localizacao')
+        }
+        window.dispatchEvent(new Event('localizacao-atualizada'))
+      }
       onSalvo({
         id: modo === 'editar' ? 'principal' : Date.now(),
         label: labelFinal,

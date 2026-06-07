@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import StoreCard from './CartaoLoja'
 import api from '../services/api'
-import { paramsComLocalizacao } from '../utils/localizacao'
+import { garantirLocalizacaoCepSalvo, paramsComLocalizacao } from '../utils/localizacao'
 
 const CATEGORIAS_MERCADO = new Set(['mercado', 'conveniencia'])
 const DIAS_SEMANA = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
@@ -290,6 +290,16 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
     const atualizar = () => setVersaoLocalizacao(versao => versao + 1)
     window.addEventListener('localizacao-atualizada', atualizar)
     return () => window.removeEventListener('localizacao-atualizada', atualizar)
+  }, [])
+
+  useEffect(() => {
+    let ativo = true
+    garantirLocalizacaoCepSalvo().then((coordenadas) => {
+      if (ativo && coordenadas) setVersaoLocalizacao(versao => versao + 1)
+    })
+    return () => {
+      ativo = false
+    }
   }, [])
 
   useEffect(() => {

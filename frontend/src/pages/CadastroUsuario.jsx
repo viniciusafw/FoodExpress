@@ -7,6 +7,7 @@ import { motion as Motion, AnimatePresence } from 'framer-motion'
 import logoSrc from '../imgs/Logo-site.png'
 import CampoSenhaForte from '../components/CampoSenhaForte'
 import { senhaForteValida } from '../utils/senha'
+import { geocodificarEnderecoCep } from '../utils/localizacao'
 
 const itemVariants = {
   hidden: { opacity: 0, y: 16 },
@@ -154,7 +155,7 @@ export default function CadastroUsuario() {
     }
   }
 
-  const confirmarCep = () => {
+  const confirmarCep = async () => {
     if (!dadosCep) return
     if (!dados.numero.trim()) {
       setErro('Informe o número do endereço.')
@@ -162,7 +163,13 @@ export default function CadastroUsuario() {
     }
     const endereco = montarEnderecoCompleto(dadosCep, formatarCep(dados.cep), dados.numero.trim(), dados.complemento.trim())
     const regiao = montarNomeEndereco(dadosCep, formatarCep(dados.cep))
-    setDados(prev => ({ ...prev, endereco, latitude: null, longitude: null }))
+    const coordenadas = await geocodificarEnderecoCep(dadosCep, formatarCep(dados.cep), dados.numero.trim())
+    setDados(prev => ({
+      ...prev,
+      endereco,
+      latitude: coordenadas?.latitude ?? null,
+      longitude: coordenadas?.longitude ?? null,
+    }))
     localStorage.setItem('cep', formatarCep(dados.cep))
     localStorage.setItem('regiao', regiao)
     localStorage.setItem('enderecoCep', JSON.stringify(dadosCep))
@@ -170,7 +177,11 @@ export default function CadastroUsuario() {
     localStorage.setItem('enderecoComplemento', dados.complemento.trim())
     localStorage.setItem('enderecoEntrega', endereco)
     localStorage.setItem('enderecoPrincipalLabel', obterLabelEndereco())
-    localStorage.removeItem('localizacao')
+    if (coordenadas) {
+      localStorage.setItem('localizacao', JSON.stringify(coordenadas))
+    } else {
+      localStorage.removeItem('localizacao')
+    }
     window.dispatchEvent(new Event('localizacao-atualizada'))
     setErro('')
   }

@@ -1,12 +1,12 @@
 import { useCart } from '../contexts/CartContext';
 import { useAuth } from '../contexts/AuthContext';
-import { X, Trash2, ShoppingBag, ArrowRight } from 'lucide-react';
+import { X, Trash2, ShoppingBag, ArrowRight, Minus, Plus } from 'lucide-react';
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 
 export default function CartDrawer({ isOpen, onClose }) {
-  const { itens, removerItem, totalCarrinho } = useCart();
+  const { itens, removerItem, incrementarItem, decrementarItem, totalCarrinho } = useCart();
   const { estaLogado } = useAuth();
   const navigate = useNavigate();
 
@@ -23,6 +23,13 @@ export default function CartDrawer({ isOpen, onClose }) {
       document.body.style.overflow = '';
     };
   }, [isOpen, onClose]);
+
+  const abrirLojaDoItem = (item) => {
+    const lojaId = item.restauranteId || item.restaurante_id || item.loja?.id || item.restaurantId;
+    if (!lojaId) return;
+    navigate(`/loja/${lojaId}`);
+    onClose();
+  };
 
   return (
     <AnimatePresence>
@@ -105,16 +112,51 @@ export default function CartDrawer({ isOpen, onClose }) {
                       exit={{ opacity: 0, x: -20, height: 0, paddingTop: 0, paddingBottom: 0 }}
                       transition={{ duration: 0.2, delay: i * 0.05 }}
                     >
-                      <div className="w-12 h-12 bg-surface-2 rounded-xl flex items-center justify-center text-2xl shrink-0 border border-border">
+                      <button
+                        type="button"
+                        onClick={() => abrirLojaDoItem(item)}
+                        className="w-12 h-12 bg-surface-2 rounded-xl flex items-center justify-center text-2xl shrink-0 border border-border cursor-pointer hover:border-primary hover:bg-primary-light transition-colors"
+                        title="Abrir loja"
+                      >
                         {item.emoji || '🍕'}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-sm text-text-primary mb-0.5 truncate">
-                          {item.name}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => abrirLojaDoItem(item)}
+                        className="flex-1 min-w-0 text-left bg-transparent border-none p-0 cursor-pointer group"
+                        title="Abrir loja"
+                      >
+                        <h4 className="font-bold text-sm text-text-primary mb-0.5 truncate group-hover:text-primary transition-colors">
+                          {item.name || item.nome}
                         </h4>
                         <span className="font-display text-sm font-bold text-primary">
-                          R$ {(item.price || 0).toFixed(2)}
+                          R$ {Number(item.price || item.preco || 0).toFixed(2)}
                         </span>
+                        <p className="mt-0.5 text-[11px] font-semibold text-text-muted group-hover:text-primary">
+                          Abrir loja
+                        </p>
+                      </button>
+                      <div className="flex shrink-0 items-center gap-0.5 rounded-full border border-border bg-white p-0.5 sm:gap-1 sm:p-1">
+                        <button
+                          type="button"
+                          onClick={() => decrementarItem(item.id)}
+                          disabled={Number(item.quantidade || 1) <= 1}
+                          className="flex h-6 w-6 items-center justify-center rounded-full border-none bg-surface-2 text-text-secondary transition-colors hover:bg-primary-light hover:text-primary disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-surface-2 disabled:hover:text-text-secondary sm:h-7 sm:w-7"
+                          aria-label={`Diminuir quantidade de ${item.name || item.nome}`}
+                        >
+                          <Minus size={13} />
+                        </button>
+                        <span className="min-w-4 text-center text-xs font-extrabold text-text-primary sm:min-w-5 sm:text-sm">
+                          {item.quantidade || 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => incrementarItem(item.id)}
+                          className="flex h-6 w-6 items-center justify-center rounded-full border-none bg-primary text-white transition-colors hover:bg-primary/90 sm:h-7 sm:w-7"
+                          aria-label={`Aumentar quantidade de ${item.name || item.nome}`}
+                        >
+                          <Plus size={13} />
+                        </button>
                       </div>
                       <Motion.button
                         onClick={() => removerItem(item.id)}

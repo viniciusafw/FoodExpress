@@ -58,6 +58,33 @@ export function CartProvider({ children }) {
     setItens((anterior) => anterior.filter((item) => item.id !== id));
   };
 
+  const alterarQuantidade = (id, quantidade) => {
+    const proximaQuantidade = Number(quantidade);
+    setItens((anterior) => anterior
+      .map((item) => {
+        if (item.id !== id) return item;
+        return { ...item, quantidade: Math.max(0, Math.min(99, proximaQuantidade)) };
+      })
+      .filter((item) => item.quantidade > 0)
+    );
+  };
+
+  const incrementarItem = (id) => {
+    setItens((anterior) => anterior.map((item) => (
+      item.id === id
+        ? { ...item, quantidade: Math.min(99, Number(item.quantidade || 1) + 1) }
+        : item
+    )));
+  };
+
+  const decrementarItem = (id) => {
+    setItens((anterior) => anterior.map((item) => (
+        item.id === id
+          ? { ...item, quantidade: Math.max(1, Number(item.quantidade || 1) - 1) }
+          : item
+      )));
+  };
+
   const limparCarrinho = () => setItens([]);
 
   const quantidadeTotal = itens.reduce((soma, item) => soma + item.quantidade, 0);
@@ -70,6 +97,9 @@ export function CartProvider({ children }) {
     itens,
     adicionarItem,
     removerItem,
+    alterarQuantidade,
+    incrementarItem,
+    decrementarItem,
     limparCarrinho,
     quantidadeTotal,
     totalCarrinho,
