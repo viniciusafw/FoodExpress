@@ -27,7 +27,7 @@ export default function MobileNavBar() {
 
   const navItemsCliente = [
     { to: '/', label: 'Início', Icon: Home },
-    { to: '/busca', label: 'Buscar', Icon: Search },
+    { to: '/explorar?filtros=1', match: '/explorar', label: 'Buscar', Icon: Search },
   ];
   const navItemsPorPerfil = {
     gerente: [
@@ -60,13 +60,13 @@ export default function MobileNavBar() {
         animate={{ y: 0 }}
         transition={{ type: 'spring', damping: 25, stiffness: 260, delay: 0.3 }}
       >
-        {navItems.map(({ to, label, Icon }) => {
+        {navItems.map(({ to, match, label, Icon }) => {
           const IconComponent = Icon
           return (
             <Link
               key={to}
               to={to}
-              className={`flex min-h-12 min-w-14 flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 transition-all ${ativo(to) ? 'text-primary bg-primary-light' : 'text-text-muted'}`}
+              className={`flex min-h-12 min-w-14 flex-col items-center justify-center gap-1 rounded-xl px-2 py-1.5 transition-all ${ativo(match || to) ? 'text-primary bg-primary-light' : 'text-text-muted'}`}
             >
               <Motion.div whileTap={{ scale: 0.85 }}>
                 <IconComponent size={22} />

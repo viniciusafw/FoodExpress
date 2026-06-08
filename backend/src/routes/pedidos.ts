@@ -710,7 +710,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       }
       const row = cardapioItem.rows[0] as any
       const quantidade = Number(item.quantidade)
-      if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > 99) {
+      if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > 500) {
         return res.status(400).json({ erro: 'Quantidade inválida em um item do pedido.' }) as any
       }
       restaurantesDosItens.add(String(row.restaurante_id))
@@ -718,6 +718,12 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     }
     if (restaurantesDosItens.size > 1 || (restaurantesDosItens.size === 1 && !restaurantesDosItens.has(String(restauranteId)))) {
       return res.status(400).json({ erro: 'O pedido só pode conter itens de um restaurante.' }) as any
+    }
+    const pedidoMinimo = Math.max(0, Number((restaurante.rows[0] as any).pedido_minimo || 0))
+    if (subtotal < pedidoMinimo) {
+      return res.status(400).json({
+        erro: `O pedido mínimo desta loja é R$ ${pedidoMinimo.toFixed(2).replace('.', ',')}.`,
+      }) as any
     }
 
     const dist = calcularDistancia(

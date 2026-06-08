@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS restaurantes (
   promo VARCHAR(120) NULL,
   status VARCHAR(50) DEFAULT 'ativo',
   taxa_comissao DOUBLE DEFAULT 15,
+  pedido_minimo DOUBLE DEFAULT 0,
   tempo_medio_preparo INT NULL,
   horario_abertura VARCHAR(10) NULL,
   horario_fechamento VARCHAR(10) NULL,
@@ -145,6 +146,25 @@ CREATE TABLE IF NOT EXISTS clientes (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ============================================================
+-- Endereços dos clientes
+-- ============================================================
+CREATE TABLE IF NOT EXISTS enderecos_clientes (
+  id VARCHAR(191) NOT NULL,
+  cliente_id VARCHAR(191) NOT NULL,
+  label VARCHAR(80) NOT NULL,
+  endereco TEXT NOT NULL,
+  principal TINYINT(1) DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_enderecos_cliente (cliente_id),
+  KEY idx_enderecos_principal (cliente_id, principal),
+  CONSTRAINT fk_enderecos_cliente
+    FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
 -- Cardápio
 -- ============================================================
 CREATE TABLE IF NOT EXISTS cardapio (
@@ -158,6 +178,7 @@ CREATE TABLE IF NOT EXISTS cardapio (
   subcategoria VARCHAR(120) NULL,
   imagem TEXT NULL,
   ingredientes TEXT NULL,
+  serve_pessoas INT DEFAULT 1,
   promocao_ativa TINYINT(1) DEFAULT 0,
   promocao_tipo VARCHAR(50) NULL,
   promocao_label VARCHAR(120) NULL,

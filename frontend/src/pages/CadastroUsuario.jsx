@@ -92,6 +92,7 @@ export default function CadastroUsuario() {
     const { name, value } = e.target
     let valor = value
     if (name === 'telefone') valor = mascaraTelefone(value)
+    if (name === 'nome') valor = value.replace(/[^\p{L}\s'-]/gu, '').slice(0, 100)
     if (name === 'cep') {
       valor = formatarCep(value)
       setDadosCep(null)
@@ -101,6 +102,7 @@ export default function CadastroUsuario() {
 
   const validarPasso1 = () => {
     if (!dados.nome.trim()) return 'Informe seu nome.'
+    if (!/^[\p{L}\s'-]+$/u.test(dados.nome.trim())) return 'O nome deve conter somente letras.'
     if (dados.telefone.replace(/\D/g, '').length < 10) return 'Informe um telefone válido.'
     return ''
   }

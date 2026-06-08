@@ -67,6 +67,10 @@ const categorias = [
   'Saudável',
   'Mercado',
   'Conveniência',
+  'Farmácia',
+  'Pet Shop',
+  'Shopping',
+  'Bebidas',
 ] as const
 
 const nomes = [
@@ -238,6 +242,10 @@ function termoImagem(categoria: string) {
     Saudável: 'healthy-bowl,salad',
     Mercado: 'grocery,supermarket,produce',
     Conveniência: 'convenience-store,snacks',
+    Farmácia: 'pharmacy,health,personal-care',
+    'Pet Shop': 'pet-shop,dog,cat',
+    Shopping: 'shopping,store,gifts',
+    Bebidas: 'drinks,beverages,juice',
   }
   return termos[categoria] || 'food,restaurant'
 }
@@ -284,6 +292,10 @@ const fotosPorCategoria: Record<string, string> = {
   Saudável: '1512621776951-a57141f2eefd',
   Mercado: '1542838132-92c53300491e',
   Conveniência: '1528698827591-e19ccd7bc23d',
+  Farmácia: '1584308666744-24d5c474f2ae',
+  'Pet Shop': '1601758228041-f3b2795255f1',
+  Shopping: '1441986300917-64674bd600d8',
+  Bebidas: '1544145945-f90425340c7e',
 }
 
 function imagemUnsplash(photoId: string) {
@@ -319,6 +331,10 @@ function nomeRestaurante(categoria: string, index: number, bairro: string) {
     Saudável: ['Greenlife', 'Fit Food', 'Boali', 'Natural Leve', 'Salad Bowl', 'Vila Orgânica'],
     Mercado: ['Mercadinhos São Luiz', 'Super Lagoa', 'Supermercado Pinheiro', 'Pão de Açúcar', 'Carrefour Bairro', 'Frangolândia'],
     Conveniência: ['Oxxo Conveniência', 'Shell Select', 'BR Mania', 'ampm Conveniência', 'Mercadinho Express', 'Conveniência 24h'],
+    Farmácia: ['Pague Menos', 'Drogasil', 'Extrafarma', 'Farmácia Santa Branca', 'Farmácia Dose Certa', 'Drogaria Popular'],
+    'Pet Shop': ['Petz', 'Cobasi', 'Petland', 'Mundo Pet', 'Empório Animal', 'Pet & Cia'],
+    Shopping: ['Loja Americanas', 'Ri Happy', 'Kalunga', 'Miniso', 'Le Biscuit', 'Casa & Vídeo'],
+    Bebidas: ['Zé Delivery', 'Empório das Bebidas', 'Disk Bebidas', 'Adega Fortaleza', 'Bebidas Express', 'Gelada Delivery'],
   }
   const lista = nomesPorCategoria[categoria] || nomesPorCategoria.Brasileira
   return `${lista[(index - 1) % lista.length]} ${bairro}`
@@ -441,6 +457,30 @@ function produtosPorCategoria(categoria: string) {
       ['Combo Higiene Rápida', 'Escova dental, pasta, desodorante, sabonete e lenço umedecido', 36.9, 'Conveniência'],
       ['Sorvete + Chocolate', 'Pote de sorvete, barra de chocolate, cobertura e castanha', 42.9, 'Sobremesas'],
     ],
+    Farmácia: [
+      ['Kit Primeiros Cuidados', 'Curativos adesivos, gaze, antisséptico, algodão e fita microporosa', 29.9, 'Saúde'],
+      ['Protetor Solar FPS 50', 'Proteção UVA e UVB, toque seco, resistente à água e dermatologicamente testado', 54.9, 'Cuidados pessoais'],
+      ['Kit Higiene Bucal', 'Escova macia, creme dental, fio dental e enxaguante bucal', 24.9, 'Higiene'],
+      ['Fraldas Descartáveis', 'Pacote de fraldas com barreiras antivazamento e ajuste confortável', 69.9, 'Bebê'],
+    ],
+    'Pet Shop': [
+      ['Ração Premium Cães 3kg', 'Ração completa para cães adultos com proteínas, vitaminas e minerais', 74.9, 'Rações'],
+      ['Ração Gatos 1kg', 'Alimento completo para gatos adultos com taurina e controle de bolas de pelo', 32.9, 'Rações'],
+      ['Areia Higiênica 4kg', 'Areia de alta absorção com controle de odores e torrões firmes', 26.9, 'Higiene'],
+      ['Kit Brinquedos Pet', 'Bola resistente, mordedor, corda e brinquedo com som', 39.9, 'Acessórios'],
+    ],
+    Shopping: [
+      ['Fone Bluetooth', 'Fone sem fio com estojo de recarga, microfone e conexão Bluetooth', 89.9, 'Eletrônicos'],
+      ['Jogo de Copos 6 Peças', 'Copos de vidro transparente resistentes para uso diário', 44.9, 'Casa'],
+      ['Kit Escolar Completo', 'Caderno, canetas, lápis, borracha, apontador e estojo', 58.9, 'Papelaria'],
+      ['Jogo Educativo', 'Jogo de raciocínio para crianças com peças resistentes e manual', 64.9, 'Brinquedos'],
+    ],
+    Bebidas: [
+      ['Refrigerante 2L', 'Refrigerante gelado de 2 litros em embalagem lacrada', 12.9, 'Refrigerantes'],
+      ['Pack Cerveja 12 Latas', 'Doze latas de cerveja pilsen gelada de 350ml', 49.9, 'Cervejas'],
+      ['Água Mineral 12 Unidades', 'Fardo com doze garrafas de água mineral sem gás de 500ml', 22.9, 'Água'],
+      ['Kit Drinks sem Álcool', 'Água tônica, frutas, gelo, xarope e utensílios para preparo', 39.9, 'Drinks'],
+    ],
   }
 
   const fallback = [
@@ -494,6 +534,7 @@ async function resetFakeData(action: 'reset' | 'clear' = 'reset') {
     ['tickets', "id LIKE 'fake_%'"],
     ['pedidos', "id LIKE 'fake_%'"],
     ['cardapio', "id LIKE 'fake_%'"],
+    ['enderecos_clientes', "cliente_id LIKE 'fake_%' OR id LIKE 'fake_%'"],
     ['gerentes', "id LIKE 'fake_%'"],
     ['operadores', "id LIKE 'fake_%'"],
     ['entregadores', "id LIKE 'fake_%'"],
@@ -561,6 +602,7 @@ function createRestaurantes() {
       promo: promoRestaurante(i),
       status: 'ativo',
       taxa_comissao: money(rand(10, 18)),
+      pedido_minimo: [0, 10, 15, 20, 25][i % 5],
       tempo_medio_preparo: int(15, 42),
       horario_abertura: i % 5 === 0 ? '10:00' : '18:00',
       horario_fechamento: i % 5 === 0 ? '22:30' : '23:59',
@@ -620,6 +662,7 @@ function createClientes() {
       telefone: telefoneFake(40000 + i),
       data_nascimento: sqlOnlyDate(nascimento),
       endereco_principal: enderecoFake(local.bairro),
+      endereco_label: i % 4 === 0 ? 'Trabalho' : 'Casa',
       latitude: local.latitude,
       longitude: local.longitude,
       senha_hash: PASSWORD_FAKE_HASH,
@@ -686,6 +729,18 @@ function createCardapio(restaurantes: Row[]) {
   return rows
 }
 
+function inferirServePessoas(nome: string, descricao: string, preco: number) {
+  const texto = `${nome} ${descricao}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  if (/(familia|familiar|30 pecas|40 pecas|pizza gigante|combo churrasco)/.test(texto)) return 4
+  if (/(pizza|20 pecas|12 unidades|6 unidades|dupla|casal|porcao|nachos|cesta|kit hortifruti|costela|moqueca|peixada|picanha)/.test(texto)) {
+    return preco >= 100 ? 4 : preco >= 65 ? 3 : 2
+  }
+  if (preco >= 100) return 4
+  if (preco >= 70) return 3
+  if (preco >= 45) return 2
+  return 1
+}
+
 function cardapioRow(restaurante: Row, restIndex: number, itemIndex: number, produto: [string, string, number, string]) {
   const [nome, descricao, preco, categoria] = produto
   const precoBase = money(Number(preco) * rand(0.92, 1.18))
@@ -702,6 +757,7 @@ function cardapioRow(restaurante: Row, restIndex: number, itemIndex: number, pro
     subcategoria: categoria,
     imagem: imagemProdutoCategoria(String(restaurante.categoria), restIndex, itemIndex, nome),
     ingredientes: JSON.stringify(descricao.split(',').map(item => item.trim()).filter(Boolean)),
+    serve_pessoas: inferirServePessoas(nome, descricao, Number(preco)),
     promocao_ativa: emPromocao ? 1 : 0,
     promocao_tipo: emPromocao ? 'desconto' : null,
     promocao_label: emPromocao ? String(restaurante.promo) : null,
@@ -1052,12 +1108,12 @@ async function main() {
   const relatorios = createRelatoriosCache()
 
   const plan: Array<[string, string[], Row[]]> = [
-    ['restaurantes', ['id', 'user_id', 'nome', 'cnpj', 'email', 'telefone', 'endereco', 'latitude', 'longitude', 'categoria', 'descricao', 'logo', 'capa', 'promo', 'status', 'taxa_comissao', 'tempo_medio_preparo', 'horario_abertura', 'horario_fechamento', 'dias_aberto', 'formas_pagamento', 'motivo_rejeicao', 'senha_hash', 'avaliacao_media', 'created_at'], restaurantes],
+    ['restaurantes', ['id', 'user_id', 'nome', 'cnpj', 'email', 'telefone', 'endereco', 'latitude', 'longitude', 'categoria', 'descricao', 'logo', 'capa', 'promo', 'status', 'taxa_comissao', 'pedido_minimo', 'tempo_medio_preparo', 'horario_abertura', 'horario_fechamento', 'dias_aberto', 'formas_pagamento', 'motivo_rejeicao', 'senha_hash', 'avaliacao_media', 'created_at'], restaurantes],
     ['gerentes', ['id', 'user_id', 'nome', 'email', 'telefone', 'cargo', 'restaurante_id', 'permissoes', 'status', 'senha_hash', 'created_at'], gerentes],
     ['operadores', ['id', 'user_id', 'nome', 'email', 'telefone', 'turno', 'status', 'senha_hash', 'created_at'], operadores],
-    ['clientes', ['id', 'user_id', 'nome', 'email', 'telefone', 'data_nascimento', 'endereco_principal', 'latitude', 'longitude', 'senha_hash', 'total_pedidos', 'deletado_em', 'created_at'], clientes],
+    ['clientes', ['id', 'user_id', 'nome', 'email', 'telefone', 'data_nascimento', 'endereco_principal', 'endereco_label', 'latitude', 'longitude', 'senha_hash', 'total_pedidos', 'deletado_em', 'created_at'], clientes],
     ['entregadores', ['id', 'user_id', 'nome', 'email', 'telefone', 'cpf', 'veiculo_tipo', 'veiculo_placa', 'documento_foto', 'status', 'latitude', 'longitude', 'ultima_atualizacao', 'avaliacao_media', 'total_entregas', 'saldo_disponivel', 'saldo_total', 'senha_hash', 'created_at'], entregadores],
-    ['cardapio', ['id', 'restaurante_id', 'nome', 'descricao', 'preco', 'preco_original', 'categoria', 'subcategoria', 'imagem', 'ingredientes', 'promocao_ativa', 'promocao_tipo', 'promocao_label', 'combo_itens', 'disponivel', 'destaque', 'tempo_preparo', 'created_at'], cardapio],
+    ['cardapio', ['id', 'restaurante_id', 'nome', 'descricao', 'preco', 'preco_original', 'categoria', 'subcategoria', 'imagem', 'ingredientes', 'serve_pessoas', 'promocao_ativa', 'promocao_tipo', 'promocao_label', 'combo_itens', 'disponivel', 'destaque', 'tempo_preparo', 'created_at'], cardapio],
     ['cupons', ['id', 'codigo', 'desconto', 'tipo', 'minimo', 'data_expiracao', 'ativo', 'created_at'], cupons],
     ['pedidos', ['id', 'cliente_id', 'restaurante_id', 'entregador_id', 'status', 'itens', 'subtotal', 'taxa_entrega', 'desconto', 'troco', 'total', 'forma_pagamento', 'pagamento_status', 'pagamento_id', 'endereco_entrega', 'latitude_entrega', 'longitude_entrega', 'distancia_km', 'observacoes', 'tempo_preparo_estimado', 'tempo_entrega_estimado', 'tempo_total_estimado', 'iniciado_em', 'confirmado_em', 'pronto_em', 'entregue_em', 'cancelado_em', 'motivo_cancelamento', 'avaliacao_restaurante', 'avaliacao_entregador', 'comentario', 'ganho_entregador', 'repasse_entregador_status', 'repasse_entregador_em', 'created_at', 'updated_at'], pedidos],
     ['rotas', ['id', 'pedido_id', 'entregador_id', 'origem_lat', 'origem_lng', 'destino_lat', 'destino_lng', 'distancia_km', 'duracao_estimada', 'pontos_rota', 'created_at'], rotas],

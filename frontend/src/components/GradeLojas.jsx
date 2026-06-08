@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react'
 import StoreCard from './CartaoLoja'
 import api from '../services/api'
 import { paramsComLocalizacao } from '../utils/localizacao'
+import { statusFuncionamento } from '../utils/horarios'
+
+const CATEGORIAS_MERCADO = new Set(['mercado', 'conveniencia', 'farmacia', 'pet shop', 'petshop', 'shopping', 'bebidas'])
 
 function normalizarTexto(valor) {
   return String(valor || '')
@@ -21,7 +24,7 @@ function normalizarPromocaoLoja(loja) {
   return numero > 0 && numero % 11 === 0 ? promocao : null
 }
 
-export default function StoreGrid({ tipo, limite = 50, somenteLinha = false }) {
+export default function StoreGrid({ tipo = 'restaurante', limite = 50, somenteLinha = false }) {
   const [lista, setLista] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
@@ -37,17 +40,28 @@ export default function StoreGrid({ tipo, limite = 50, somenteLinha = false }) {
   useEffect(() => {
     setErro('')
     setCarregando(true)
-    const categoria = tipo === 'mercado' ? 'Mercado' : tipo
-    api.restaurantes.listar(paramsComLocalizacao({ ...(categoria ? { categoria } : {}), limite }))
+    api.restaurantes.listar(paramsComLocalizacao({ limite: tipo === 'mercado' ? 1000 : limite }))
       .then(dados => {
-        const normalizados = dados.map(r => ({
-          ...r,
-          promo: normalizarPromocaoLoja(r),
-          emoji: r.emoji || '🍽️',
-          avaliacao: r.avaliacao_media ?? 0,
-          tempoEntrega: r.tempo_medio_preparo ? `${r.tempo_medio_preparo}-${r.tempo_medio_preparo + 10} min` : '30-40 min',
-          taxaEntrega: 'Grátis',
-        }))
+        const normalizados = dados
+          .filter(r => {
+            const categoria = normalizarTexto(r.categoria)
+            const mercado = CATEGORIAS_MERCADO.has(categoria)
+            return tipo === 'mercado' ? mercado : !mercado
+          })
+          .slice(0, limite)
+          .map(r => {
+            const funcionamento = statusFuncionamento(r)
+            return {
+              ...r,
+              promo: normalizarPromocaoLoja(r),
+              emoji: r.emoji || '🍽️',
+              avaliacao: r.avaliacao_media ?? 0,
+              tempoEntrega: r.tempo_medio_preparo ? `${r.tempo_medio_preparo}-${r.tempo_medio_preparo + 10} min` : '30-40 min',
+              taxaEntrega: 'Grátis',
+              fechado: !funcionamento.aberta,
+              statusFuncionamento: funcionamento.texto,
+            }
+          })
         setLista(normalizados)
       })
       .catch(err => {
@@ -99,8 +113,8 @@ export default function StoreGrid({ tipo, limite = 50, somenteLinha = false }) {
 
   return (
     <div className={somenteLinha
-      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5'
-      : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-5'
+      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 lg:gap-6'
+      : 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 lg:gap-6'
     }>
       {lista.map((loja, i) => (
         <StoreCard key={loja.id} loja={loja} index={i} />

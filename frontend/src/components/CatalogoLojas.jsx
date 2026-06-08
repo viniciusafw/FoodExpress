@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { motion as Motion, AnimatePresence } from 'framer-motion'
 import {
   Check,
@@ -16,9 +17,17 @@ import {
 import StoreCard from './CartaoLoja'
 import api from '../services/api'
 import { garantirLocalizacaoCepSalvo, paramsComLocalizacao } from '../utils/localizacao'
+import { statusFuncionamento } from '../utils/horarios'
 
-const CATEGORIAS_MERCADO = new Set(['mercado', 'conveniencia'])
-const DIAS_SEMANA = ['domingo', 'segunda', 'terca', 'quarta', 'quinta', 'sexta', 'sabado']
+const CATEGORIAS_MERCADO = new Set([
+  'mercado',
+  'conveniencia',
+  'farmacia',
+  'pet shop',
+  'petshop',
+  'shopping',
+  'bebidas',
+])
 const ITENS_POR_PAGINA = 24
 
 const opcoesOrdenacao = [
@@ -55,28 +64,6 @@ function formatarDistancia(valor) {
   return `${distancia.toFixed(1).replace('.', ',')} km`
 }
 
-function lojaEstaAberta(loja) {
-  if (loja.status === 'fechado' || loja.status === 'inativo') return false
-  if (!loja.horario_abertura || !loja.horario_fechamento) return true
-
-  const agora = new Date()
-  const diaAtual = DIAS_SEMANA[agora.getDay()]
-  const diasAbertos = lerLista(loja.dias_aberto).map(normalizarTexto)
-  if (diasAbertos.length && !diasAbertos.some(dia => dia.startsWith(diaAtual))) return false
-
-  const paraMinutos = horario => {
-    const [hora, minuto] = String(horario).split(':').map(Number)
-    return hora * 60 + minuto
-  }
-
-  const minutosAgora = agora.getHours() * 60 + agora.getMinutes()
-  const abertura = paraMinutos(loja.horario_abertura)
-  const fechamento = paraMinutos(loja.horario_fechamento)
-  if (![abertura, fechamento].every(Number.isFinite)) return true
-  if (fechamento < abertura) return minutosAgora >= abertura || minutosAgora <= fechamento
-  return minutosAgora >= abertura && minutosAgora <= fechamento
-}
-
 function deveMostrarPromoFake(loja) {
   const id = String(loja?.id || '')
   if (!id.startsWith('fake_')) return true
@@ -98,6 +85,7 @@ function normalizarLoja(loja) {
   const tempo = Number(loja.tempo_medio_preparo)
   const distanciaKm = loja.distancia_km == null ? null : Number(loja.distancia_km)
   const categoriaNormalizada = normalizarTexto(loja.categoria)
+  const funcionamento = statusFuncionamento(loja)
 
   return {
     ...loja,
@@ -111,12 +99,14 @@ function normalizarLoja(loja) {
     distanciaKm: Number.isFinite(distanciaKm) ? distanciaKm : null,
     distancia: loja.distancia || formatarDistancia(distanciaKm),
     pagamentos: lerLista(loja.formas_pagamento),
-    abertaAgora: lojaEstaAberta(loja),
-    fechado: !lojaEstaAberta(loja),
+    abertaAgora: funcionamento.aberta,
+    fechado: !funcionamento.aberta,
+    statusFuncionamento: funcionamento.texto,
   }
 }
 
 function pertenceAoCatalogo(loja, tipo) {
+  if (tipo === 'todos') return true
   const mercado = CATEGORIAS_MERCADO.has(loja.categoriaNormalizada)
   return tipo === 'mercado' ? mercado : !mercado
 }
@@ -278,12 +268,15 @@ function PainelFiltros({
 }
 
 export default function CatalogoLojas({ tipo = 'restaurante' }) {
+  const [searchParams] = useSearchParams()
+  const termoInicial = String(searchParams.get('termo') || searchParams.get('q') || searchParams.get('categoria') || '').trim()
+  const abrirFiltrosInicial = searchParams.get('filtros') === '1'
   const [lojas, setLojas] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
   const [versaoLocalizacao, setVersaoLocalizacao] = useState(0)
   const [tentativa, setTentativa] = useState(0)
-  const [busca, setBusca] = useState('')
+  const [busca, setBusca] = useState(() => String(searchParams.get('busca') || '').trim())
   const [categoria, setCategoria] = useState('todas')
   const [ordenacao, setOrdenacao] = useState('recomendados')
   const [somenteAbertos, setSomenteAbertos] = useState(false)
@@ -293,12 +286,15 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
   const [tempoMax, setTempoMax] = useState(0)
   const [distanciaMax, setDistanciaMax] = useState(0)
   const [pagamento, setPagamento] = useState('')
-  const [filtrosMobileAbertos, setFiltrosMobileAbertos] = useState(false)
+  const [filtrosMobileAbertos, setFiltrosMobileAbertos] = useState(() => abrirFiltrosInicial)
   const [paginaAtual, setPaginaAtual] = useState(1)
 
   const ehMercado = tipo === 'mercado'
-  const titulo = ehMercado ? 'Mercados e conveniência' : 'Restaurantes'
-  const descricao = ehMercado
+  const tituloBase = tipo === 'todos' ? 'Explorar lojas' : ehMercado ? 'Mercados e conveniência' : 'Restaurantes'
+  const titulo = termoInicial ? `${tituloBase}: ${termoInicial}` : tituloBase
+  const descricao = tipo === 'todos'
+    ? 'Encontre lojas, restaurantes e produtos com filtros completos.'
+    : ehMercado
     ? 'Compras do dia a dia, bebidas e itens essenciais perto de você.'
     : 'Descubra cozinhas, ofertas e entregas que combinam com seu momento.'
 
@@ -321,7 +317,10 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
   useEffect(() => {
     setCarregando(true)
     setErro('')
-    api.restaurantes.listar(paramsComLocalizacao({ limite: 1000 }))
+    api.restaurantes.listar(paramsComLocalizacao({
+      limite: 1000,
+      ...(termoInicial ? { categoria: termoInicial } : {}),
+    }))
       .then(dados => {
         const normalizadas = (Array.isArray(dados) ? dados : [])
           .map(normalizarLoja)
@@ -333,7 +332,7 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
         setErro(error.message?.includes('Backend offline') ? 'backend_offline' : 'erro_generico')
       })
       .finally(() => setCarregando(false))
-  }, [tipo, versaoLocalizacao, tentativa])
+  }, [tipo, termoInicial, versaoLocalizacao, tentativa])
 
   useEffect(() => {
     if (!filtrosMobileAbertos) return undefined
@@ -689,7 +688,16 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+              drag="y"
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.35 }}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 90 || info.velocity.y > 650) setFiltrosMobileAbertos(false)
+              }}
             >
+              <div className="-mt-1 mb-3 flex justify-center lg:hidden">
+                <div className="h-1 w-10 rounded-full bg-border" />
+              </div>
               <div className="mb-5 flex items-center justify-between border-b border-border pb-4">
                 <div>
                   <p className="font-display text-lg font-extrabold text-text-primary">Filtros avançados</p>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { motion as Motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
 import { imagemRestaurante, emojiRestaurante } from '../utils/imagens'
+import { useAuth } from '../contexts/AuthContext'
 
 const gradients = [
   'linear-gradient(135deg,#FFE0D0,#FFCAB4)',
@@ -14,6 +15,7 @@ const gradients = [
 
 export default function StoreCard({ loja, index = 0 }) {
   const navigate = useNavigate()
+  const { estaLogado } = useAuth()
 
   const loja_ = {
     id: loja?.id || index + 1,
@@ -28,6 +30,7 @@ export default function StoreCard({ loja, index = 0 }) {
     fechado: loja?.fechado || loja?.status === 'fechado' || loja?.status === 'inativo',
     gratis: loja?.taxaEntrega === 'Grátis' || loja?.gratis,
     distancia: loja?.distancia || null,
+    statusFuncionamento: loja?.statusFuncionamento || (loja?.fechado ? 'Fechada no momento' : 'Aberta agora'),
   }
 
   const [fav, setFav] = useState(false)
@@ -43,6 +46,10 @@ export default function StoreCard({ loja, index = 0 }) {
 
   const alternarFavorito = (e) => {
     e.stopPropagation()
+    if (!estaLogado) {
+      navigate('/login')
+      return
+    }
     try {
       const salvos = JSON.parse(localStorage.getItem('favoritosRestaurantes') || '[]')
       const existe = salvos.some((item) => String(item.id) === String(loja_.id))
@@ -116,6 +123,9 @@ export default function StoreCard({ loja, index = 0 }) {
           </div>
         </div>
         <p className="text-xs text-text-muted font-semibold mb-3">{loja_.categoria}</p>
+        <p className={`mb-3 text-xs font-extrabold ${loja_.fechado ? 'text-red-500' : 'text-accent'}`}>
+          {loja_.statusFuncionamento}
+        </p>
         <div className="h-px bg-border mb-3" />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-1.5 text-xs font-bold text-text-secondary">

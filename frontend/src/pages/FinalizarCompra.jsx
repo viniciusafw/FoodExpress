@@ -83,6 +83,8 @@ export default function Checkout() {
   const navigate = useNavigate()
 
   const [enderecoPrincipal, setEnderecoPrincipal] = useState('')
+  const [enderecosSalvos, setEnderecosSalvos] = useState([])
+  const [enderecoSelecionadoId, setEnderecoSelecionadoId] = useState('')
   const [enderecoCustom, setEnderecoCustom] = useState('')
   const [pagamentoSelecionado, setPagamentoSelecionado] = useState('cartao')
   const [troco, setTroco] = useState('')
@@ -95,10 +97,22 @@ export default function Checkout() {
   const [carregando, setCarregando] = useState(false)
   const [pedidoConfirmado, setPedidoConfirmado] = useState(null)
   const [erro, setErro] = useState('')
+  const [pedidoMinimo, setPedidoMinimo] = useState(() => Math.max(0, Number(itens[0]?.pedidoMinimo || itens[0]?.pedido_minimo || 0)))
+  const restauranteIdCarrinho = itens
+    .map(item => item.restauranteId || item.restaurante_id || item.loja?.id || item.restaurantId)
+    .find(Boolean)
 
   useEffect(() => {
     api.clientes.meuPerfil()
-      .then(cliente => { if (cliente?.endereco_principal) setEnderecoPrincipal(cliente.endereco_principal) })
+      .then(async cliente => {
+        if (cliente?.endereco_principal) setEnderecoPrincipal(cliente.endereco_principal)
+        if (cliente?.id) {
+          const lista = await api.clientes.listarEnderecos(cliente.id).catch(() => [])
+          setEnderecosSalvos(Array.isArray(lista) ? lista : [])
+          const principal = lista.find(endereco => Boolean(endereco.principal)) || lista[0]
+          if (principal?.id) setEnderecoSelecionadoId(principal.id)
+        }
+      })
       .catch(() => {})
 
     if (typeof window !== 'undefined') {
@@ -123,6 +137,13 @@ export default function Checkout() {
       }
     }
   }, [])
+
+  useEffect(() => {
+    if (!restauranteIdCarrinho) return
+    api.restaurantes.buscarPorId(restauranteIdCarrinho)
+      .then(restaurante => setPedidoMinimo(Math.max(0, Number(restaurante?.pedido_minimo || 0))))
+      .catch(() => {})
+  }, [restauranteIdCarrinho])
 
   const taxaEntregaBase = totalCarrinho >= 50 ? 0 : 5.99
   const cupomFreteGratis = Boolean(cupomAplicado?.frete_gratis || cupomAplicado?.tipo === 'frete_gratis')
@@ -150,7 +171,8 @@ export default function Checkout() {
         : `${Number(cupomAplicado.desconto_percentual ?? cupomAplicado.desconto ?? 0)}% de desconto — economizando R$ ${desconto.toFixed(2).replace('.', ',')}`
     : ''
 
-  const enderecoFinal = enderecoCustom.trim() || enderecoPrincipal || (localizacao ? 'Minha localização atual' : '')
+  const enderecoSelecionado = enderecosSalvos.find(endereco => String(endereco.id) === String(enderecoSelecionadoId))
+  const enderecoFinal = enderecoSelecionado?.endereco || enderecoCustom.trim() || enderecoPrincipal || (localizacao ? 'Minha localização atual' : '')
 
   const validarCupom = async (codigoInformado) => {
     const codigoNormalizado = String(codigoInformado || '').trim().toUpperCase()
@@ -214,6 +236,10 @@ export default function Checkout() {
     if (itens.length === 0) return
     if (!enderecoFinal) {
       setErro('Informe um endereço de entrega antes de confirmar o pedido.')
+      return
+    }
+    if (totalCarrinho < pedidoMinimo) {
+      setErro(`O pedido mínimo desta loja é R$ ${pedidoMinimo.toFixed(2).replace('.', ',')}. Adicione mais R$ ${(pedidoMinimo - totalCarrinho).toFixed(2).replace('.', ',')}.`)
       return
     }
 
@@ -326,7 +352,36 @@ export default function Checkout() {
             <h3 className="font-display text-base font-bold text-text-primary">Endereço de entrega</h3>
           </div>
           <div className="p-5 flex flex-col gap-3">
-            {enderecoPrincipal && (
+            {enderecosSalvos.length > 0 && (
+              <div className="grid gap-2">
+                {enderecosSalvos.map(endereco => {
+                  const selecionado = String(endereco.id) === String(enderecoSelecionadoId)
+                  return (
+                    <button
+                      key={endereco.id}
+                      type="button"
+                      onClick={() => {
+                        setEnderecoSelecionadoId(endereco.id)
+                        setEnderecoCustom('')
+                        setLocalizacao(null)
+                      }}
+                      className={`flex items-center gap-3 rounded-xl border p-3 text-left ${
+                        selecionado ? 'border-primary/30 bg-primary-light' : 'border-border bg-white hover:border-primary/40'
+                      }`}
+                    >
+                      <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${selecionado ? 'border-primary' : 'border-border'}`}>
+                        {selecionado && <div className="h-2.5 w-2.5 rounded-full bg-primary" />}
+                      </div>
+                      <div>
+                        <p className="text-xs font-extrabold uppercase tracking-wide text-text-muted">{endereco.label || 'Endereço salvo'}</p>
+                        <p className="text-sm font-semibold text-text-primary">{endereco.endereco}</p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            {!enderecosSalvos.length && enderecoPrincipal && (
               <div className="flex items-center gap-3 p-3 bg-primary-light border border-primary/20 rounded-xl">
                 <div className="w-5 h-5 rounded-full border-2 border-primary flex items-center justify-center shrink-0">
                   <div className="w-2.5 h-2.5 bg-primary rounded-full" />
@@ -356,6 +411,7 @@ export default function Checkout() {
                 value={enderecoCustom}
                 onChange={e => {
                   setEnderecoCustom(e.target.value)
+                  setEnderecoSelecionadoId('')
                   setLocalizacao(null)
                   setLocalizacaoStatus('')
                 }}
@@ -525,6 +581,18 @@ export default function Checkout() {
                 <span>Total</span>
                 <span className="text-accent">R$ {total.toFixed(2).replace('.', ',')}</span>
               </div>
+              {pedidoMinimo > 0 && (
+                <div className={`mt-2 rounded-xl border px-3 py-2 text-xs font-bold ${
+                  totalCarrinho < pedidoMinimo
+                    ? 'border-yellow-200 bg-yellow-50 text-yellow-700'
+                    : 'border-accent/20 bg-accent/10 text-accent'
+                }`}>
+                  Pedido mínimo: R$ {pedidoMinimo.toFixed(2).replace('.', ',')}
+                  {totalCarrinho < pedidoMinimo
+                    ? ` · faltam R$ ${(pedidoMinimo - totalCarrinho).toFixed(2).replace('.', ',')}`
+                    : ' · atingido'}
+                </div>
+              )}
             </div>
           </div>
         </Motion.div>
@@ -540,7 +608,7 @@ export default function Checkout() {
           </div>
         )}
 
-        <Motion.button onClick={handleConfirmar} disabled={carregando}
+        <Motion.button onClick={handleConfirmar} disabled={carregando || totalCarrinho < pedidoMinimo}
           className="w-full py-4 bg-primary text-white rounded-2xl font-bold text-base cursor-pointer hover:bg-primary/90 transition-all disabled:opacity-60 flex items-center justify-center gap-2 border-none"
           whileTap={{ scale: 0.98 }}>
           {carregando ? (

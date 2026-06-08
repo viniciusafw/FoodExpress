@@ -304,12 +304,21 @@ function OfertaEntrega({ oferta, segundos, online, buscando, processando, onAcei
               role="dialog"
               aria-modal="true"
               aria-label="Nova oferta de entrega"
-              className="w-full max-w-md overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+              className="max-h-[92dvh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
               initial={{ y: 80, scale: 0.96 }}
               animate={{ y: 0, scale: 1 }}
               exit={{ y: 80, scale: 0.96 }}
               transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+              drag={typeof window !== 'undefined' && window.innerWidth < 640 ? 'y' : false}
+              dragConstraints={{ top: 0, bottom: 0 }}
+              dragElastic={{ top: 0, bottom: 0.35 }}
+              onDragEnd={(_, info) => {
+                if (info.offset.y > 100 || info.velocity.y > 700) onRecusar()
+              }}
             >
+              <div className="flex justify-center bg-secondary pt-3 sm:hidden">
+                <div className="h-1 w-10 rounded-full bg-white/35" />
+              </div>
               <div className="bg-secondary px-5 pt-5 text-white">
                 <div className="flex items-center justify-between">
                   <div>

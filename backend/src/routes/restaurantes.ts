@@ -368,6 +368,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       horario_fechamento,
       dias_aberto,
       formas_pagamento,
+      pedido_minimo,
     } = req.body
 
     const sets: string[] = ['updated_at = CURRENT_TIMESTAMP']
@@ -405,6 +406,11 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (horario_fechamento !== undefined) { sets.push('horario_fechamento = ?'); args.push(horario_fechamento) }
     if (dias_aberto !== undefined) { sets.push('dias_aberto = ?'); args.push(serializarArray(dias_aberto)) }
     if (formas_pagamento !== undefined) { sets.push('formas_pagamento = ?'); args.push(serializarArray(formas_pagamento)) }
+    if (pedido_minimo !== undefined) {
+      const minimo = Number(pedido_minimo)
+      if (!Number.isFinite(minimo) || minimo < 0) return res.status(400).json({ erro: 'Pedido mínimo inválido' }) as any
+      sets.push('pedido_minimo = ?'); args.push(Number(minimo.toFixed(2)))
+    }
 
     args.push(id)
     await db.execute({ sql: `UPDATE restaurantes SET ${sets.join(', ')} WHERE id = ?`, args })

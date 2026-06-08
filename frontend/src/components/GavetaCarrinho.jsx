@@ -6,9 +6,11 @@ import { useNavigate } from 'react-router-dom';
 import { motion as Motion, AnimatePresence } from 'framer-motion';
 
 export default function CartDrawer({ isOpen, onClose }) {
-  const { itens, removerItem, incrementarItem, decrementarItem, totalCarrinho } = useCart();
+  const { itens, removerItem, alterarQuantidade, incrementarItem, decrementarItem, totalCarrinho } = useCart();
   const { estaLogado } = useAuth();
   const navigate = useNavigate();
+  const pedidoMinimo = Math.max(0, Number(itens[0]?.pedidoMinimo || itens[0]?.pedido_minimo || 0));
+  const faltaPedidoMinimo = Math.max(0, pedidoMinimo - Number(totalCarrinho || 0));
 
   useEffect(() => {
     const handle = (e) => {
@@ -55,6 +57,12 @@ export default function CartDrawer({ isOpen, onClose }) {
             animate={{ x: 0, y: 0, opacity: 1 }}
             exit={typeof window !== 'undefined' && window.innerWidth >= 768 ? { x: '100%', opacity: 0 } : { y: '100%', opacity: 0 }}
             transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            drag={typeof window !== 'undefined' && window.innerWidth < 768 ? 'y' : false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.35 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 100 || info.velocity.y > 700) onClose();
+            }}
           >
             {/* Alça — só mobile */}
             <div className="md:hidden flex justify-center pt-3 pb-1 shrink-0">
@@ -160,9 +168,16 @@ export default function CartDrawer({ isOpen, onClose }) {
                         >
                           <Minus size={13} />
                         </button>
-                        <span className="min-w-4 text-center text-xs font-extrabold text-text-primary sm:min-w-5 sm:text-sm">
-                          {item.quantidade || 1}
-                        </span>
+                        <input
+                          type="number"
+                          min="1"
+                          max="500"
+                          inputMode="numeric"
+                          value={item.quantidade || 1}
+                          onChange={(event) => alterarQuantidade(item.id, event.target.value)}
+                          className="h-7 w-10 border-none bg-transparent text-center text-xs font-extrabold text-text-primary outline-none sm:w-12 sm:text-sm"
+                          aria-label={`Quantidade de ${item.name || item.nome}`}
+                        />
                         <button
                           type="button"
                           onClick={() => incrementarItem(item.id)}
@@ -201,6 +216,17 @@ export default function CartDrawer({ isOpen, onClose }) {
                 <span className="text-text-muted font-bold">Calculada no checkout</span>
               </div>
               <div className="h-px bg-border mb-3" />
+              {pedidoMinimo > 0 && (
+                <div className={`mb-3 rounded-xl border px-3 py-2 text-xs font-bold ${
+                  faltaPedidoMinimo > 0
+                    ? 'border-yellow-200 bg-yellow-50 text-yellow-700'
+                    : 'border-accent/20 bg-accent/10 text-accent'
+                }`}>
+                  {faltaPedidoMinimo > 0
+                    ? `Pedido mínimo de R$ ${pedidoMinimo.toFixed(2).replace('.', ',')}. Adicione mais R$ ${faltaPedidoMinimo.toFixed(2).replace('.', ',')}.`
+                    : 'Pedido mínimo atingido.'}
+                </div>
+              )}
               <div className="flex justify-between items-center mb-4">
                 <span className="font-display text-base font-bold text-text-primary">Subtotal</span>
                 <span className="font-display text-xl font-extrabold text-primary">
@@ -216,7 +242,7 @@ export default function CartDrawer({ isOpen, onClose }) {
                   }
                   onClose();
                 }}
-                disabled={itens.length === 0}
+                disabled={itens.length === 0 || faltaPedidoMinimo > 0}
                 className="w-full py-4 bg-primary text-white border-none rounded-xl font-display text-base font-bold cursor-pointer flex items-center justify-center gap-2 disabled:bg-border disabled:text-text-muted disabled:cursor-not-allowed"
                 whileHover={{ scale: 1.02, boxShadow: '0 4px 20px rgba(255,107,53,0.35)' }}
                 whileTap={{ scale: 0.98 }}

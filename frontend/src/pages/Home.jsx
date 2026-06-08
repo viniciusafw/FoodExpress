@@ -31,7 +31,7 @@ export default function Home() {
 
   const handleBusca = (e) => {
     e.preventDefault()
-    if (query.trim()) navigate(`/busca?q=${encodeURIComponent(query)}`)
+    if (query.trim()) navigate(`/explorar?termo=${encodeURIComponent(query)}&filtros=1`)
   }
 
   return (
@@ -39,11 +39,9 @@ export default function Home() {
       <Header />
 
       {/* Hero */}
-      <section className="relative bg-secondary px-4 pt-12 pb-20 overflow-hidden sm:px-6 sm:pt-14">
+      <section className="relative bg-secondary px-4 pt-12 pb-16 overflow-hidden sm:px-6 sm:pt-14 sm:pb-20">
         <div className="absolute top-[-50%] right-[-20%] w-96 h-96 rounded-full pointer-events-none"
           style={{ background: 'radial-gradient(circle, rgba(255,107,53,0.15) 0%, transparent 70%)' }} />
-        <div className="absolute bottom-0 left-0 right-0 h-10 bg-background"
-          style={{ clipPath: 'ellipse(55% 100% at 50% 100%)' }} />
 
         <Motion.div className="max-w-175 mx-auto text-center relative z-10"
           variants={containerVariants}
@@ -83,7 +81,7 @@ export default function Home() {
       </section>
 
       {/* Conteúdo */}
-      <main className="max-w-7xl mx-auto w-full px-4 sm:px-6 pb-24 md:pb-8">
+      <main className="mx-auto w-full max-w-[90rem] px-4 pb-24 sm:px-8 md:pb-8">
         <PromotionalBanner />
         <Motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: "easeOut" }}
           className="flex items-center justify-between mt-10 mb-5">

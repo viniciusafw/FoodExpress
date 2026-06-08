@@ -201,6 +201,7 @@ export async function ensureDatabaseHealth() {
       await ensureColumn('restaurantes', 'motivo_rejeicao', 'TEXT')
       await ensureColumn('restaurantes', 'senha_hash', 'TEXT')
       await ensureColumn('restaurantes', 'avaliacao_media', 'DOUBLE DEFAULT 0')
+      await ensureColumn('restaurantes', 'pedido_minimo', 'DOUBLE DEFAULT 0')
 
       await ensureColumn('clientes', 'senha_hash', 'TEXT')
       await ensureColumn('clientes', 'deletado_em', 'DATETIME')
@@ -211,6 +212,7 @@ export async function ensureDatabaseHealth() {
       await ensureColumn('entregadores', 'saldo_total', 'DOUBLE DEFAULT 0')
       await ensureColumn('entregadores', 'senha_hash', 'TEXT')
       await ensureColumn('cardapio', 'imagem', 'TEXT')
+      await ensureColumn('cardapio', 'serve_pessoas', 'INT DEFAULT 1')
       await ensureColumn('cardapio', 'preco_original', 'DOUBLE')
       await ensureColumn('cardapio', 'promocao_ativa', 'TINYINT(1) DEFAULT 0')
       await ensureColumn('cardapio', 'promocao_tipo', 'VARCHAR(50)')

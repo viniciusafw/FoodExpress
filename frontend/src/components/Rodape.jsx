@@ -4,10 +4,10 @@ import logoSrc from '../imgs/Logo-site.png'
 import { motion as Motion } from 'framer-motion'
 
 const redesSociais = [
-  { Icone: Instagram, href: '#', rotulo: 'Instagram' },
-  { Icone: Facebook,  href: '#', rotulo: 'Facebook'  },
-  { Icone: Youtube,   href: '#', rotulo: 'Youtube'   },
-  { Icone: Twitter,   href: '#', rotulo: 'Twitter'   },
+  { Icone: Instagram, href: 'https://www.instagram.com/', rotulo: 'Instagram' },
+  { Icone: Facebook,  href: 'https://www.facebook.com/', rotulo: 'Facebook'  },
+  { Icone: Youtube,   href: 'https://www.youtube.com/', rotulo: 'Youtube'   },
+  { Icone: Twitter,   href: 'https://x.com/', rotulo: 'X / Twitter'   },
 ]
 
 const contatos = [
@@ -20,7 +20,7 @@ const linksClientes = [
   { rotulo: 'Início',       href: '/'             },
   { rotulo: 'Restaurantes', href: '/Restaurantes'  },
   { rotulo: 'Mercados',     href: '/Mercados'      },
-  { rotulo: 'Buscar',       href: '/busca'         },
+  { rotulo: 'Buscar',       href: '/explorar?filtros=1' },
   { rotulo: 'Minha conta',  href: '/perfil'        },
 ]
 
@@ -45,7 +45,7 @@ export default function Rodape() {
             {redesSociais.map(({ Icone, href, rotulo }) => {
               const IconComponent = Icone
               return (
-                <a key={rotulo} href={href} aria-label={rotulo}
+                <a key={rotulo} href={href} aria-label={rotulo} target="_blank" rel="noreferrer"
                   className="w-9 h-9 bg-white/8 rounded-xl flex items-center justify-center text-white/60 transition-all hover:bg-primary hover:text-white hover:-translate-y-0.5">
                   <IconComponent size={16} />
                 </a>

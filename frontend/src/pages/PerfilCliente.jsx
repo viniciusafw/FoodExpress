@@ -134,7 +134,17 @@ function salvarLabelEndereco(email, label) {
   if (email) localStorage.setItem(obterChaveEnderecoLabel(email), label)
 }
 
-function EnderecoCepForm({ clienteId, emailUsuario, enderecoAtual = '', labelAtual = '', onSalvo, onCancelar, modo = 'adicionar' }) {
+function EnderecoCepForm({
+  clienteId,
+  emailUsuario,
+  enderecoId,
+  enderecoAtual = '',
+  labelAtual = '',
+  principalAtual = false,
+  onSalvo,
+  onCancelar,
+  modo = 'adicionar',
+}) {
   const [cep, setCep] = useState('')
   const [dadosCep, setDadosCep] = useState(null)
   const [numero, setNumero] = useState('')
@@ -200,14 +210,16 @@ function EnderecoCepForm({ clienteId, emailUsuario, enderecoAtual = '', labelAtu
         ? await geocodificarEnderecoCep(dadosCep, formatarCep(cep), numero.trim())
         : null
       const payload = {
-        endereco_principal: enderecoFinal,
-        endereco_label: labelFinal,
-        ...(coordenadas ? { latitude: coordenadas.latitude, longitude: coordenadas.longitude } : {}),
+        label: labelFinal,
+        endereco: enderecoFinal,
+        principal: principalAtual,
       }
 
-      await api.clientes.atualizar(clienteId, payload)
-      salvarLabelEndereco(emailUsuario, labelFinal)
-      if (dadosCep) {
+      const salvo = modo === 'editar'
+        ? await api.clientes.atualizarEndereco(clienteId, enderecoId, payload)
+        : await api.clientes.criarEndereco(clienteId, payload)
+      if (salvo?.principal || principalAtual) salvarLabelEndereco(emailUsuario, labelFinal)
+      if (dadosCep && (salvo?.principal || principalAtual)) {
         const regiao = montarNomeEndereco(dadosCep, formatarCep(cep))
         localStorage.setItem('cep', formatarCep(cep))
         localStorage.setItem('regiao', regiao)
@@ -223,12 +235,12 @@ function EnderecoCepForm({ clienteId, emailUsuario, enderecoAtual = '', labelAtu
         window.dispatchEvent(new Event('localizacao-atualizada'))
       }
       onSalvo({
-        id: modo === 'editar' ? 'principal' : Date.now(),
-        label: labelFinal,
-        rua: enderecoFinal,
+        id: salvo?.id || enderecoId || Date.now(),
+        label: salvo?.label || labelFinal,
+        rua: salvo?.endereco || enderecoFinal,
         bairro: '',
         cidade: '',
-        principal: modo === 'editar',
+        principal: Boolean(salvo?.principal ?? principalAtual),
       })
     } catch (e) {
       setStatus(e.message || 'Não foi possível salvar o endereço.')
@@ -412,7 +424,7 @@ function EditarEndereco({ end, clienteId, emailUsuario, onSalvo }) {
 
   if (!editando) return (
     <button onClick={() => setEditando(true)}
-      className="text-xs font-bold text-text-muted hover:text-primary transition-colors bg-transparent border-none cursor-pointer shrink-0 mt-1">
+      className="shrink-0 rounded-lg border border-border bg-white px-3 py-2 text-xs font-extrabold text-text-secondary shadow-sm transition-colors hover:border-primary hover:text-primary cursor-pointer">
       Editar
     </button>
   )
@@ -422,8 +434,10 @@ function EditarEndereco({ end, clienteId, emailUsuario, onSalvo }) {
         <EnderecoCepForm
           clienteId={clienteId}
           emailUsuario={emailUsuario}
+          enderecoId={end.id}
           enderecoAtual={end.rua}
           labelAtual={end.label}
+          principalAtual={end.principal}
           modo="editar"
           onCancelar={() => setEditando(false)}
           onSalvo={(novo) => {
@@ -442,6 +456,14 @@ export default function PerfilCliente() {
   const [editando, setEditando] = useState(false)
   const [nome, setNome] = useState(usuario?.nome || 'Usuário')
   const [nomeTemp, setNomeTemp] = useState(nome)
+  const [emailPerfil, setEmailPerfil] = useState(usuario?.email || '')
+  const [telefonePerfil, setTelefonePerfil] = useState(usuario?.telefone || '')
+  const [dadosTemp, setDadosTemp] = useState({
+    nome: usuario?.nome || '',
+    email: usuario?.email || '',
+    telefone: usuario?.telefone || '',
+  })
+  const [editandoDados, setEditandoDados] = useState(false)
   const [pedidos, setPedidos] = useState([])
   const [enderecos, setEnderecos] = useState([])
   const [carregando, setCarregando] = useState(true)
@@ -520,8 +542,35 @@ export default function PerfilCliente() {
           setNome(nomeBackend)
           setNomeTemp(nomeBackend)
         }
+        if (cliente?.email) setEmailPerfil(cliente.email)
+        if (cliente?.telefone) setTelefonePerfil(cliente.telefone)
+        if (cliente) {
+          setDadosTemp({
+            nome: formatarNome(cliente.nome || usuario?.nome || ''),
+            email: cliente.email || usuario?.email || '',
+            telefone: cliente.telefone || usuario?.telefone || '',
+          })
+        }
 
-        if (cliente?.endereco_principal) {
+        let enderecosBanco = []
+        if (cliente?.id) {
+          try {
+            enderecosBanco = await api.clientes.listarEnderecos(cliente.id)
+          } catch {
+            enderecosBanco = []
+          }
+        }
+
+        if (Array.isArray(enderecosBanco) && enderecosBanco.length) {
+          setEnderecos(enderecosBanco.map(endereco => ({
+            id: endereco.id,
+            label: endereco.label || 'Endereço',
+            rua: endereco.endereco,
+            bairro: '',
+            cidade: '',
+            principal: Boolean(endereco.principal),
+          })))
+        } else if (cliente?.endereco_principal) {
           const emailEndereco = cliente?.email || usuario?.email
           setEnderecos([{
             id: 'principal',
@@ -576,8 +625,8 @@ export default function PerfilCliente() {
 
   const salvarNome = async () => {
     const nomeFinal = formatarNome(nomeTemp)
-    if (!nomeFinal) {
-      setErroNome('Informe um nome válido.')
+    if (!nomeFinal || !/^[\p{L}\s'-]+$/u.test(nomeFinal)) {
+      setErroNome('O nome deve conter somente letras.')
       return
     }
     if (!clienteId) {
@@ -593,6 +642,48 @@ export default function PerfilCliente() {
       setEditando(false)
     } catch (error) {
       setErroNome(error.message || 'Não foi possível salvar seu nome.')
+    } finally {
+      setSalvandoNome(false)
+    }
+  }
+
+  const salvarDadosPessoais = async () => {
+    const nomeFinal = formatarNome(dadosTemp.nome)
+    const emailFinal = String(dadosTemp.email || '').trim().toLowerCase()
+    const telefoneFinal = String(dadosTemp.telefone || '').trim()
+    if (!nomeFinal || !/^[\p{L}\s'-]+$/u.test(nomeFinal)) {
+      setErroNome('O nome deve conter somente letras.')
+      return
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailFinal)) {
+      setErroNome('Informe um e-mail válido.')
+      return
+    }
+    if (telefoneFinal.replace(/\D/g, '').length < 10) {
+      setErroNome('Informe um telefone válido.')
+      return
+    }
+    if (!clienteId) {
+      setErroNome('Seu perfil ainda está carregando. Tente novamente.')
+      return
+    }
+
+    setSalvandoNome(true)
+    setErroNome('')
+    try {
+      await api.clientes.atualizar(clienteId, {
+        nome: nomeFinal,
+        email: emailFinal,
+        telefone: telefoneFinal,
+      })
+      setNome(nomeFinal)
+      setNomeTemp(nomeFinal)
+      setEmailPerfil(emailFinal)
+      setTelefonePerfil(telefoneFinal)
+      atualizarUsuario({ nome: nomeFinal, email: emailFinal, telefone: telefoneFinal })
+      setEditandoDados(false)
+    } catch (error) {
+      setErroNome(error.message || 'Não foi possível salvar seus dados.')
     } finally {
       setSalvandoNome(false)
     }
@@ -628,12 +719,21 @@ export default function PerfilCliente() {
       <Header />
 
       {pedidoParaAvaliar && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4">
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 sm:items-center sm:px-4">
           <Motion.div
-            className="w-full max-w-md rounded-2xl bg-white border border-border shadow-xl p-6"
+            className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-t-2xl border border-border bg-white p-6 shadow-xl sm:rounded-2xl"
             initial={{ opacity: 0, scale: 0.94, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
+            drag={typeof window !== 'undefined' && window.innerWidth < 640 ? 'y' : false}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0, bottom: 0.35 }}
+            onDragEnd={(_, info) => {
+              if (info.offset.y > 90 || info.velocity.y > 650) dispensarAvaliacao(pedidoParaAvaliar.id)
+            }}
           >
+            <div className="-mt-2 mb-4 flex justify-center sm:hidden">
+              <div className="h-1 w-10 rounded-full bg-border" />
+            </div>
             <div className="flex items-start justify-between gap-4 mb-4">
               <div className="w-12 h-12 rounded-2xl bg-accent/10 flex items-center justify-center shrink-0">
                 <Star size={24} className="text-accent" fill="#FFBA08" stroke="#FFBA08" />
@@ -715,7 +815,7 @@ export default function PerfilCliente() {
               {editando ? (
                 <div className="flex items-center gap-2 justify-center mb-1">
                   <input
-                    value={nomeTemp} onChange={e => setNomeTemp(e.target.value)}
+                    value={nomeTemp} onChange={e => setNomeTemp(e.target.value.replace(/[^\p{L}\s'-]/gu, ''))}
                     className="border border-border rounded-lg px-2 py-1 text-sm font-bold text-center outline-none focus:border-primary w-36"
                     autoFocus
                   />
@@ -800,25 +900,83 @@ export default function PerfilCliente() {
 
             {/* Dados pessoais */}
             <SecaoCard titulo="Dados pessoais" delay={0.15}>
-              <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {[
-                  { Icon: User, label: 'Nome', valor: nome },
-                  { Icon: Mail, label: 'E-mail', valor: usuario?.email || '—' },
-                  { Icon: Phone, label: 'Telefone', valor: usuario?.telefone || 'Não informado' },
-                ].map((item) => {
-                  const Icon = item.Icon
-                  return (
-                    <div key={item.label} className="flex items-start gap-3">
-                      <div className="w-9 h-9 rounded-xl bg-surface-2 border border-border flex items-center justify-center shrink-0 mt-0.5">
-                        <Icon size={15} className="text-text-muted" />
-                      </div>
-                      <div>
-                        <p className="text-xs font-extrabold text-text-muted uppercase tracking-wide mb-0.5">{item.label}</p>
-                        <p className="text-sm font-semibold text-text-primary">{item.valor}</p>
-                      </div>
+              <div className="p-5">
+                {editandoDados ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="sm:col-span-2">
+                      <span className="mb-1.5 block text-xs font-extrabold uppercase text-text-muted">Nome *</span>
+                      <input
+                        value={dadosTemp.nome}
+                        onChange={e => setDadosTemp(prev => ({ ...prev, nome: e.target.value.replace(/[^\p{L}\s'-]/gu, '') }))}
+                        className="h-11 w-full rounded-xl border border-border bg-white px-4 text-sm font-semibold text-text-primary outline-none focus:border-primary"
+                      />
+                    </label>
+                    <label>
+                      <span className="mb-1.5 block text-xs font-extrabold uppercase text-text-muted">E-mail *</span>
+                      <input
+                        type="email"
+                        value={dadosTemp.email}
+                        onChange={e => setDadosTemp(prev => ({ ...prev, email: e.target.value }))}
+                        className="h-11 w-full rounded-xl border border-border bg-white px-4 text-sm font-semibold text-text-primary outline-none focus:border-primary"
+                      />
+                    </label>
+                    <label>
+                      <span className="mb-1.5 block text-xs font-extrabold uppercase text-text-muted">Telefone *</span>
+                      <input
+                        type="tel"
+                        value={dadosTemp.telefone}
+                        onChange={e => setDadosTemp(prev => ({ ...prev, telefone: e.target.value }))}
+                        className="h-11 w-full rounded-xl border border-border bg-white px-4 text-sm font-semibold text-text-primary outline-none focus:border-primary"
+                      />
+                    </label>
+                    <div className="flex gap-2 sm:col-span-2">
+                      <button type="button" onClick={salvarDadosPessoais} disabled={salvandoNome}
+                        className="rounded-xl bg-primary px-4 py-2.5 text-sm font-extrabold text-white border-none disabled:opacity-60">
+                        {salvandoNome ? 'Salvando...' : 'Salvar dados'}
+                      </button>
+                      <button type="button" onClick={() => setEditandoDados(false)}
+                        className="rounded-xl border border-border bg-white px-4 py-2.5 text-sm font-bold text-text-secondary">
+                        Cancelar
+                      </button>
                     </div>
-                  )
-                })}
+                  </div>
+                ) : (
+                  <>
+                    <div className="mb-4 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDadosTemp({ nome, email: emailPerfil, telefone: telefonePerfil })
+                          setEditandoDados(true)
+                        }}
+                        className="inline-flex items-center gap-2 rounded-xl border border-border bg-white px-3 py-2 text-xs font-extrabold text-text-secondary hover:border-primary hover:text-primary"
+                      >
+                        <Edit3 size={14} /> Editar dados
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      {[
+                        { Icon: User, label: 'Nome', valor: nome },
+                        { Icon: Mail, label: 'E-mail', valor: emailPerfil || '—' },
+                        { Icon: Phone, label: 'Telefone', valor: telefonePerfil || 'Não informado' },
+                      ].map((item) => {
+                        const Icon = item.Icon
+                        return (
+                          <div key={item.label} className="flex items-start gap-3">
+                            <div className="w-9 h-9 rounded-xl bg-surface-2 border border-border flex items-center justify-center shrink-0 mt-0.5">
+                              <Icon size={15} className="text-text-muted" />
+                            </div>
+                            <div>
+                              <p className="text-xs font-extrabold text-text-muted uppercase tracking-wide mb-0.5">{item.label}</p>
+                              <p className="break-all text-sm font-semibold text-text-primary">{item.valor}</p>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </>
+                )}
+                {erroNome && <p className="mt-3 text-xs font-bold text-red-500">{erroNome}</p>}
               </div>
             </SecaoCard>
 
@@ -910,15 +1068,13 @@ export default function PerfilCliente() {
                     />
                   </div>
                 ))}
-                {enderecos.length === 0 && (
-                  <div className="px-5 py-4">
-                    <AdicionarEndereco
-                      clienteId={clienteId}
-                      emailUsuario={usuario?.email}
-                      onSalvo={(end) => setEnderecos([{ ...end, id: 'principal', principal: true }])}
-                    />
-                  </div>
-                )}
+                <div className="px-5 py-4">
+                  <AdicionarEndereco
+                    clienteId={clienteId}
+                    emailUsuario={usuario?.email}
+                    onSalvo={(end) => setEnderecos(prev => [...prev, end])}
+                  />
+                </div>
               </div>
             </SecaoCard>
 

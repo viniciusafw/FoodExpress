@@ -263,6 +263,13 @@ router.post('/registrar', async (req, res) => {
         senhaHash,
       ]
     });
+    if (enderecoFinal) {
+      await db.execute({
+        sql: `INSERT INTO enderecos_clientes (id, cliente_id, label, endereco, principal)
+              VALUES (?, ?, ?, ?, 1)`,
+        args: [`end_${crypto.randomUUID().slice(0, 16)}`, clienteId, enderecoLabel || 'Casa', enderecoFinal],
+      });
+    }
 
     const cliente = await db.execute({ sql: 'SELECT id, nome, email, telefone, endereco_principal, endereco_label, latitude, longitude FROM clientes WHERE id = ?', args: [clienteId] });
     res.status(201).json(respostaSessaoCliente(cliente.rows[0] as any));

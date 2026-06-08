@@ -168,6 +168,10 @@ export const api = {
   clientes: {
     meuPerfil: () => request('/api/clientes'),
     atualizar: (id, dados) => request(`/api/clientes/${id}`, { method: 'PUT', body: JSON.stringify(dados) }),
+    listarEnderecos: (id) => request(`/api/clientes/${id}/enderecos`),
+    criarEndereco: (id, dados) => request(`/api/clientes/${id}/enderecos`, { method: 'POST', body: JSON.stringify(dados) }),
+    atualizarEndereco: (id, enderecoId, dados) => request(`/api/clientes/${id}/enderecos/${enderecoId}`, { method: 'PUT', body: JSON.stringify(dados) }),
+    removerEndereco: (id, enderecoId) => request(`/api/clientes/${id}/enderecos/${enderecoId}`, { method: 'DELETE' }),
     cadastrarInicial: () => {
       const usuario = (() => { try { return JSON.parse(localStorage.getItem('usuario') || '{}') } catch { return {} } })()
       return request('/api/clientes', { method: 'POST', body: JSON.stringify({ nome: usuario.nome, email: usuario.email }) })

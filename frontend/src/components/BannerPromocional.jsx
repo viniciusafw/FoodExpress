@@ -37,7 +37,7 @@ export default function PromotionalBanner() {
   }
 
   return (
-    <div className="mt-8 overflow-x-auto scrollbar-none -mx-4 px-4 sm:-mx-6 sm:px-6">
+    <div className="mt-6 overflow-x-auto border-0 scrollbar-none -mx-4 px-4 sm:-mx-6 sm:px-6">
       <div className="flex gap-3 sm:gap-4 pb-1" style={{ minWidth: 'max-content' }}>
         {banners.map((b, i) => (
           <Motion.button
@@ -45,11 +45,10 @@ export default function PromotionalBanner() {
             type="button"
             onClick={() => abrirOferta(b)}
             aria-label={`Abrir oferta: ${b.titulo}`}
-            className="shrink-0 w-[17.5rem] sm:w-[22.5rem] md:w-[30rem] rounded-2xl p-5 sm:p-7 flex items-center justify-between gap-3 cursor-pointer relative overflow-hidden border-none text-left"
+            className="relative flex min-h-36 w-[78vw] max-w-[17rem] shrink-0 cursor-pointer items-center justify-between gap-3 overflow-hidden rounded-xl border-0 p-4 text-left outline-none sm:min-h-44 sm:w-[22.5rem] sm:max-w-none sm:p-6 md:w-[30rem]"
             style={{ background: b.bg }}
-            initial={{ opacity: 0, y: 24 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: i * 0.1, ease: 'easeOut' }}
             whileHover={{ y: -4, boxShadow: '0 16px 40px rgba(0,0,0,0.25)' }}
             whileTap={{ scale: 0.98 }}
@@ -65,7 +64,7 @@ export default function PromotionalBanner() {
               <div className="text-[0.7rem] font-extrabold tracking-widest uppercase opacity-80 mb-1">
                 {b.eyebrow}
               </div>
-              <h3 className="font-display text-xl sm:text-2xl font-extrabold mb-1 leading-tight">
+              <h3 className="font-display text-lg sm:text-2xl font-extrabold mb-1 leading-tight">
                 {b.titulo}
               </h3>
               <p className="text-xs sm:text-sm opacity-85 font-semibold mb-3">{b.desc}</p>

@@ -9,6 +9,10 @@ import {
   IceCream,
   Beef,
   Salad,
+  Pill,
+  PawPrint,
+  ShoppingBag,
+  Wine,
 } from 'lucide-react'
 import { motion as Motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -24,6 +28,10 @@ const categorias = [
   { Icon: IceCream, nome: 'Sobremesas', bg: '#F5D6FF', categoria: 'Sobremesas' },
   { Icon: Beef, nome: 'Churrasco', bg: '#FFD6D6', categoria: 'Churrasco' },
   { Icon: Salad, nome: 'Saladas', bg: '#D6FFE8', categoria: 'Saladas' },
+  { Icon: Wine, nome: 'Bebidas', bg: '#E8D6FF', categoria: 'Bebidas' },
+  { Icon: Pill, nome: 'Farmácias', bg: '#D6F0FF', categoria: 'Farmácia' },
+  { Icon: PawPrint, nome: 'Pet Shop', bg: '#FFE7C7', categoria: 'Pet Shop' },
+  { Icon: ShoppingBag, nome: 'Shopping', bg: '#E6E6FF', categoria: 'Shopping' },
 ]
 
 export default function CategoriesCarousel() {
@@ -34,7 +42,7 @@ export default function CategoriesCarousel() {
       navigate(cat.rota)
       return
     }
-    navigate(`/busca?categoria=${encodeURIComponent(cat.categoria || cat.nome)}`)
+    navigate(`/explorar?termo=${encodeURIComponent(cat.categoria || cat.nome)}&filtros=1`)
   }
 
   return (

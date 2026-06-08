@@ -36,6 +36,9 @@ html {
 
 body {
   min-width: 320px;
+  min-height: 100%;
+  overflow-x: clip;
+  overflow-y: auto;
   font-family: 'Inter', sans-serif;
   background-color: var(--color-background);
   color: var(--color-text);

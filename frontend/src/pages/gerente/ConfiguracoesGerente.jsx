@@ -34,6 +34,7 @@ export default function ConfiguracoesGerente() {
   const [latitude, setLatitude] = useState('')
   const [longitude, setLongitude] = useState('')
   const [statusLoja, setStatusLoja] = useState('ativo')
+  const [pedidoMinimo, setPedidoMinimo] = useState('0')
 
   const [diasAberto, setDiasAberto] = useState(['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta'])
   const [horarioAbertura, setHorarioAbertura] = useState('18:00')
@@ -64,6 +65,7 @@ export default function ConfiguracoesGerente() {
         setLatitude(rest.latitude ?? '')
         setLongitude(rest.longitude ?? '')
         setStatusLoja(rest.status || 'ativo')
+        setPedidoMinimo(String(Number(rest.pedido_minimo || 0)))
         setHorarioAbertura(rest.horario_abertura || '18:00')
         setHorarioFechamento(rest.horario_fechamento || '23:00')
         setDiasAberto(lerLista(rest.dias_aberto, ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta']))
@@ -144,6 +146,7 @@ export default function ConfiguracoesGerente() {
         horario_fechamento: horarioFechamento,
         dias_aberto: diasAberto,
         formas_pagamento: pagamentos,
+        pedido_minimo: Math.max(0, Number(pedidoMinimo || 0)),
       })
       setSalvo(true)
       setTimeout(() => setSalvo(false), 3000)
@@ -344,6 +347,24 @@ export default function ConfiguracoesGerente() {
               <label className={labelCls}>Categoria *</label>
               <input type="text" value={categoria} onChange={e => setCategoria(e.target.value)}
                 placeholder="Ex: Pizzas, Hambúrgueres, Japonesa…" className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Pedido mínimo</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-bold text-text-muted">R$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={pedidoMinimo}
+                  onChange={e => setPedidoMinimo(e.target.value)}
+                  placeholder="0,00"
+                  className={`${inputCls} pl-11`}
+                />
+              </div>
+              <p className="mt-1.5 text-xs font-semibold text-text-muted">
+                O cliente só poderá finalizar quando o subtotal alcançar esse valor. Use zero para não exigir mínimo.
+              </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>

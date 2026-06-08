@@ -231,7 +231,7 @@ export default function Header() {
     if (savedRegion) {
       setRegiao(savedRegion)
     } else if (
-      ['/', '/Restaurantes', '/Mercados', '/busca'].includes(location.pathname) &&
+      ['/', '/Restaurantes', '/Mercados', '/explorar'].includes(location.pathname) &&
       navigator.geolocation &&
       !window.__foodexpressLocalizacaoAdiada
     ) {
@@ -255,7 +255,11 @@ export default function Header() {
 
   const handleBusca = (e) => {
     e.preventDefault()
-    if (busca.trim()) navigate(`/busca?q=${encodeURIComponent(busca)}`)
+    if (busca.trim()) {
+      navigate(`/explorar?termo=${encodeURIComponent(busca)}&filtros=1`)
+      setMenuMobile(false)
+      setBusca('')
+    }
   }
 
   const handleSair = () => {
@@ -263,15 +267,18 @@ export default function Header() {
     setMenuMobile(false)
   }
 
-  const navLinks = [
+  const navLinksPrincipais = [
     { to: '/', label: 'Início' },
     { to: '/Restaurantes', label: 'Restaurantes' },
     { to: '/Mercados', label: 'Mercados' },
-    { to: '/busca?q=Bebidas', label: 'Bebidas' },
-    { to: '/busca?q=Farmacias', label: 'Farmácias' },
-    { to: '/busca?q=Pets', label: 'Pets' },
-    { to: '/busca?q=Shopping', label: 'Shopping' },
   ]
+  const navLinksCategorias = [
+    { to: '/explorar?termo=Bebidas&filtros=1', label: 'Bebidas' },
+    { to: '/Mercados?termo=Farmácia&filtros=1', label: 'Farmácias' },
+    { to: '/Mercados?termo=Pet Shop&filtros=1', label: 'Pet Shop' },
+    { to: '/Mercados?termo=Shopping&filtros=1', label: 'Shopping' },
+  ]
+  const navLinks = [...navLinksPrincipais, ...navLinksCategorias]
 
   return (
     <>
@@ -281,17 +288,14 @@ export default function Header() {
         animate={{ y: oculto ? '-100%' : '0%' }}
         transition={{ duration: 0.3, ease: 'easeInOut' }}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-[72px] flex items-center gap-3 lg:gap-5">
+        <div className="mx-auto flex h-[72px] w-full max-w-[90rem] items-center gap-3 px-4 sm:px-8 lg:gap-7">
 
-          <Link to="/" className="flex min-w-0 shrink-0 items-center gap-2 rounded-lg p-1 hover:bg-surface-2 transition-colors">
+          <Link to="/" className="flex min-w-0 shrink-0 items-center rounded-lg p-1 hover:bg-surface-2 transition-colors">
             <img src={logoSrc} alt="FoodExpress" className="h-10 w-auto object-contain" />
-            <span className="max-w-[9rem] truncate font-display text-lg font-extrabold tracking-tight text-text-primary sm:hidden">
-              FoodExpress
-            </span>
           </Link>
 
           <nav className="hidden lg:flex h-full items-center gap-1">
-            {navLinks.map(({ to, label }) => {
+            {navLinksPrincipais.map(({ to, label }) => {
               const eAtivo = ativo(to)
               return (
                 <Link key={label} to={to}
@@ -301,6 +305,22 @@ export default function Header() {
                 >{label}</Link>
               )
             })}
+            <details className="group relative h-full">
+              <summary className="flex h-full cursor-pointer list-none items-center gap-1 border-b-2 border-transparent px-2.5 text-sm font-semibold text-text-secondary transition-colors hover:text-primary">
+                Categorias <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="absolute left-0 top-[calc(100%-1px)] z-50 min-w-48 rounded-b-xl border border-border bg-white p-2 shadow-xl">
+                {navLinksCategorias.map(({ to, label }) => (
+                  <Link
+                    key={label}
+                    to={to}
+                    className="block rounded-lg px-3 py-2.5 text-sm font-bold text-text-secondary hover:bg-primary-light hover:text-primary"
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </details>
           </nav>
 
           <form onSubmit={handleBusca}
@@ -334,7 +354,7 @@ export default function Header() {
             <button
               type="button"
               onClick={toggle}
-              className="sm:hidden w-10 h-10 rounded-full border-none bg-transparent flex items-center justify-center text-text-secondary cursor-pointer transition-all hover:bg-surface-2 hover:text-primary"
+              className="sm:hidden flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-border bg-white text-text-secondary shadow-sm transition-all hover:border-primary hover:text-primary"
               title={dark ? 'Modo claro' : 'Modo escuro'}
               aria-label={dark ? 'Ativar modo claro' : 'Ativar modo escuro'}
             >

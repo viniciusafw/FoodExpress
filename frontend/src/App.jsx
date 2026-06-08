@@ -8,7 +8,7 @@ import CadastroUsuario from './pages/CadastroUsuario'
 import CadastroEstabelecimento from './pages/CadastroEstabelecimento'
 import CadastroEntregador from './pages/CadastroEntregador'
 import PaginaLoja from './pages/PaginaLoja'
-import PaginaBusca from './pages/PaginaBusca'
+import Explorar from './pages/Explorar'
 import PerfilCliente from './pages/PerfilCliente'
 import DashboardGerente from './pages/DashboardGerente'
 import AdminDashboard from './pages/AdminDashboard'
@@ -63,6 +63,11 @@ function HomeOuPainel() {
   return <Home />
 }
 
+function RedirecionarBuscaAntiga() {
+  const location = useLocation()
+  return <Navigate to={`/explorar${location.search}`} replace />
+}
+
 function AnimatedRoutes() {
   const location = useLocation()
   return (
@@ -77,7 +82,8 @@ function AnimatedRoutes() {
         <Route path="/Restaurantes" element={<PageWrapper><Restaurantes /></PageWrapper>} />
         <Route path="/Mercados" element={<PageWrapper><Mercados /></PageWrapper>} />
         <Route path="/loja/:id" element={<PageWrapper><PaginaLoja /></PageWrapper>} />
-        <Route path="/busca" element={<PageWrapper><PaginaBusca /></PageWrapper>} />
+        <Route path="/explorar" element={<PageWrapper><Explorar /></PageWrapper>} />
+        <Route path="/busca" element={<RedirecionarBuscaAntiga />} />
         <Route path="/checkout" element={
           <RotaProtegida perfil="cliente">
             <PageWrapper><FinalizarCompra /></PageWrapper>

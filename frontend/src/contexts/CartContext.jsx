@@ -41,11 +41,11 @@ export function CartProvider({ children }) {
       const existente = anterior.find((i) => i.id === item.id);
       if (existente) {
         return anterior.map((i) =>
-          i.id === item.id ? { ...i, quantidade: i.quantidade + (item.quantidade || 1) } : i
+          i.id === item.id ? { ...i, quantidade: Math.min(500, Number(i.quantidade || 0) + Number(item.quantidade || 1)) } : i
         );
       }
       // Garante que restauranteId seja preservado para o checkout
-      return [...anterior, { ...item, restauranteId: restauranteNovo || item.restauranteId, quantidade: item.quantidade || 1 }];
+      return [...anterior, { ...item, restauranteId: restauranteNovo || item.restauranteId, quantidade: Math.min(500, Math.max(1, Number(item.quantidade || 1))) }];
     });
     window.setTimeout(() => {
       if (typeof window === 'undefined') return;
@@ -63,7 +63,7 @@ export function CartProvider({ children }) {
     setItens((anterior) => anterior
       .map((item) => {
         if (item.id !== id) return item;
-        return { ...item, quantidade: Math.max(0, Math.min(99, proximaQuantidade)) };
+        return { ...item, quantidade: Math.max(0, Math.min(500, proximaQuantidade)) };
       })
       .filter((item) => item.quantidade > 0)
     );
@@ -72,7 +72,7 @@ export function CartProvider({ children }) {
   const incrementarItem = (id) => {
     setItens((anterior) => anterior.map((item) => (
       item.id === id
-        ? { ...item, quantidade: Math.min(99, Number(item.quantidade || 1) + 1) }
+        ? { ...item, quantidade: Math.min(500, Number(item.quantidade || 1) + 1) }
         : item
     )));
   };

@@ -8,6 +8,7 @@ import { useCart } from '../contexts/CartContext'
 import { useAuth } from '../contexts/AuthContext'
 import api from '../services/api'
 import { imagemRestaurante, imagemProduto, emojiRestaurante, emojiProduto } from '../utils/imagens'
+import { statusFuncionamento } from '../utils/horarios'
 
 function normalizarTexto(valor) {
   return String(valor || '')
@@ -54,6 +55,22 @@ function lojaEstaAberta(loja) {
   if (![minutosAgora, abertura, fechamento].every(Number.isFinite)) return true
   if (fechamento < abertura) return minutosAgora >= abertura || minutosAgora <= fechamento
   return minutosAgora >= abertura && minutosAgora <= fechamento
+}
+
+function inferirServePessoas(item) {
+  const configurado = Number(item?.serve_pessoas)
+  const texto = normalizarTexto(`${item?.nome} ${item?.categoria} ${item?.descricao}`)
+  const preco = Number(item?.preco || 0)
+  if (Number.isInteger(configurado) && configurado > 1) return Math.min(20, configurado)
+  if (/(familia|familiar|30 pecas|40 pecas|pizza gigante|combo churrasco)/.test(texto)) return 4
+  if (/(pizza|20 pecas|12 unidades|6 unidades|dupla|casal|2 pessoas|porcao|nachos|cesta|kit hortifruti|costela|moqueca|peixada|picanha)/.test(texto)) {
+    return preco >= 100 ? 4 : preco >= 65 ? 3 : 2
+  }
+  if (/(individual|executivo|lata|suco|agua|sobremesa|temaki|sanduiche|burger)/.test(texto)) return 1
+  if (preco >= 100) return 4
+  if (preco >= 70) return 3
+  if (preco >= 45) return 2
+  return Number.isInteger(configurado) && configurado > 0 ? configurado : 1
 }
 
 function criarComplementosPadrao(item) {
@@ -236,6 +253,7 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
       complementos: complementosSelecionados,
       restauranteId: produto.restauranteId,
       imagem: produto.imagem,
+      pedidoMinimo: Number(loja?.pedidoMinimo || 0),
     }
     const adicionado = adicionarItem(item)
     if (!adicionado) return
@@ -283,6 +301,12 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
         className="bg-white w-full sm:max-w-6xl sm:rounded-lg rounded-t-3xl overflow-hidden flex flex-col max-h-[95dvh] sm:max-h-[90vh]"
         initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+        drag={typeof window !== 'undefined' && window.innerWidth < 640 ? 'y' : false}
+        dragConstraints={{ top: 0, bottom: 0 }}
+        dragElastic={{ top: 0, bottom: 0.35 }}
+        onDragEnd={(_, info) => {
+          if (info.offset.y > 100 || info.velocity.y > 700) onClose()
+        }}
         onClick={e => e.stopPropagation()}
       >
         {/* Alça mobile */}
@@ -502,12 +526,21 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
             {/* Footer fixo */}
             <div className="px-5 py-4 border-t border-border bg-white shrink-0">
               <div className="flex items-center gap-3">
-                <div className="flex items-center gap-3 bg-surface-2 border border-border rounded-xl px-3 py-2.5">
+                <div className="flex items-center gap-2 bg-surface-2 border border-border rounded-xl px-2 py-2.5">
                   <Motion.button onClick={() => setQuantidade(q => Math.max(1, q - 1))}
                     className="w-7 h-7 rounded-full bg-white border border-border flex items-center justify-center cursor-pointer text-text-secondary hover:border-primary hover:text-primary transition-all"
                     whileTap={{ scale: 0.85 }}><Minus size={14} /></Motion.button>
-                  <span className="font-display text-lg font-extrabold text-text-primary w-5 text-center">{quantidade}</span>
-                  <Motion.button onClick={() => setQuantidade(q => q + 1)}
+                  <input
+                    type="number"
+                    min="1"
+                    max="500"
+                    inputMode="numeric"
+                    value={quantidade}
+                    onChange={(event) => setQuantidade(Math.min(500, Math.max(1, Number(event.target.value) || 1)))}
+                    className="h-8 w-14 border-none bg-transparent text-center font-display text-base font-extrabold text-text-primary outline-none"
+                    aria-label="Quantidade do produto"
+                  />
+                  <Motion.button onClick={() => setQuantidade(q => Math.min(500, q + 1))}
                     className="w-7 h-7 rounded-full bg-primary border-none flex items-center justify-center cursor-pointer text-white hover:bg-primary-dark transition-all"
                     whileTap={{ scale: 0.85 }}><Plus size={14} /></Motion.button>
                 </div>
@@ -520,6 +553,9 @@ function ProdutoModal({ produto, loja, onClose, onItemAdded }) {
                   {lojaFechada ? 'Loja fechada' : `Adicionar · R$ ${precoFinal.toFixed(2).replace('.', ',')}`}
                 </Motion.button>
               </div>
+              <p className="mt-2 text-center text-[11px] font-semibold text-text-muted">
+                Máximo de 500 unidades por item.
+              </p>
             </div>
           </div>
         </div>
@@ -703,11 +739,12 @@ export default function StorePage() {
           promocaoTipo: item.promocao_tipo || null,
           emoji: emojiProduto(item),
           imagem: imagemProduto(item),
-          serve: 1,
+          serve: inferirServePessoas(item),
           opcionais: normalizarOpcionais(item),
           restauranteId: id,
         })
       })
+      const funcionamento = statusFuncionamento(rest)
       setLoja({
         ...rest,
         emoji: emojiRestaurante(rest),
@@ -717,9 +754,10 @@ export default function StorePage() {
         tempoEntrega: rest.tempo_medio_preparo ? `${rest.tempo_medio_preparo}-${rest.tempo_medio_preparo + 10} min` : '30-40 min',
         taxaEntrega: 'Grátis',
         sobre: rest.descricao || `${rest.nome} — ${rest.categoria || 'Restaurante'} em ${rest.endereco || 'sua cidade'}`,
-        pedidoMinimo: 'R$ 15,00',
+        pedidoMinimo: Math.max(0, Number(rest.pedido_minimo || 0)),
         status: rest.status || 'ativo',
-        fechado: !lojaEstaAberta(rest),
+        fechado: !funcionamento.aberta,
+        statusFuncionamento: funcionamento.texto,
         superRestaurante: (rest.avaliacao_media || 0) >= 4.8,
         horarios: (() => {
           if (rest.status === 'fechado' || rest.status === 'inativo') {
@@ -914,6 +952,9 @@ export default function StorePage() {
                 </div>
               </div>
               <p className="text-sm text-text-muted font-semibold">{loja.categoria}</p>
+              <p className={`mt-1 text-xs font-extrabold ${loja.fechado ? 'text-red-500' : 'text-accent'}`}>
+                {loja.statusFuncionamento}
+              </p>
             </div>
 
             {/* Ver mais + pedido mínimo — desktop */}
@@ -927,7 +968,7 @@ export default function StorePage() {
               <div className="w-px h-8 bg-border" />
               <div className="flex items-center gap-1.5 text-sm text-text-muted font-semibold">
                 <span className="w-5 h-5 rounded-full bg-surface-2 border border-border flex items-center justify-center text-xs">$</span>
-                Pedido mínimo {loja.pedidoMinimo}
+                Pedido mínimo R$ {Number(loja.pedidoMinimo || 0).toFixed(2).replace('.', ',')}
               </div>
             </div>
           </div>
@@ -972,13 +1013,16 @@ export default function StorePage() {
           >
             Ver mais informações
           </button>
+          <p className="mt-1 text-xs font-semibold text-text-muted md:hidden">
+            Pedido mínimo: R$ {Number(loja.pedidoMinimo || 0).toFixed(2).replace('.', ',')}
+          </p>
         </div>
       </div>
 
       {loja.fechado && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4">
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600">
-            Esta loja está fechada agora. O cardápio pode ser consultado, mas novos pedidos estão bloqueados.
+            Esta loja está fechada agora. {loja.statusFuncionamento}. O cardápio pode ser consultado, mas novos pedidos estão bloqueados.
           </div>
         </div>
       )}

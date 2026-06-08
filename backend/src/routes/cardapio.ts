@@ -104,6 +104,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
       promocao_tipo,
       promocao_label,
       combo_itens,
+      serve_pessoas,
     } = req.body
     if (!restauranteId || !nome || !preco || !categoria) return res.status(400).json({ erro: 'Campos obrigatórios faltando' }) as any
     if (!(await podeGerenciarRestaurante(req, String(restauranteId)))) {
@@ -118,8 +119,8 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
     await db.execute({
       sql: `INSERT INTO cardapio
             (id, restaurante_id, nome, preco, preco_original, categoria, descricao, imagem, tempo_preparo,
-             promocao_ativa, promocao_tipo, promocao_label, combo_itens, disponivel)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+             serve_pessoas, promocao_ativa, promocao_tipo, promocao_label, combo_itens, disponivel)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       args: [
         id,
         restauranteId,
@@ -130,6 +131,7 @@ router.post('/', requireAuth, async (req: AuthRequest, res: Response) => {
         descricao || '',
         imagem || '',
         tempo_preparo || 30,
+        Math.max(1, Math.min(20, Number(serve_pessoas || 1))),
         promocaoAtiva,
         promocao_tipo || (promocaoAtiva ? 'desconto' : null),
         promocao_label || (promocaoAtiva ? 'Oferta' : null),
@@ -166,6 +168,7 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
       promocao_tipo,
       promocao_label,
       combo_itens,
+      serve_pessoas,
     } = req.body
     const sets: string[] = []
     const args: any[] = []
@@ -176,6 +179,10 @@ router.put('/:id', requireAuth, async (req: AuthRequest, res: Response) => {
     if (descricao !== undefined) { sets.push('descricao = ?'); args.push(descricao) }
     if (imagem !== undefined) { sets.push('imagem = ?'); args.push(imagem) }
     if (tempo_preparo !== undefined) { sets.push('tempo_preparo = ?'); args.push(tempo_preparo) }
+    if (serve_pessoas !== undefined) {
+      sets.push('serve_pessoas = ?')
+      args.push(Math.max(1, Math.min(20, Number(serve_pessoas || 1))))
+    }
     if (disponivel !== undefined) { sets.push('disponivel = ?'); args.push(disponivel ? 1 : 0) }
     if (destaque !== undefined) { sets.push('destaque = ?'); args.push(destaque ? 1 : 0) }
     if (promocao_ativa !== undefined) { sets.push('promocao_ativa = ?'); args.push(promocao_ativa ? 1 : 0) }

@@ -16,6 +16,7 @@ function ModalProduto({ produto, categoriaId, categorias, restauranteId, onFecha
   const [categoria, setCategoria] = useState(produto?.categoria || categoriaId || '')
   const [descricao, setDescricao] = useState(produto?.descricao || '')
   const [imagem, setImagem] = useState(produto?.imagem || '')
+  const [servePessoas, setServePessoas] = useState(String(produto?.serve_pessoas || 1))
   const [salvando, setSalvando] = useState(false)
 
   const handleImagemArquivo = (event) => {
@@ -41,11 +42,12 @@ function ModalProduto({ produto, categoriaId, categorias, restauranteId, onFecha
     try {
       if (produto?.id) {
         await api.cardapio.atualizar(produto.id, {
-          nome, preco: parseFloat(preco), categoria, descricao, imagem,
+          nome, preco: parseFloat(preco), categoria, descricao, imagem, serve_pessoas: Math.max(1, Number(servePessoas || 1)),
         })
       } else {
         await api.cardapio.criar({
-          restauranteId, nome, preco: parseFloat(preco), categoria, descricao, imagem, tempo_preparo: 30,
+          restauranteId, nome, preco: parseFloat(preco), categoria, descricao, imagem,
+          serve_pessoas: Math.max(1, Number(servePessoas || 1)), tempo_preparo: 30,
         })
       }
       onSalvo()
@@ -100,6 +102,17 @@ function ModalProduto({ produto, categoriaId, categorias, restauranteId, onFecha
             <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Descrição</label>
             <input type="text" value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Breve descrição do produto"
               className="w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all" />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Serve quantas pessoas? *</label>
+            <input
+              type="number"
+              min="1"
+              max="20"
+              value={servePessoas}
+              onChange={e => setServePessoas(e.target.value)}
+              className="w-full px-4 py-2.5 border border-border rounded-xl text-sm font-semibold text-text-primary bg-white outline-none focus:border-primary transition-all"
+            />
           </div>
           <div>
             <label className="block text-xs font-bold text-text-muted uppercase tracking-wide mb-1.5">Imagem do produto</label>
@@ -247,6 +260,7 @@ function ModalPromocao({ categorias, restauranteId, onFechar, onSalvo }) {
         preco_original: Number(somaCombo.toFixed(2)),
         categoria: 'Combos',
         descricao: comboDescricao || produtosSelecionados.map(produto => produto.nome).join(' + '),
+        serve_pessoas: Math.max(2, Math.min(20, produtosSelecionados.reduce((total, produto) => total + Number(produto.serve_pessoas || 1), 0))),
         tempo_preparo: 30,
         promocao_ativa: true,
         promocao_tipo: 'combo',
