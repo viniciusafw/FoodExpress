@@ -117,6 +117,39 @@ function montarEnderecoCompleto(dados, cepFormatado, numero, complemento) {
   return partes.join(' · ')
 }
 
+function textoEnderecoCompleto(endereco) {
+  if (!endereco) return ''
+  return String(endereco.endereco || endereco.rua || endereco.address || '')
+}
+
+function extrairNumeroComplemento(endereco = '') {
+  const texto = String(endereco || '').trim()
+  if (!texto) return { numero: '', complemento: '' }
+
+  const partes = texto.split('·').map((parte) => parte.trim()).filter(Boolean)
+  let numero = ''
+  let complemento = ''
+
+  if (partes.length > 0) {
+    const primeiro = partes[0]
+    const segmentos = primeiro.split(',').map((item) => item.trim()).filter(Boolean)
+    if (segmentos.length > 1) {
+      const ultimo = segmentos[segmentos.length - 1]
+      if (/^\d+[A-Za-z\-\/\s]*$/.test(ultimo)) {
+        numero = ultimo
+      }
+    }
+  }
+
+  if (partes.length > 1) {
+    const possiveis = partes.slice(1)
+    const achado = possiveis.find((parte) => !/^\s*$/.test(parte))
+    if (achado) complemento = achado
+  }
+
+  return { numero, complemento }
+}
+
 function obterChaveEnderecoLabel(email) {
   return `foodexpress:enderecoLabel:${String(email || '').trim().toLowerCase()}`
 }
@@ -147,9 +180,11 @@ function EnderecoCepForm({
 }) {
   const [cep, setCep] = useState('')
   const [dadosCep, setDadosCep] = useState(null)
-  const [numero, setNumero] = useState('')
-  const [complemento, setComplemento] = useState('')
-  const [enderecoLivre, setEnderecoLivre] = useState(enderecoAtual || '')
+  const enderecoOriginal = String(enderecoAtual || '').trim()
+  const { numero: numeroInicial, complemento: complementoInicial } = extrairNumeroComplemento(enderecoOriginal)
+  const [numero, setNumero] = useState(numeroInicial)
+  const [complemento, setComplemento] = useState(complementoInicial)
+  const [enderecoLivre, setEnderecoLivre] = useState(enderecoOriginal)
   const [tipoEndereco, setTipoEndereco] = useState(['Casa', 'Trabalho'].includes(labelAtual) ? labelAtual : (modo === 'editar' && labelAtual ? 'Outro' : 'Casa'))
   const [apelidoEndereco, setApelidoEndereco] = useState(['Casa', 'Trabalho'].includes(labelAtual) ? '' : (labelAtual === 'Principal' ? '' : labelAtual))
   const [status, setStatus] = useState('')
@@ -196,7 +231,8 @@ function EnderecoCepForm({
       }
       enderecoFinal = montarEnderecoCompleto(dadosCep, formatarCep(cep), numero.trim(), complemento.trim())
     } else {
-      enderecoFinal = enderecoLivre.trim()
+      const enderecoLivreTrim = enderecoLivre.trim()
+      enderecoFinal = enderecoLivreTrim || (modo === 'editar' ? enderecoOriginal : '')
       if (!enderecoFinal) {
         setStatus('Busque pelo CEP ou informe o endereço completo.')
         return
@@ -211,9 +247,9 @@ function EnderecoCepForm({
         : null
       const payload = {
         label: labelFinal,
-        endereco: enderecoFinal,
         principal: principalAtual,
       }
+      if (enderecoFinal) payload.endereco = enderecoFinal
 
       const salvo = modo === 'editar'
         ? await api.clientes.atualizarEndereco(clienteId, enderecoId, payload)
@@ -237,6 +273,7 @@ function EnderecoCepForm({
       onSalvo({
         id: salvo?.id || enderecoId || Date.now(),
         label: salvo?.label || labelFinal,
+        endereco: salvo?.endereco || enderecoFinal,
         rua: salvo?.endereco || enderecoFinal,
         bairro: '',
         cidade: '',
@@ -373,19 +410,19 @@ function EnderecoCepForm({
         {status && <p className="text-xs font-semibold text-text-muted sm:text-right">{status}</p>}
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
         <button
           type="button"
           onClick={salvar}
           disabled={salvando}
-          className="h-11 rounded-xl bg-primary text-sm font-extrabold text-white border-none cursor-pointer disabled:opacity-60"
+          className="h-11 rounded-xl bg-primary text-sm font-extrabold text-white border-none cursor-pointer disabled:opacity-60 w-full"
         >
           {salvando ? 'Salvando...' : 'Salvar endereço'}
         </button>
         <button
           type="button"
           onClick={onCancelar}
-          className="h-11 rounded-xl border border-border bg-white text-sm font-bold text-text-secondary cursor-pointer hover:bg-surface-2"
+          className="h-11 rounded-xl border border-border bg-white text-sm font-bold text-text-secondary cursor-pointer hover:bg-surface-2 w-full"
         >
           Cancelar
         </button>
@@ -430,12 +467,12 @@ function EditarEndereco({ end, clienteId, emailUsuario, onSalvo }) {
   )
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/45 px-4 py-6">
-      <div className="w-full max-w-md">
+      <div className="w-full max-w-3xl max-h-[calc(100vh-4rem)] overflow-auto">
         <EnderecoCepForm
           clienteId={clienteId}
           emailUsuario={emailUsuario}
           enderecoId={end.id}
-          enderecoAtual={end.rua}
+          enderecoAtual={textoEnderecoCompleto(end)}
           labelAtual={end.label}
           principalAtual={end.principal}
           modo="editar"
@@ -565,6 +602,7 @@ export default function PerfilCliente() {
           setEnderecos(enderecosBanco.map(endereco => ({
             id: endereco.id,
             label: endereco.label || 'Endereço',
+            endereco: endereco.endereco,
             rua: endereco.endereco,
             bairro: '',
             cidade: '',
@@ -575,6 +613,7 @@ export default function PerfilCliente() {
           setEnderecos([{
             id: 'principal',
             label: lerLabelEndereco(emailEndereco, cliente?.endereco_label),
+            endereco: cliente.endereco_principal,
             rua: cliente.endereco_principal,
             bairro: '',
             cidade: '',
@@ -1056,7 +1095,7 @@ export default function PerfilCliente() {
                         )}
                       </div>
                       <p className="text-xs text-text-secondary font-medium">
-                        {[end.rua, end.bairro].filter(Boolean).join(', ') || 'Endereço não informado'}
+                        {[textoEnderecoCompleto(end), end.bairro].filter(Boolean).join(', ') || 'Endereço não informado'}
                       </p>
                       {end.cidade && <p className="text-xs text-text-muted font-medium">{end.cidade}</p>}
                     </div>

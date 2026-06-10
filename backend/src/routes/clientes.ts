@@ -3,6 +3,7 @@ import { Router, Response } from 'express'
 import crypto from 'crypto'
 import { db } from '../lib/db'
 import { requireAuth, AuthRequest } from '../middleware/auth'
+import { ensureEnderecosClientesTable } from '../lib/schema'
 
 const router = Router()
 
@@ -53,6 +54,7 @@ router.get('/', requireAuth, async (req: AuthRequest, res: Response) => {
 
 router.get('/:id/enderecos', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    await ensureEnderecosClientesTable()
     const cliente = await db.execute({ sql: 'SELECT * FROM clientes WHERE id = ?', args: [req.params.id] })
     if (!cliente.rows.length) return res.status(404).json({ erro: 'Cliente não encontrado' }) as any
     if (!podeAcessarCliente(req, cliente.rows[0])) return res.status(403).json({ erro: 'Você não pode acessar estes endereços' }) as any
@@ -87,6 +89,7 @@ router.get('/:id/enderecos', requireAuth, async (req: AuthRequest, res: Response
 
 router.post('/:id/enderecos', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    await ensureEnderecosClientesTable()
     const cliente = await db.execute({ sql: 'SELECT * FROM clientes WHERE id = ?', args: [req.params.id] })
     if (!cliente.rows.length) return res.status(404).json({ erro: 'Cliente não encontrado' }) as any
     if (!podeAcessarCliente(req, cliente.rows[0])) return res.status(403).json({ erro: 'Você não pode alterar estes endereços' }) as any
@@ -126,6 +129,7 @@ router.post('/:id/enderecos', requireAuth, async (req: AuthRequest, res: Respons
 
 router.put('/:id/enderecos/:enderecoId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    await ensureEnderecosClientesTable()
     const cliente = await db.execute({ sql: 'SELECT * FROM clientes WHERE id = ?', args: [req.params.id] })
     if (!cliente.rows.length) return res.status(404).json({ erro: 'Cliente não encontrado' }) as any
     if (!podeAcessarCliente(req, cliente.rows[0])) return res.status(403).json({ erro: 'Você não pode alterar estes endereços' }) as any
@@ -136,8 +140,13 @@ router.put('/:id/enderecos/:enderecoId', requireAuth, async (req: AuthRequest, r
     })
     if (!atual.rows.length) return res.status(404).json({ erro: 'Endereço não encontrado' }) as any
 
-    const label = String(req.body.label ?? (atual.rows[0] as any).label).trim().slice(0, 80)
-    const endereco = String(req.body.endereco ?? (atual.rows[0] as any).endereco).trim()
+    const labelRecebido = req.body.label == null ? undefined : String(req.body.label || '').trim()
+    const labelAtual = String((atual.rows[0] as any).label || '').trim()
+    const label = labelRecebido !== undefined && labelRecebido.length > 0 ? labelRecebido : labelAtual
+
+    const enderecoRecebido = req.body.endereco == null ? undefined : String(req.body.endereco).trim()
+    const enderecoAtual = String((atual.rows[0] as any).endereco || '').trim()
+    const endereco = enderecoRecebido !== undefined && enderecoRecebido.length > 0 ? enderecoRecebido : enderecoAtual
     const principal = req.body.principal === undefined
       ? Boolean((atual.rows[0] as any).principal)
       : Boolean(req.body.principal)
@@ -168,6 +177,7 @@ router.put('/:id/enderecos/:enderecoId', requireAuth, async (req: AuthRequest, r
 
 router.delete('/:id/enderecos/:enderecoId', requireAuth, async (req: AuthRequest, res: Response) => {
   try {
+    await ensureEnderecosClientesTable()
     const cliente = await db.execute({ sql: 'SELECT * FROM clientes WHERE id = ?', args: [req.params.id] })
     if (!cliente.rows.length) return res.status(404).json({ erro: 'Cliente não encontrado' }) as any
     if (!podeAcessarCliente(req, cliente.rows[0])) return res.status(403).json({ erro: 'Você não pode alterar estes endereços' }) as any
