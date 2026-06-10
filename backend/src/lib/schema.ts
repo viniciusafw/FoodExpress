@@ -35,6 +35,26 @@ async function ensureColumn(table: string, column: string, definition: string) {
   }
 }
 
+export async function ensureEnderecosClientesTable() {
+  await db.execute(`
+    CREATE TABLE IF NOT EXISTS enderecos_clientes (
+      id VARCHAR(191) NOT NULL,
+      cliente_id VARCHAR(191) NOT NULL,
+      label VARCHAR(80) NOT NULL,
+      endereco TEXT NOT NULL,
+      principal TINYINT(1) DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (id),
+      KEY idx_enderecos_cliente (cliente_id),
+      KEY idx_enderecos_principal (cliente_id, principal),
+      CONSTRAINT fk_enderecos_cliente
+        FOREIGN KEY (cliente_id) REFERENCES clientes(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `)
+}
+
 function splitSqlStatements(schema: string) {
   const statements: string[] = []
   let current = ''
@@ -206,6 +226,7 @@ export async function ensureDatabaseHealth() {
       await ensureColumn('clientes', 'senha_hash', 'TEXT')
       await ensureColumn('clientes', 'deletado_em', 'DATETIME')
       await ensureColumn('clientes', 'endereco_label', 'VARCHAR(80)')
+      await ensureEnderecosClientesTable()
       await ensureColumn('gerentes', 'senha_hash', 'TEXT')
       await ensureColumn('operadores', 'senha_hash', 'TEXT')
       await ensureColumn('entregadores', 'saldo_disponivel', 'DOUBLE DEFAULT 0')

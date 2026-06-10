@@ -106,15 +106,68 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    sessionStorage.setItem(GOOGLE_PASSWORD_PENDING_KEY, JSON.stringify({
-      sub: auth0Sub,
-      email: auth0Email,
-      nome: auth0Name,
-      chave: chaveContaAuth0,
-    }));
-    setAuth0Sincronizado(true);
-    navigate('/login?googleSenha=true', { replace: true });
-    return;
+    let cancelado = false;
+
+    const sincronizarGoogle = async () => {
+      setAuth0Sincronizado(false);
+      try {
+        const response = await fetch(`${getApiBaseUrl()}/api/auth/auth0-sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: auth0Email, nome: auth0Name }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (cancelado) return;
+
+        if (response.status === 202 && data?.needsPassword) {
+          sessionStorage.setItem(GOOGLE_PASSWORD_PENDING_KEY, JSON.stringify({
+            sub: auth0Sub,
+            email: data?.usuario?.email || auth0Email,
+            nome: data?.usuario?.nome || auth0Name,
+            chave: chaveContaAuth0,
+          }));
+          setAuth0Sincronizado(true);
+          navigate('/login?googleSenha=true', { replace: true });
+          return;
+        }
+
+        if (!response.ok) {
+          throw new Error(data?.erro || 'Não foi possível entrar com Google.');
+        }
+
+        if (data?.token) {
+          const usuarioCliente = {
+            id: data?.usuario?.id || auth0Sub,
+            nome: data?.usuario?.nome || auth0Name || auth0Email.split('@')[0],
+            email: data?.usuario?.email || auth0Email,
+            telefone: data?.usuario?.telefone || '',
+            perfil: data?.usuario?.perfil || 'cliente',
+            provider: 'auth0',
+          };
+          localStorage.setItem('token', data.token);
+          localStorage.setItem('usuario', JSON.stringify(usuarioCliente));
+          localStorage.setItem('preferLocalAuth', 'true');
+          sessionStorage.removeItem(GOOGLE_PASSWORD_PENDING_KEY);
+          ultimaContaAuth0Sincronizada.current = chaveContaAuth0;
+          setUsuario(usuarioCliente);
+          setAuth0Sincronizado(true);
+          navigate(destinoPorPerfil(usuarioCliente.perfil), { replace: true });
+          return;
+        }
+
+        throw new Error('Resposta inválida do login com Google.');
+      } catch (error) {
+        if (cancelado) return;
+        sessionStorage.setItem('authError', error?.message || 'Não foi possível entrar com Google.');
+        setAuth0Sincronizado(true);
+        navigate('/login', { replace: true });
+      }
+    };
+
+    sincronizarGoogle();
+    return () => {
+      cancelado = true;
+    };
   }, [auth0Configurado, auth0Loading, isAuthenticated, auth0Sub, auth0Email, auth0Name, navigate]);
 
   const entrar = async (email, perfil, extras = {}) => {

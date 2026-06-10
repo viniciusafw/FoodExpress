@@ -42,7 +42,7 @@ export default function CategoriesCarousel() {
       navigate(cat.rota)
       return
     }
-    navigate(`/explorar?termo=${encodeURIComponent(cat.categoria || cat.nome)}&filtros=1`)
+    navigate(`/explorar?termo=${encodeURIComponent(cat.categoria || cat.nome)}`)
   }
 
   return (

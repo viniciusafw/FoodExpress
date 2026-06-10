@@ -6,6 +6,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import { enviarCodigoAcesso } from '../lib/email';
 import { hashSenha, verificarSenha } from '../lib/password';
+import { ensureEnderecosClientesTable } from '../lib/schema';
 
 const router = Router();
 
@@ -264,6 +265,7 @@ router.post('/registrar', async (req, res) => {
       ]
     });
     if (enderecoFinal) {
+      await ensureEnderecosClientesTable();
       await db.execute({
         sql: `INSERT INTO enderecos_clientes (id, cliente_id, label, endereco, principal)
               VALUES (?, ?, ?, ?, 1)`,
@@ -511,7 +513,6 @@ router.post('/auth0-sync', async (req, res) => {
 
     const emailLimpo = email.toLowerCase().trim();
     const senhaInformada = String(senha || password || '');
-    if (!senhaInformada) return res.status(400).json({ erro: 'Crie ou confirme sua senha para concluir o login com Google.' });
 
     const existente = await db.execute({
       sql: 'SELECT * FROM clientes WHERE lower(email) = ?',
@@ -521,10 +522,22 @@ router.post('/auth0-sync', async (req, res) => {
     if (existente.rows.length) {
       const cliente = existente.rows[0] as any;
       if (cliente.senha_hash) {
-        if (!verificarSenha(senhaInformada, cliente.senha_hash)) {
+        if (senhaInformada && !verificarSenha(senhaInformada, cliente.senha_hash)) {
           return res.status(401).json({ erro: 'Senha incorreta para este e-mail.' });
         }
       } else {
+        if (!senhaInformada) {
+          return res.status(202).json({
+            needsPassword: true,
+            usuario: {
+              id: cliente.id,
+              nome: cliente.nome || nome || emailLimpo.split('@')[0],
+              email: cliente.email || emailLimpo,
+              telefone: cliente.telefone || '',
+              perfil: 'cliente'
+            }
+          });
+        }
         const erroSenha = validarSenhaForte(senhaInformada);
         if (erroSenha) return res.status(400).json({ erro: erroSenha });
         const senhaHash = hashSenha(senhaInformada);
@@ -548,6 +561,18 @@ router.post('/auth0-sync', async (req, res) => {
     const perfisDiferentes = perfisExistentes.filter(p => p !== 'cliente');
     if (perfisDiferentes.length) {
       return res.status(409).json({ erro: `Este e-mail já está cadastrado como ${perfisDiferentes.join(', ')}. Entre pelo perfil correto com e-mail e senha.` });
+    }
+
+    if (!senhaInformada) {
+      return res.status(202).json({
+        needsPassword: true,
+        usuario: {
+          nome: nome || emailLimpo.split('@')[0],
+          email: emailLimpo,
+          telefone: '',
+          perfil: 'cliente'
+        }
+      });
     }
 
     const erroSenha = validarSenhaForte(senhaInformada);

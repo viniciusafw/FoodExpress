@@ -422,6 +422,7 @@ export default function Login() {
                     onSenhaChange={setSenhaGoogle}
                     onConfirmarSenhaChange={setConfirmarSenhaGoogle}
                     iconPadding={false}
+                    autoComplete="new-password"
                   />
                 </Motion.div>
 
@@ -448,7 +449,7 @@ export default function Login() {
                 <label className="text-xs font-extrabold text-text-secondary uppercase tracking-wide">E-mail *</label>
                 <input type="email" placeholder="seu@email.com"
                   value={email} onChange={e => setEmail(e.target.value)}
-                  required className={inputCls} />
+                  required autoComplete="username" className={inputCls} />
               </Motion.div>
 
               <Motion.div className="flex flex-col gap-1.5" variants={fieldVariant}>
@@ -457,6 +458,7 @@ export default function Login() {
                   <input
                     type={mostrarSenha ? 'text' : 'password'} placeholder="••••••••"
                     value={senha} onChange={e => setSenha(e.target.value)} required
+                    autoComplete="current-password"
                     className="w-full px-4 py-3.5 pr-12 border border-border rounded-xl text-sm font-semibold text-text-primary bg-surface-2 outline-none transition-all focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,107,53,0.08)] placeholder:text-text-muted placeholder:font-normal"
                   />
                   <Motion.button type="button" onClick={() => setMostrarSenha(s => !s)}

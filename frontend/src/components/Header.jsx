@@ -273,10 +273,10 @@ export default function Header() {
     { to: '/Mercados', label: 'Mercados' },
   ]
   const navLinksCategorias = [
-    { to: '/explorar?termo=Bebidas&filtros=1', label: 'Bebidas' },
-    { to: '/Mercados?termo=Farmácia&filtros=1', label: 'Farmácias' },
-    { to: '/Mercados?termo=Pet Shop&filtros=1', label: 'Pet Shop' },
-    { to: '/Mercados?termo=Shopping&filtros=1', label: 'Shopping' },
+    { to: '/explorar?termo=Bebidas', label: 'Bebidas' },
+    { to: '/Mercados?termo=Farmácia', label: 'Farmácias' },
+    { to: '/Mercados?termo=Pet Shop', label: 'Pet Shop' },
+    { to: '/Mercados?termo=Shopping', label: 'Shopping' },
   ]
   const navLinks = [...navLinksPrincipais, ...navLinksCategorias]
 

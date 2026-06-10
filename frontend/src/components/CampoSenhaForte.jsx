@@ -12,6 +12,7 @@ export default function CampoSenhaForte({
   accentClass = 'text-accent',
   focusClass = 'focus:border-primary focus:bg-white focus:shadow-[0_0_0_3px_rgba(255,107,53,0.08)]',
   iconPadding = true,
+  autoComplete = 'new-password',
 }) {
   const [mostrarSenha, setMostrarSenha] = useState(false)
   const [mostrarConfirmacao, setMostrarConfirmacao] = useState(false)
@@ -38,6 +39,7 @@ export default function CampoSenhaForte({
             onChange={e => onSenhaChange(e.target.value)}
             minLength={8}
             required
+            autoComplete={autoComplete}
             className={inputClass}
           />
           <button
@@ -61,6 +63,7 @@ export default function CampoSenhaForte({
             onChange={e => onConfirmarSenhaChange(e.target.value)}
             minLength={8}
             required
+            autoComplete={autoComplete}
             className={inputClass}
           />
           <button

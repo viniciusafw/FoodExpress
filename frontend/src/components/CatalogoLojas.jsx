@@ -683,19 +683,14 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
               role="dialog"
               aria-modal="true"
               aria-label="Filtros avançados"
-              className="fixed inset-x-0 bottom-0 z-[120] max-h-[92dvh] overflow-y-auto rounded-t-xl bg-white p-5 pb-0 shadow-2xl lg:hidden"
+              className="fixed inset-x-0 bottom-0 z-[120] flex max-h-[92dvh] flex-col overflow-hidden rounded-t-xl bg-white shadow-2xl lg:hidden"
               initial={{ y: '100%' }}
               animate={{ y: 0 }}
               exit={{ y: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-              drag="y"
-              dragConstraints={{ top: 0, bottom: 0 }}
-              dragElastic={{ top: 0, bottom: 0.35 }}
-              onDragEnd={(_, info) => {
-                if (info.offset.y > 90 || info.velocity.y > 650) setFiltrosMobileAbertos(false)
-              }}
             >
-              <div className="-mt-1 mb-3 flex justify-center lg:hidden">
+              <div className="px-5 pt-4">
+                <div className="-mt-1 mb-3 flex justify-center lg:hidden">
                 <div className="h-1 w-10 rounded-full bg-border" />
               </div>
               <div className="mb-5 flex items-center justify-between border-b border-border pb-4">
@@ -712,8 +707,11 @@ export default function CatalogoLojas({ tipo = 'restaurante' }) {
                   <X size={18} />
                 </button>
               </div>
-              <PainelFiltros {...propriedadesPainel} />
-              <div className="sticky bottom-0 -mx-5 mt-6 border-t border-border bg-white px-5 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3">
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6 overscroll-contain">
+                <PainelFiltros {...propriedadesPainel} />
+              </div>
+              <div className="border-t border-border bg-white px-5 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-3">
                 <button
                   type="button"
                   onClick={() => setFiltrosMobileAbertos(false)}
